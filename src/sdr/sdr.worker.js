@@ -7,29 +7,41 @@ import {
   updateAircraftTrack,
 } from './adsbDecoder.js';
 import { analyzeSpectrum } from './spectrum.js';
+import { createAmReceiver } from './airband.js';
 import { recordFromDecoderTrack } from '../sources/adsbRecords.js';
 
 let mode = 'fm';
 let sampleRate = 2_048_000;
 let receiverLocation = null;
 let demodulator = null;
+// AM airband receiver settings, kept across reconfiguration of the same mode.
+let amSettings = { offsetHz: 0, bandwidthHz: undefined, squelch: 0 };
 let blockCount = 0;
 const aircraft = new Map();
 // Positions refused by the decoder's speed check since the last clear.
 const decoderStats = { positionsRejected: 0 };
 const adsbStream = new AdsbStreamDecoder();
 
-function configure(nextMode, nextSampleRate, location) {
-  const modeChanged = mode !== (nextMode === 'adsb' ? 'adsb' : 'fm');
-  mode = nextMode === 'adsb' ? 'adsb' : 'fm';
+function workerMode(value) {
+  return value === 'adsb' || value === 'am' ? value : 'fm';
+}
+
+function configure(nextMode, nextSampleRate, location, am) {
+  const modeChanged = mode !== workerMode(nextMode);
+  mode = workerMode(nextMode);
   sampleRate =
     Number(nextSampleRate) || (mode === 'adsb' ? 2_000_000 : 2_048_000);
   receiverLocation = location || receiverLocation;
   blockCount = 0;
-  demodulator =
-    mode === 'fm'
-      ? getDemod(sampleRate, 48_000, { ...getMode('WBFM'), stereo: false })
-      : null;
+  if (am) amSettings = { ...amSettings, ...am };
+  if (mode === 'fm')
+    demodulator = getDemod(sampleRate, 48_000, {
+      ...getMode('WBFM'),
+      stereo: false,
+    });
+  else if (mode === 'am')
+    demodulator = createAmReceiver({ sampleRate, ...amSettings });
+  else demodulator = null;
   if (modeChanged) {
     adsbStream.reset();
     aircraft.clear();
@@ -88,7 +100,12 @@ function publicAircraft() {
 self.onmessage = (event) => {
   const message = event.data || {};
   if (message.type === 'configure') {
-    configure(message.mode, message.sampleRate, message.location);
+    configure(message.mode, message.sampleRate, message.location, message.am);
+    return;
+  }
+  if (message.type === 'squelch') {
+    amSettings = { ...amSettings, squelch: Number(message.squelch) || 0 };
+    if (mode === 'am') demodulator.gate.threshold = amSettings.squelch;
     return;
   }
   if (message.type === 'location') {
@@ -102,7 +119,7 @@ self.onmessage = (event) => {
       aircraft.clear();
       decoderStats.positionsRejected = 0;
     }
-    if (mode === 'fm') configure(mode, sampleRate, receiverLocation);
+    if (mode !== 'adsb') configure(mode, sampleRate, receiverLocation);
     return;
   }
   if (message.type !== 'samples' || !(message.buffer instanceof ArrayBuffer))
@@ -125,6 +142,31 @@ self.onmessage = (event) => {
           Number.isFinite(decoded.snr) && decoded.snr > 0
             ? 10 * Math.log10(decoded.snr)
             : null,
+        diagnostics:
+          blockCount % 15 === 0
+            ? {
+                workerBlocks: blockCount,
+                iqLevelDbfs,
+                audioLevelDbfs: audioLevel(samples),
+              }
+            : null,
+      },
+      [samples.buffer, ...(bins ? [bins.buffer] : [])],
+    );
+    return;
+  }
+
+  if (mode === 'am') {
+    const bins = blockCount % 3 === 0 ? analyzeSpectrum(message.buffer) : null;
+    const { i, q, iqLevelDbfs } = normalizedIq(message.buffer);
+    const { samples, snr, open } = demodulator.process(i, q);
+    self.postMessage(
+      {
+        type: 'am',
+        samples,
+        bins,
+        snr: Number.isFinite(snr) && snr > 0 ? 10 * Math.log10(snr) : null,
+        squelchOpen: open,
         diagnostics:
           blockCount % 15 === 0
             ? {
