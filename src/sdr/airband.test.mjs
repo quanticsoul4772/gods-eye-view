@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   AIRBAND_AUDIO_RATE,
+  AIRBAND_BANDWIDTH_HZ,
   AIRBAND_MAX_HZ,
   AIRBAND_MIN_HZ,
   AIRBAND_SAMPLE_RATE,
@@ -10,6 +11,7 @@ import {
   SquelchGate,
   airbandChannel,
   airbandTuning,
+  channelSnrDb,
   createAmReceiver,
   snapAirbandFrequency,
 } from './airband.js';
@@ -79,6 +81,7 @@ test('25 kHz channel names resolve to their own carrier', () => {
     name: '118.000',
     carrierHz: 118_000_000,
     spacingHz: 25_000,
+    bandwidthHz: AIRBAND_BANDWIDTH_HZ[25_000],
   });
   assert.equal(airbandChannel('121.5').carrierHz, 121_500_000);
   assert.equal(airbandChannel('121.5').name, '121.500');
@@ -96,6 +99,7 @@ test('8.33 kHz channel names resolve to the carrier, not the name', () => {
   for (const [name, carrierHz] of cases) {
     const channel = airbandChannel(name);
     assert.equal(channel.spacingHz, 8_333, name);
+    assert.equal(channel.bandwidthHz, AIRBAND_BANDWIDTH_HZ[8_333], name);
     assert.ok(Math.abs(channel.carrierHz - carrierHz) < 1e-6, name);
   }
 });
@@ -131,72 +135,119 @@ test('the tuner centre sits off the channel and the offset points back to it', (
   assert.ok(Math.abs(offsetHz) < AIRBAND_SAMPLE_RATE / 2);
 });
 
-test('squelch passes everything at threshold 0', () => {
-  const gate = new SquelchGate(AIRBAND_AUDIO_RATE, 0);
+test('channel SNR reads no signal for noise and ignores bandwidth', () => {
+  // Noise spread evenly across the audio band: the in-channel share equals
+  // the bandwidth share, which is no signal at any bandwidth.
+  for (const bandwidthHz of [7_000, 18_000])
+    assert.ok(channelSnrDb(1, bandwidthHz) < -100, String(bandwidthHz));
+  assert.equal(channelSnrDb(0, 18_000), -Infinity);
+  assert.equal(channelSnrDb(Number.NaN, 18_000), -Infinity);
+  // All power in the channel: nothing left to call noise.
+  assert.equal(channelSnrDb(48_000 / 18_000, 18_000), Infinity);
+  // Half the band's power in an 18 kHz channel: noise density is 0.5/30k,
+  // so channel noise is 0.3 and channel SNR is 0.5/0.3 - 1 = 2/3.
+  assert.ok(
+    Math.abs(
+      channelSnrDb((0.5 * 48_000) / 18_000, 18_000) - 10 * Math.log10(2 / 3),
+    ) < 1e-9,
+  );
+});
+
+test('squelch with no threshold passes everything', () => {
+  const gate = new SquelchGate(AIRBAND_AUDIO_RATE, null);
   const samples = new Float32Array([0.5, -0.5]);
-  assert.equal(gate.apply(samples, 0.1), true);
+  assert.equal(gate.apply(samples, -Infinity), true);
   assert.deepEqual([...samples], [0.5, -0.5]);
 });
 
 test('squelch silences weak blocks after a 0.1 s tail', () => {
-  const gate = new SquelchGate(AIRBAND_AUDIO_RATE, 2);
+  const gate = new SquelchGate(AIRBAND_AUDIO_RATE, 6);
   const block = () => new Float32Array(1_200).fill(0.25);
-  assert.equal(gate.apply(block(), 5), true, 'strong signal opens');
+  assert.equal(gate.apply(block(), 20), true, 'strong signal opens');
   // 0.1 s at 48 kHz is 4,800 samples: four 1,200-sample blocks of tail.
   for (let k = 0; k < 4; k += 1)
-    assert.equal(gate.apply(block(), 1), true, `tail block ${k}`);
+    assert.equal(gate.apply(block(), 0), true, `tail block ${k}`);
   const closed = block();
-  assert.equal(gate.apply(closed, 1), false, 'closes after the tail');
+  assert.equal(gate.apply(closed, 0), false, 'closes after the tail');
   assert.ok(closed.every((sample) => sample === 0));
 });
 
-test('an AM carrier at the tuning offset demodulates to its tone', () => {
+/**
+ * Receive a 1 kHz AM tone whose carrier sits `carrierOffsetHz` away from the
+ * tuned channel, through a receiver of the given spacing's bandwidth.
+ */
+function receiveTone({ spacingHz, carrierOffsetHz = 0, squelchDb = 6 }) {
   const { offsetHz } = airbandTuning(121_500_000);
-  const receiver = createAmReceiver({ offsetHz });
-  let last;
-  for (const { i, q } of amBlocks({ offsetHz, noise: 0.05 }))
-    last = receiver.process(i, q);
+  const receiver = createAmReceiver({
+    offsetHz,
+    bandwidthHz: AIRBAND_BANDWIDTH_HZ[spacingHz],
+    squelchDb,
+  });
+  let result;
+  for (const { i, q } of amBlocks({
+    offsetHz: offsetHz + carrierOffsetHz,
+    noise: 0.05,
+  }))
+    result = receiver.process(i, q);
   // Skip the start of the block so filter start-up does not count.
-  const audio = last.samples.subarray(256);
-  const wanted = tonePower(audio, 1_000, AIRBAND_AUDIO_RATE);
-  const other = tonePower(audio, 2_700, AIRBAND_AUDIO_RATE);
-  assert.ok(
-    10 * Math.log10(wanted / other) > 20,
-    `1 kHz tone should dominate (got ${(10 * Math.log10(wanted / other)).toFixed(1)} dB)`,
-  );
-  assert.equal(last.open, true);
+  const audio = result.samples.subarray(256);
+  const toneDb =
+    10 *
+    Math.log10(
+      tonePower(audio, 1_000, AIRBAND_AUDIO_RATE) /
+        tonePower(audio, 2_700, AIRBAND_AUDIO_RATE),
+    );
+  return { ...result, toneDb };
+}
+
+test('an AM carrier on the channel demodulates to its tone', () => {
+  for (const spacingHz of [25_000, 8_333]) {
+    const result = receiveTone({ spacingHz });
+    assert.equal(result.open, true, `${spacingHz} opens`);
+    assert.ok(result.toneDb > 20, `${spacingHz}: tone ${result.toneDb} dB`);
+  }
+});
+
+test('offset carriers within ICAO acceptance bandwidth still demodulate', () => {
+  // Annex 10 Vol III 2.3.2.3: within 8 kHz on 25 kHz channels and 2.5 kHz
+  // on 8.33 kHz channels where offset-carrier systems are in use.
+  const cases = [
+    [25_000, 7_500],
+    [25_000, -7_500],
+    [25_000, 8_000],
+    [8_333, 2_500],
+    [8_333, -2_500],
+  ];
+  for (const [spacingHz, carrierOffsetHz] of cases) {
+    const result = receiveTone({ spacingHz, carrierOffsetHz });
+    const label = `${spacingHz} channel, carrier ${carrierOffsetHz} Hz off`;
+    assert.equal(result.open, true, label);
+    assert.ok(result.toneDb > 20, `${label}: tone ${result.toneDb} dB`);
+  }
 });
 
 test('a carrier on another channel is rejected by SNR and squelch', () => {
   // The AM detector normalizes by its own carrier average, so audio level
   // alone cannot show rejection; the reported SNR, which drives the squelch,
   // does.
-  const { offsetHz } = airbandTuning(121_500_000);
-  const receive = (detuneHz) => {
-    const receiver = createAmReceiver({ offsetHz, squelch: 3 });
-    let result;
-    for (const { i, q } of amBlocks({
-      offsetHz: offsetHz + detuneHz,
-      noise: 0.05,
-    }))
-      result = receiver.process(i, q);
-    return result;
-  };
-  const tuned = receive(0);
-  assert.equal(tuned.open, true, 'the tuned channel passes');
-  for (const detuneHz of [8_333, 25_000, 50_000, -50_000]) {
-    const detuned = receive(detuneHz);
-    assert.ok(
-      10 * Math.log10(tuned.snr / detuned.snr) > 4,
-      `${detuneHz} Hz away reads below the tuned channel`,
-    );
-    assert.equal(detuned.open, false, `${detuneHz} Hz away is squelched`);
+  const cases = [
+    [25_000, [25_000, -25_000, 50_000]],
+    [8_333, [8_333, -8_333, 25_000]],
+  ];
+  for (const [spacingHz, neighbours] of cases) {
+    const tuned = receiveTone({ spacingHz });
+    for (const carrierOffsetHz of neighbours) {
+      const detuned = receiveTone({ spacingHz, carrierOffsetHz });
+      const label = `${spacingHz} channel, neighbour ${carrierOffsetHz} Hz`;
+      assert.ok(tuned.snrDb - detuned.snrDb > 10, label);
+      assert.equal(detuned.open, false, label);
+    }
   }
 });
 
 test('squelch closes on noise and opens on a carrier', () => {
   const { offsetHz } = airbandTuning(121_500_000);
-  const receiver = createAmReceiver({ offsetHz, squelch: 3 });
+  const receiver = createAmReceiver({ offsetHz, squelchDb: 6 });
   const random = seededNoise(7);
   let result;
   for (let b = 0; b < 4; b += 1) {

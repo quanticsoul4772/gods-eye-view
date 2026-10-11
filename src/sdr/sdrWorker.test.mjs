@@ -32,7 +32,7 @@ test('the worker demodulates AM blocks and reports squelch state', () => {
     type: 'configure',
     mode: 'am',
     sampleRate: AIRBAND_SAMPLE_RATE,
-    am: { offsetHz, squelch: 3 },
+    am: { offsetHz, squelchDb: 6 },
   });
   posted.length = 0;
   for (let block = 0; block < 3; block += 1)
@@ -54,15 +54,15 @@ test('a squelch message takes effect without reconfiguring', () => {
     type: 'configure',
     mode: 'am',
     sampleRate: AIRBAND_SAMPLE_RATE,
-    am: { offsetHz, squelch: 0 },
+    am: { offsetHz, squelchDb: null },
   });
   // A carrier well outside the passband: only noise-level SNR remains.
   const offChannel = amIqBuffer(offsetHz + 400_000);
   posted.length = 0;
   send({ type: 'samples', buffer: offChannel });
-  assert.equal(posted.at(-1).squelchOpen, true, 'threshold 0 never closes');
+  assert.equal(posted.at(-1).squelchOpen, true, 'no threshold never closes');
 
-  send({ type: 'squelch', squelch: 6 });
+  send({ type: 'squelch', squelchDb: 6 });
   // Run past the 0.1 s tail the open block left behind.
   for (let block = 0; block < 5; block += 1)
     send({ type: 'samples', buffer: amIqBuffer(offsetHz + 400_000) });

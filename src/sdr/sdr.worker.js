@@ -15,7 +15,7 @@ let sampleRate = 2_048_000;
 let receiverLocation = null;
 let demodulator = null;
 // AM airband receiver settings, kept across reconfiguration of the same mode.
-let amSettings = { offsetHz: 0, bandwidthHz: undefined, squelch: 0 };
+let amSettings = { offsetHz: 0, bandwidthHz: undefined, squelchDb: null };
 let blockCount = 0;
 const aircraft = new Map();
 // Positions refused by the decoder's speed check since the last clear.
@@ -88,6 +88,53 @@ function audioLevel(samples) {
   );
 }
 
+/**
+ * Demodulate one block of IQ in the current audio mode and post the audio.
+ * FM reports DemodWBFM's SNR in dB; AM reports the estimated channel SNR in
+ * dB and whether the squelch passed the block.
+ */
+function postAudio(buffer) {
+  const bins = blockCount % 3 === 0 ? analyzeSpectrum(buffer) : null;
+  const { i, q, iqLevelDbfs } = normalizedIq(buffer);
+  let samples;
+  let snr;
+  let squelchOpen;
+  if (mode === 'am') {
+    const received = demodulator.process(i, q);
+    samples = received.samples;
+    // Clamped so a clean or absent signal still posts a finite reading.
+    snr = Math.max(-99, Math.min(99, received.snrDb));
+    squelchOpen = received.open;
+  } else {
+    const decoded = demodulator.demodulate(i, q, 0);
+    // The demodulator owns pooled output arrays. Transfer a copy so detaching
+    // the message buffer cannot invalidate the pool used by the next block.
+    samples = new Float32Array(decoded.left);
+    snr =
+      Number.isFinite(decoded.snr) && decoded.snr > 0
+        ? 10 * Math.log10(decoded.snr)
+        : null;
+  }
+  self.postMessage(
+    {
+      type: mode,
+      samples,
+      bins,
+      snr,
+      ...(mode === 'am' ? { squelchOpen } : {}),
+      diagnostics:
+        blockCount % 15 === 0
+          ? {
+              workerBlocks: blockCount,
+              iqLevelDbfs,
+              audioLevelDbfs: audioLevel(samples),
+            }
+          : null,
+    },
+    [samples.buffer, ...(bins ? [bins.buffer] : [])],
+  );
+}
+
 function publicAircraft() {
   const records = [];
   for (const track of aircraft.values()) {
@@ -104,8 +151,11 @@ self.onmessage = (event) => {
     return;
   }
   if (message.type === 'squelch') {
-    amSettings = { ...amSettings, squelch: Number(message.squelch) || 0 };
-    if (mode === 'am') demodulator.gate.threshold = amSettings.squelch;
+    const squelchDb = Number.isFinite(message.squelchDb)
+      ? message.squelchDb
+      : null;
+    amSettings = { ...amSettings, squelchDb };
+    if (mode === 'am') demodulator.gate.thresholdDb = squelchDb;
     return;
   }
   if (message.type === 'location') {
@@ -126,58 +176,8 @@ self.onmessage = (event) => {
     return;
 
   blockCount += 1;
-  if (mode === 'fm') {
-    const bins = blockCount % 3 === 0 ? analyzeSpectrum(message.buffer) : null;
-    const { i, q, iqLevelDbfs } = normalizedIq(message.buffer);
-    const decoded = demodulator.demodulate(i, q, 0);
-    // The demodulator owns pooled output arrays. Transfer a copy so detaching
-    // the message buffer cannot invalidate the pool used by the next block.
-    const samples = new Float32Array(decoded.left);
-    self.postMessage(
-      {
-        type: 'fm',
-        samples,
-        bins,
-        snr:
-          Number.isFinite(decoded.snr) && decoded.snr > 0
-            ? 10 * Math.log10(decoded.snr)
-            : null,
-        diagnostics:
-          blockCount % 15 === 0
-            ? {
-                workerBlocks: blockCount,
-                iqLevelDbfs,
-                audioLevelDbfs: audioLevel(samples),
-              }
-            : null,
-      },
-      [samples.buffer, ...(bins ? [bins.buffer] : [])],
-    );
-    return;
-  }
-
-  if (mode === 'am') {
-    const bins = blockCount % 3 === 0 ? analyzeSpectrum(message.buffer) : null;
-    const { i, q, iqLevelDbfs } = normalizedIq(message.buffer);
-    const { samples, snr, open } = demodulator.process(i, q);
-    self.postMessage(
-      {
-        type: 'am',
-        samples,
-        bins,
-        snr: Number.isFinite(snr) && snr > 0 ? 10 * Math.log10(snr) : null,
-        squelchOpen: open,
-        diagnostics:
-          blockCount % 15 === 0
-            ? {
-                workerBlocks: blockCount,
-                iqLevelDbfs,
-                audioLevelDbfs: audioLevel(samples),
-              }
-            : null,
-      },
-      [samples.buffer, ...(bins ? [bins.buffer] : [])],
-    );
+  if (mode === 'fm' || mode === 'am') {
+    postAudio(message.buffer);
     return;
   }
 
