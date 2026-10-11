@@ -1,5 +1,9 @@
 # Changelog
 
+- Without a Google browser key, the page no longer logs a 404 console error on
+  every load: the standalone server answers `/api/google/tiles-token` with 204
+  when no provider offers tokens, which the app already reads as "no tokens".
+
 - Treat explicitly current, complete empty vessel coverage as a successful update,
   clearing obsolete contacts while retaining stale or incomplete snapshots.
 
