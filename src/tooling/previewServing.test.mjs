@@ -145,6 +145,15 @@ test('real dev and built-preview servers serve provider JSON and terminate unkno
           assert.equal(response.headers.get('cache-control'), 'no-store');
         }
       }
+      // No server here offers Google tiles tokens: answer without an error
+      // status so a keyless page logs nothing.
+      const tokens = await fetch(origin + '/api/google/tiles-token');
+      assert.equal(
+        tokens.status,
+        204,
+        `${isPreview ? 'preview' : 'dev'} tokens`,
+      );
+      assert.equal(await tokens.text(), '');
       const tle = await fetch(origin + '/api/celestrak/invalid!');
       assert.equal(tle.status, 400);
       assert.equal(await tle.text(), 'invalid group');
