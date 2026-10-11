@@ -54,6 +54,7 @@
     "mcp": "node server/mcp/stdio.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.133.0",
     "@jtarrio/signals": "^0.10.0",
     "@jtarrio/webrtlsdr": "^3.0.6",
     "@mapbox/vector-tile": "^3.0.0",
