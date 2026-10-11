@@ -4,7 +4,8 @@ import { initDrawTool } from '../annotations/drawTool.js';
 import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
 import { createRecentImageryPanel } from '../ui/recentImagery.js';
 import { initGevVoiceCommands } from '../voice/gevRealtime.js';
-import { installViews, isEmbeddedInline } from './embed.js';
+import { installViews, isEmbedded, isEmbeddedInline } from './embed.js';
+import { installAskClaude } from '../ui/askClaude.js';
 import { installScopeMask, destroyScopeMask } from '../scopeMask.js';
 import {
   installRenderGovernor,
@@ -188,5 +189,13 @@ export function createApplicationTools({
       signal,
     }),
   );
+  if (!isEmbedded())
+    defer(
+      installAskClaude({
+        viewer,
+        dataManager,
+        run: (name, args) => voiceCommands.runner(name, args, { signal }),
+      }),
+    );
   return { sceneDirector, annotations, voiceCommands };
 }
