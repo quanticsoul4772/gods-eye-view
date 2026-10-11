@@ -122,7 +122,10 @@ test('a question runs the tools Claude calls and returns its answer and view', a
     first.messages[0].content,
     /over 30\.2000, -97\.7000 at 12000 m/,
   );
-  assert.deepEqual(first.fallbacks, 'default');
+  // The default model is Haiku 5.5, which has no server-side fallback.
+  assert.equal(first.model, 'claude-haiku-5-5');
+  assert.equal('fallbacks' in first, false);
+  assert.equal('betas' in first, false);
   // The tool result goes back as one user turn after the assistant's turn.
   const result = second.messages[2].content[0];
   assert.equal(result.type, 'tool_result');
@@ -183,4 +186,22 @@ test('an answer with no text is reported as an error, not an empty answer', asyn
   });
   assert.equal(outcome.answer, null);
   assert.match(outcome.error, /no answer/);
+});
+
+test('larger models ask for server-side refusal fallback', async () => {
+  const client = scriptedClient([
+    { stop_reason: 'end_turn', content: [text('Done.')] },
+  ]);
+  await answerQuestion({
+    client,
+    catalog: {},
+    tools: [],
+    question: 'x',
+    camera: null,
+    model: 'claude-opus-5-5',
+  });
+  assert.equal(client.requests[0].fallbacks, 'default');
+  assert.deepEqual(client.requests[0].betas, [
+    'server-side-fallback-2026-07-01',
+  ]);
 });

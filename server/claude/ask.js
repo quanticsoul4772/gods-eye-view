@@ -14,7 +14,9 @@ import { toFunctionOutput } from '../../src/tools/functions.js';
 import { createLocalToolServices } from '../mcp/services.js';
 import { isLocalMcpRequest } from '../mcp/plugin.js';
 
-export const ASK_MODEL_DEFAULT = 'claude-opus-5-5';
+export const ASK_MODEL_DEFAULT = 'claude-haiku-5-5';
+// Haiku 5.5 has no server-side refusal fallback; the larger models do.
+const supportsFallbacks = (model) => !model.startsWith('claude-haiku');
 const MAX_QUESTION_CHARS = 500;
 const MAX_BODY_BYTES = 16 * 1024;
 const MAX_TURNS = 8;
@@ -135,8 +137,9 @@ export async function answerQuestion({
       {
         model,
         max_tokens: 16000,
-        betas: ['server-side-fallback-2026-07-01'],
-        fallbacks: 'default',
+        ...(supportsFallbacks(model)
+          ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' }
+          : {}),
         output_config: { effort: 'medium' },
         // Each round resends the tools, instructions and earlier results;
         // caching bills those repeats at the cache-read rate.
