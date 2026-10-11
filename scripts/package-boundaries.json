@@ -81,7 +81,7 @@
       "src/sources/httpBody.js",
       "src/sources/rateLimit.js"
     ],
-    "external": ["@anthropic-ai/sdk"]
+    "external": []
   },
   "place-payloads": {
     "exports": ["./sources/places"],
@@ -316,7 +316,7 @@
       "server/providers/openai/toolDescriptions.js",
       "src/sources/rateLimit.js"
     ],
-    "external": []
+    "external": ["@anthropic-ai/sdk"]
   },
   "standalone-key-setup": {
     "runtime": "node",
