@@ -36,10 +36,28 @@ const MILITARY_SCHEMA = Object.freeze({
 });
 const MAX_TRACK_POINTS = 200;
 const GROUP_LABELS = Object.freeze({
+  airline: 'airline',
   operator: 'operator',
   origin_country: 'country',
   type_code: 'type',
 });
+
+/**
+ * The ICAO airline designator a callsign flies under: three letters, then a
+ * flight number that starts with a digit (SWA1234, UAL12A, BAW1). Registrations
+ * used as callsigns (N123AB, GABCD) have no designator.
+ */
+export function airlineDesignator(callsign) {
+  const match = /^([A-Z]{3})\d[0-9A-Z]{0,4}$/.exec(
+    String(callsign ?? '')
+      .trim()
+      .toUpperCase(),
+  );
+  return match ? match[1] : null;
+}
+
+const groupValue = (field) =>
+  field === 'airline' ? (row) => airlineDesignator(row.callsign) : undefined;
 
 const round = (value, digits) =>
   Number.isFinite(value) ? Number(value.toFixed(digits)) : null;
@@ -91,7 +109,8 @@ export const aircraftInArea = defineTool({
   description:
     'Aircraft currently reported inside an area, nearest the center first. ' +
     'Optionally military aircraft only, airborne only, or within an altitude band. ' +
-    'group_by counts every matched aircraft by operator, country or type, and ' +
+    'group_by counts every matched aircraft by airline (the ICAO designator ' +
+    'in its callsign), operator, country or type, and ' +
     'stats summarizes airborne altitude and speed; both cover all matches, not ' +
     'just the rows returned.',
   inputSchema: {
@@ -149,7 +168,9 @@ export const aircraftInArea = defineTool({
       ...(regional ? [`regional feed: ${snapshot.coverage}`] : []),
       ...(snapshot.freshness === 'stale' ? ['data may be stale'] : []),
     ];
-    const groups = args.group_by ? breakdown(rows, args.group_by) : null;
+    const groups = args.group_by
+      ? breakdown(rows, args.group_by, groupValue(args.group_by))
+      : null;
     return {
       summary:
         `${rows.length} ${kind} in ${area.label}` +

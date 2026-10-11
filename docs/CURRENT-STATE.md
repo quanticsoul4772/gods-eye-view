@@ -94,8 +94,8 @@ combined situation brief, military awareness around a point, the app's heads-up 
 opens the app over an area. Tools reuse the layers' portable source factories, take a
 shared `area` argument (place name, bounding box, or point and radius) and cap
 lists at 25 rows by default. `aircraft_in_area` and `vessels_in_area` can also
-count every match by a field (`group_by`: operator, country or type for
-aircraft; type or destination for ships; the ten largest groups, then other and
+count every match by a field (`group_by`: airline, read from the ICAO
+designator in the callsign, or operator, country or type for aircraft; type or destination for ships; the ten largest groups, then other and
 unknown counts; the summary says when a feed reports none of the field) and
 summarize airborne altitude and speed (`stats`: count, min, median, mean, max).
 Both cover all matches, not just the rows returned; voice leaves these two

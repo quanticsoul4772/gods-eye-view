@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { composeCatalog, coreTools } from '../index.js';
+import { airlineDesignator } from './aviation.js';
 import { LiveSourceError } from '../../sources/live/contract.js';
 
 const record = (id, latitude, longitude, extra = {}) => ({
@@ -444,4 +445,44 @@ test('aircraft answers carry no breakdown or stats unless asked', async () => {
     catalog.call('aircraft_in_area', { area: bay, group_by: 'callsign' }),
     /must be one of/,
   );
+});
+
+test('an airline designator is read from an ICAO flight callsign only', () => {
+  for (const [callsign, designator] of [
+    ['SWA1234', 'SWA'],
+    ['ual12a', 'UAL'],
+    [' BAW1 ', 'BAW'],
+    ['RCH123', 'RCH'],
+    ['N123AB', null],
+    ['GABCD', null],
+    ['SWA', null],
+    ['SWAX123', null],
+    ['', null],
+    [null, null],
+  ])
+    assert.equal(airlineDesignator(callsign), designator, String(callsign));
+});
+
+test('aircraft in an area can be counted by airline from their callsigns', async () => {
+  const fleet = [
+    record('a1', 37.6, -122.3, { callsign: 'SWA100' }),
+    record('a2', 37.61, -122.3, { callsign: 'SWA2' }),
+    record('a3', 37.62, -122.3, { callsign: 'UAL9' }),
+    record('a4', 37.63, -122.3, { callsign: 'N123AB' }),
+  ];
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: { aircraft: feed(fleet) },
+  });
+  const result = await catalog.call('aircraft_in_area', {
+    area: bay,
+    group_by: 'airline',
+  });
+  assert.equal(
+    result.summary,
+    '4 aircraft in 60 km around 37.600, -122.300; most by airline: SWA (2), UAL (1); 1 unknown.',
+  );
+  assert.equal(result.data.breakdown.field, 'airline');
+  // Rows are unchanged: the designator is derived, not added to each row.
+  assert.equal('airline' in result.data.rows[0], false);
 });

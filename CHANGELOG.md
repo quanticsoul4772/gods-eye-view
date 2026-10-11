@@ -6,10 +6,10 @@
   the shell command string instead of an argument array.
 
 - `aircraft_in_area` and `vessels_in_area` take `group_by` and `stats`, so an
-  MCP client can ask which countries, aircraft types or ship types dominate an
-  area, or the average altitude or speed, over every match instead of
-  estimating from the returned rows. Operator and type are counted only where
-  the feed reports them.
+  MCP client can ask which airlines, countries, aircraft types or ship types
+  dominate an area, or the average altitude or speed, over every match instead of
+  estimating from the returned rows. Airlines come from the ICAO designator in
+  each callsign; operator and type are counted only where the feed reports them.
 
 - Without a Google browser key, the page no longer logs a 404 console error on
   every load: the standalone server answers `/api/google/tiles-token` with 204

@@ -28,13 +28,15 @@ export const MAX_GROUPS = 10;
 /**
  * Count rows by one text field over every row, not just those returned.
  * Values group case-insensitively and keep their first spelling; rows
- * without a value are counted as unknown.
+ * without a value are counted as unknown. `valueOf` derives the value when
+ * it is not a row field as it stands.
  */
-export function breakdown(rows, field) {
+export function breakdown(rows, field, valueOf = (row) => row[field]) {
   const groups = new Map();
   let unknown = 0;
   for (const row of rows) {
-    const value = typeof row[field] === 'string' ? row[field].trim() : '';
+    const raw = valueOf(row);
+    const value = typeof raw === 'string' ? raw.trim() : '';
     if (!value) {
       unknown += 1;
       continue;
