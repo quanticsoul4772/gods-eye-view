@@ -170,6 +170,7 @@ test('the realtime token route throttles by default, and says so in a 429', asyn
 
 test('the HUD summary route throttles the paid path, never the free one', async (t) => {
   env(t, 'OPENAI_API_KEY', 'fixture-upstream-secret');
+  env(t, 'ANTHROPIC_API_KEY', undefined);
   let upstreamCalls = 0;
   t.mock.method(globalThis, 'fetch', async () => {
     upstreamCalls += 1;

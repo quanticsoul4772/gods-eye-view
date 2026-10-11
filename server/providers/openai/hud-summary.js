@@ -4,7 +4,11 @@ import {
 } from '../../../src/hudSummaryResponse.js';
 import { enforceRateLimit, openAiRateLimiter } from './rate-limit.js';
 import { readRequestBody } from '../common/request.js';
-import { OPENAI_HUD_SUMMARY_MODEL_DEFAULT } from './constants.js';
+import {
+  ANTHROPIC_HUD_SUMMARY_MODEL_DEFAULT,
+  OPENAI_HUD_SUMMARY_MODEL_DEFAULT,
+} from './constants.js';
+import Anthropic from '@anthropic-ai/sdk';
 
 function extractOpenAiResponseText(data) {
   if (typeof data?.output_text === 'string' && data.output_text.trim()) {
@@ -36,8 +40,11 @@ async function handleHudSummary(req, res) {
     return;
   }
 
+  // An Anthropic key takes precedence: the summary runs on Claude and the
+  // OpenAI key, if any, is left for voice alone.
+  const anthropicKey = String(process.env.ANTHROPIC_API_KEY ?? '').trim();
   const apiKey = process.env.OPENAI_API_KEY;
-  const keyless = keylessHudSummaryResponse(apiKey);
+  const keyless = keylessHudSummaryResponse(anthropicKey || apiKey);
   if (keyless) {
     res.statusCode = keyless.statusCode;
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -50,6 +57,11 @@ async function handleHudSummary(req, res) {
   // Keyless HUD fallback has no provider cost and resolves above without
   // consuming a paid-endpoint quota slot.
   if (!enforceRateLimit(openAiRateLimiter(), req, res)) return;
+
+  if (anthropicKey) {
+    await handleClaudeHudSummary(req, res, anthropicKey);
+    return;
+  }
 
   try {
     const body = await readRequestBody(req, 64 * 1024);
@@ -94,6 +106,63 @@ async function handleHudSummary(req, res) {
         error: 'OpenAI HUD summary request failed',
       }),
     );
+  }
+}
+
+function sendHudSummary(res, statusCode, payload) {
+  res.statusCode = statusCode;
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store');
+  res.end(JSON.stringify(payload));
+}
+
+async function handleClaudeHudSummary(req, res, apiKey) {
+  const failed = { summary: null, error: 'Claude HUD summary request failed' };
+  let context;
+  try {
+    context = JSON.parse((await readRequestBody(req, 64 * 1024)) || '{}');
+  } catch {
+    console.warn('[hud-summary] request failed');
+    sendHudSummary(res, 502, failed);
+    return;
+  }
+
+  try {
+    const client = new Anthropic({ apiKey });
+    const response = await client.messages.create({
+      model:
+        process.env.ANTHROPIC_HUD_SUMMARY_MODEL ||
+        ANTHROPIC_HUD_SUMMARY_MODEL_DEFAULT,
+      max_tokens: 256,
+      thinking: { type: 'disabled' },
+      output_config: { effort: 'low' },
+      system: HUD_SUMMARY_INSTRUCTIONS,
+      messages: [{ role: 'user', content: JSON.stringify(context) }],
+    });
+    if (response.stop_reason === 'refusal') {
+      console.warn('[hud-summary] Claude declined the request');
+      sendHudSummary(res, 502, failed);
+      return;
+    }
+    const text = response.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join(' ');
+    const summary = toFiveWordHudSummary(text);
+    sendHudSummary(
+      res,
+      summary ? 200 : 502,
+      summary ? { summary, error: null } : failed,
+    );
+  } catch (error) {
+    // Never relay the SDK's message: it carries request ids and quota wording.
+    if (error instanceof Anthropic.APIError && error.status) {
+      console.warn(`[hud-summary] upstream HTTP ${error.status}`);
+      sendHudSummary(res, error.status, failed);
+      return;
+    }
+    console.warn('[hud-summary] request failed');
+    sendHudSummary(res, 502, failed);
   }
 }
 

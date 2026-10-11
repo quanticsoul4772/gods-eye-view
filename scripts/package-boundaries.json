@@ -81,7 +81,7 @@
       "src/sources/httpBody.js",
       "src/sources/rateLimit.js"
     ],
-    "external": []
+    "external": ["@anthropic-ai/sdk"]
   },
   "place-payloads": {
     "exports": ["./sources/places"],

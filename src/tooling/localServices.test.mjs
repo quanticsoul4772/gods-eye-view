@@ -731,6 +731,7 @@ test('Realtime service configuration selects compatible endpoint/model without f
 
 test('OpenAI routes answer generically when the upstream or the request fails', async (t) => {
   env(t, 'OPENAI_API_KEY', 'fixture-upstream-secret');
+  env(t, 'ANTHROPIC_API_KEY', undefined);
   env(t, 'GEV_RATELIMIT_OPENAI_PER_MIN', undefined);
   const leak =
     'fixture-upstream-secret req_fixture_1234 org-fixture quota exhausted';
