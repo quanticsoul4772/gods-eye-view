@@ -122,6 +122,14 @@ export async function answerQuestion({
   ];
   const used = [];
   let view = null;
+  const usage = {
+    requests: 0,
+    input_tokens: 0,
+    cache_read_input_tokens: 0,
+    cache_creation_input_tokens: 0,
+    output_tokens: 0,
+  };
+  const outcome = (fields) => ({ ...fields, view, tools: used, usage });
   for (let turn = 0; turn < MAX_TURNS; turn += 1) {
     const response = await client.beta.messages.create(
       {
@@ -130,19 +138,20 @@ export async function answerQuestion({
         betas: ['server-side-fallback-2026-07-01'],
         fallbacks: 'default',
         output_config: { effort: 'medium' },
+        // Each round resends the tools, instructions and earlier results;
+        // caching bills those repeats at the cache-read rate.
+        cache_control: { type: 'ephemeral' },
         system: SYSTEM,
         tools,
         messages,
       },
       { signal },
     );
+    usage.requests += 1;
+    for (const key of Object.keys(usage))
+      if (key !== 'requests') usage[key] += response.usage?.[key] ?? 0;
     if (response.stop_reason === 'refusal')
-      return {
-        answer: null,
-        error: 'Claude declined this question',
-        view,
-        tools: used,
-      };
+      return outcome({ answer: null, error: 'Claude declined this question' });
     messages.push({ role: 'assistant', content: response.content });
     const calls = response.content.filter((block) => block.type === 'tool_use');
     if (response.stop_reason !== 'tool_use' || calls.length === 0) {
@@ -151,7 +160,9 @@ export async function answerQuestion({
         .map((block) => block.text)
         .join('\n')
         .trim();
-      return { answer, view, tools: used };
+      return answer
+        ? outcome({ answer })
+        : outcome({ answer: null, error: 'Claude returned no answer' });
     }
     const results = await Promise.all(
       calls.map((block) => runTool(catalog, block, signal)),
@@ -165,12 +176,10 @@ export async function answerQuestion({
       content: results.map(({ content }) => content),
     });
   }
-  return {
+  return outcome({
     answer: null,
     error: 'Claude needed too many lookups to answer',
-    view,
-    tools: used,
-  };
+  });
 }
 
 function send(res, status, payload) {
@@ -236,18 +245,26 @@ export function claudeAskPlugin({
       const parsed = parseAskRequest(body);
       if (parsed.error) return send(res, 400, { error: parsed.error });
       const { catalog, tools } = askCatalog(`http://${host}`);
+      // Stop asking (and spending) when the page goes away mid-question.
+      const abort = new AbortController();
+      res.on('close', () => {
+        if (!res.writableEnded) abort.abort();
+      });
       try {
         const outcome = await answerQuestion({
           client: createClient(apiKey),
           catalog,
           tools,
+          signal: abort.signal,
           ...parsed,
           model:
             String(process.env.ANTHROPIC_ASK_MODEL ?? '').trim() ||
             ASK_MODEL_DEFAULT,
         });
+        console.info(`[claude-ask] ${JSON.stringify(outcome.usage)}`);
         send(res, outcome.answer ? 200 : 502, outcome);
       } catch (error) {
+        if (abort.signal.aborted) return;
         // Never relay the SDK's message: it carries request ids and quota wording.
         const status = upstreamStatus(error);
         console.warn(

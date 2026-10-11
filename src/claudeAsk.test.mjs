@@ -80,10 +80,20 @@ test('a question runs the tools Claude calls and returns its answer and view', a
         text('Looking that up.'),
         toolUse('t1', 'aircraft_in_area', { area: { place: 'Texas' } }),
       ],
+      usage: {
+        input_tokens: 100,
+        cache_creation_input_tokens: 4000,
+        output_tokens: 50,
+      },
     },
     {
       stop_reason: 'end_turn',
       content: [text('There are 12 aircraft over Texas.')],
+      usage: {
+        input_tokens: 300,
+        cache_read_input_tokens: 4000,
+        output_tokens: 20,
+      },
     },
   ]);
   const outcome = await answerQuestion({
@@ -97,8 +107,17 @@ test('a question runs the tools Claude calls and returns its answer and view', a
     answer: 'There are 12 aircraft over Texas.',
     view,
     tools: ['aircraft_in_area'],
+    // Summed over both rounds, so the cost of a question is visible.
+    usage: {
+      requests: 2,
+      input_tokens: 400,
+      cache_read_input_tokens: 4000,
+      cache_creation_input_tokens: 4000,
+      output_tokens: 70,
+    },
   });
   const [first, second] = client.requests;
+  assert.deepEqual(first.cache_control, { type: 'ephemeral' });
   assert.match(
     first.messages[0].content,
     /over 30\.2000, -97\.7000 at 12000 m/,
@@ -151,4 +170,17 @@ test('a refusal is reported without an answer', async () => {
   });
   assert.equal(outcome.answer, null);
   assert.match(outcome.error, /declined/);
+});
+
+test('an answer with no text is reported as an error, not an empty answer', async () => {
+  const client = scriptedClient([{ stop_reason: 'end_turn', content: [] }]);
+  const outcome = await answerQuestion({
+    client,
+    catalog: {},
+    tools: [],
+    question: 'x',
+    camera: null,
+  });
+  assert.equal(outcome.answer, null);
+  assert.match(outcome.error, /no answer/);
 });
