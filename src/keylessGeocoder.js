@@ -266,6 +266,40 @@ export function selectPhotonFeature(
   return null;
 }
 
+/**
+ * For a "place, region" query, pick the candidate named for the place that
+ * actually lies in the region. "Paris, Texas" is also the name of a pub in
+ * Budapest: matched as one name it beat the town, so the region has to be
+ * checked against where each candidate is, not against its name.
+ * @param {object[]} features - Photon features, in the order returned.
+ * @param {string} query - The query as typed.
+ * @returns {?object} null when the query names no region or nothing fits.
+ */
+export function selectQualifiedFeature(features, query) {
+  const [headText, ...rest] = String(query ?? '').split(',');
+  const region = normalizeToponym(rest.join(' '));
+  const head = normalizeToponym(headText);
+  if (!head || !region) return null;
+  const words = region.split(' ');
+  return (
+    (Array.isArray(features) ? features : []).find((feature) => {
+      const properties = feature?.properties ?? {};
+      const name = normalizeToponym(properties.name);
+      if (name !== head && !name.startsWith(`${head} `)) return false;
+      const where = ` ${normalizeToponym(
+        [
+          properties.city,
+          properties.county,
+          properties.state,
+          properties.country,
+          properties.countrycode,
+        ].join(' '),
+      )} `;
+      return words.every((word) => where.includes(` ${word} `));
+    }) ?? null
+  );
+}
+
 /** Evict the oldest memo entries until the cache is within its cap. */
 function trimPhotonCache(cache) {
   while (cache.size > PHOTON_CACHE_MAX) {
@@ -344,12 +378,16 @@ export async function geocodeKeylessWithOutcome(
   // to the wrong continent. So a biased answer is only accepted when it leads
   // with the name asked for; otherwise the same query runs unbiased, which is
   // what a user searching for somewhere off-screen meant in the first place.
+  // A query naming a region is only answered nearby by a match inside it.
   let feature = null;
   let everyAskAnswered = true;
   if (bias) {
     const biased = await ask(photonSearchUrl(trimmed, { bias, endpoint }));
     if (biased === null) everyAskAnswered = false;
-    else feature = selectPhotonFeature(biased, normalizeToponym(trimmed));
+    else
+      feature = trimmed.includes(',')
+        ? selectQualifiedFeature(biased, trimmed)
+        : selectPhotonFeature(biased, normalizeToponym(trimmed));
   }
 
   signal?.throwIfAborted();
@@ -364,6 +402,7 @@ export async function geocodeKeylessWithOutcome(
       // the thing being searched for; the tail only says where to look.
       const head = normalizeToponym(trimmed.split(',')[0]);
       feature =
+        selectQualifiedFeature(anywhere, trimmed) ||
         selectPhotonFeature(anywhere, head, { allowContains: true }) ||
         anywhere[0];
     }

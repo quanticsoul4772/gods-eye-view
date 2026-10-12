@@ -30,6 +30,7 @@ import {
   photonResultTypes,
   photonSearchUrl,
   selectPhotonFeature,
+  selectQualifiedFeature,
 } from './keylessGeocoder.js';
 import { geocodeNavigationMode } from './locations.js';
 
@@ -286,6 +287,52 @@ test('a "place, region" query is matched on the place, not the region', async ()
   const result = await geocodeKeyless('Hoan Kiem Lake, Hanoi', { fetchImpl });
 
   assert.equal(result.label.startsWith('Hoàn Kiếm Lake'), true, `got ${result.label}`);
+});
+
+/** Photon's real answers for "Paris, Texas" biased to Denver, then unbiased. */
+const PARIS_TX = {
+  geometry: { type: 'Point', coordinates: [-95.5555, 33.6609] },
+  properties: { osm_key: 'place', osm_value: 'town', type: 'city', name: 'Paris', state: 'Texas', country: 'United States', countrycode: 'US' },
+};
+const PARIS_TEXAS_PUB = {
+  geometry: { type: 'Point', coordinates: [19.0606, 47.4868] },
+  properties: { osm_key: 'amenity', osm_value: 'pub', type: 'house', name: 'Paris, Texas', city: 'Budapest', country: 'Magyarország', countrycode: 'HU' },
+};
+const PARIS_TEXAS_SALON = {
+  geometry: { type: 'Point', coordinates: [153.03, -27.47] },
+  properties: { osm_key: 'shop', osm_value: 'hairdresser', type: 'house', name: 'Paris Texas', city: 'Brisbane', state: 'Queensland', country: 'Australia', countrycode: 'AU' },
+};
+
+test('"Paris, Texas" is the town in Texas, not a pub of that name in Budapest', async () => {
+  // Measured from Denver against the live service: the biased answer listed the
+  // town first, but the pub's name equals the whole query and won, flying the
+  // camera to Budapest at rooftop range.
+  const fetchImpl = photonPair([PARIS_TX, PARIS_TEXAS_PUB, PARIS_TEXAS_SALON], [PARIS_TX]);
+
+  const result = await geocodeKeyless('Paris, Texas', { bias: '39.70,-104.90|39.80,-104.80', fetchImpl });
+
+  assert.equal(Math.round(result.lat), 34, `got ${result.label}`);
+  assert.equal(fetchImpl.urls.length, 1);
+});
+
+test('a region is checked against where a candidate is, not its name', () => {
+  const pubFirst = [PARIS_TEXAS_PUB, PARIS_TEXAS_SALON, PARIS_TX];
+  assert.equal(selectQualifiedFeature(pubFirst, 'Paris, Texas'), PARIS_TX);
+  assert.equal(selectQualifiedFeature(pubFirst, 'Paris, United States'), PARIS_TX);
+  assert.equal(selectQualifiedFeature(pubFirst, 'Paris, US'), PARIS_TX);
+  // No region, or a region nothing lies in, leaves the choice to the name rules.
+  assert.equal(selectQualifiedFeature(pubFirst, 'Paris'), null);
+  assert.equal(selectQualifiedFeature(pubFirst, 'Paris, Ontario'), null);
+  assert.equal(selectQualifiedFeature(undefined, 'Paris, Texas'), null);
+});
+
+test('a region nearby fits nothing, so the unbiased answer decides', async () => {
+  const fetchImpl = photonPair([PARIS_TEXAS_PUB], [PARIS_TX, PARIS_TEXAS_PUB]);
+
+  const result = await geocodeKeyless('Paris, Texas', { bias: '47.40,19.00|47.50,19.10', fetchImpl });
+
+  assert.equal(Math.round(result.lat), 34, `got ${result.label}`);
+  assert.equal(fetchImpl.urls.length, 2);
 });
 
 test('accents and punctuation do not change what a name compares as', () => {
