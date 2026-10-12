@@ -45,6 +45,7 @@
     "preview": "vite preview",
     "test": "node scripts/run-unit-tests.mjs",
     "test:track": "node scripts/track-regression.mjs",
+    "qa:ask-claude": "node scripts/qa-ask-claude.mjs",
     "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs",
     "qa:panel-resize": "node scripts/qa-panel-resize.mjs",
     "qa:street-level": "node scripts/qa-street-level.mjs",
