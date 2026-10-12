@@ -114,6 +114,28 @@ must not be compared directly with the foreground-controlled scenes above.
 These populations change continuously. A future comparison must record the
 live counts again and match the focus conditions.
 
+## Paced rendering (local build, 2026-10-12)
+
+Flights and Military Flights now hold the render loop PACED at their fleet's
+80 ms step instead of continuous (`src/renderGovernor.js`). A parked scene with
+aircraft on therefore draws about 12 frames per second per fleet by design,
+because the aircraft only move on that step; camera motion and a tracked
+aircraft still draw every frame. A rest FPS near 12 with aircraft on is the
+intended behaviour, not a regression. Compare with `?pacedRender=0`, which
+turns paced holds back into continuous ones.
+
+`scripts/qa-paced-render.mjs` measures this on the machine's real GPU, with
+in-page control windows (a frame requested every tick) alternating with paced
+windows under the same traffic. On an Intel Arc (Windows 11, ANGLE D3D11),
+camera parked over Denver, about 11,700 aircraft:
+
+| Scene | Renders/s control → paced | Frames with no change /s | Aircraft steps/s |
+| --- | ---: | ---: | ---: |
+| Flights | 24–27 → 11–15 | 13–16 → 0–4 | 10.9–11.8 → 11.0–11.3 |
+| Flights + Military | 27–45 → 21 | 11–25 → 0.3–0.7 | military 10.7–11.3 → 11.2 |
+
+The remaining unchanged frames come from detection's label-fade follow-ups.
+
 ## Controls for a future capture
 
 Use the same controls before attributing a difference to the application:
