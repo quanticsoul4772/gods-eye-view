@@ -407,6 +407,8 @@ test('the render-governor gate covers the parked case, with teeth on the painter
   // perfect idle. If either half of the runtime gate is dropped, this fails and
   // says so rather than leaving the policy pinned but unobserved.
   const gate = await readFile(new URL('../../scripts/qa-perf.mjs', import.meta.url), 'utf8');
+  // The settle helper is shared with the GPU harness and lives beside it.
+  const probe = await readFile(new URL('../../scripts/qa-renderProbe.mjs', import.meta.url), 'utf8');
   assert.match(gate, /detection ON takes NO continuous-render hold/);
   assert.match(gate, /idle parked scene with detection ON \(≤4 fires \/ 5s\)/);
   assert.match(gate, /detection ON costs no more idle frames than detection OFF/);
@@ -420,16 +422,18 @@ test('the render-governor gate covers the parked case, with teeth on the painter
   // occluder ~16 s later, inside the old counted window. The scene is honestly
   // idle for that whole gap, so only a run longer than one refresh period can
   // tell "settled" from "about to be interrupted".
-  assert.match(gate, /const settleUntilQuiet = async \(/,
+  assert.match(probe, /export async function settleUntilQuiet\(/,
     'the idle windows wait for quiet rather than sleeping a fixed time');
-  assert.match(gate, /const HUD_SUMMARY_INTERVAL_MS = 15_000;/,
+  assert.match(probe, /const HUD_SUMMARY_INTERVAL_MS = 15_000;/,
     'the quiet run is derived from the app cadence it has to outlast');
-  assert.match(gate, /QUIET_RUN_WINDOWS = Math\.ceil\(HUD_SUMMARY_INTERVAL_MS \/ 1_000\) \+ 1/,
+  assert.match(probe, /QUIET_RUN_WINDOWS = Math\.ceil\(HUD_SUMMARY_INTERVAL_MS \/ 1_000\) \+ 1/,
     'one full summary refresh period, plus a second of margin');
-  assert.match(gate, /requiredConsecutive = QUIET_RUN_WINDOWS/,
+  assert.match(probe, /requiredConsecutive = QUIET_RUN_WINDOWS/,
     'and the settle actually requires that run, rather than a shorter constant');
-  assert.match(gate, /else \{ if \(consecutive > 0\) restarts \+= 1; consecutive = 0; \}/,
+  assert.match(probe, /else \{ if \(consecutive > 0\) restarts \+= 1; consecutive = 0; \}/,
     'any activity restarts the run, so it cannot straddle the deferred burst');
+  assert.match(gate, /settleUntilQuiet = \(\) => settlePageUntilQuiet\(page\)/,
+    'and qa-perf uses that shared settle, not a sleep of its own');
   assert.match(gate, /check\('the parked scene holds a settled quiet run before the idle window is counted', idleSettle\.quiet/,
     'quiet that never arrives is asserted as a failure, not skipped past');
   assert.match(gate, /check\('the scene holds a settled quiet run again before the second idle window', teardownSettle\.quiet/);
