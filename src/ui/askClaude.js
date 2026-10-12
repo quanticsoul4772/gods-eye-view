@@ -604,6 +604,27 @@ export function installAskClaude({
     if (event.type === 'transcript' && event.role === 'assistant')
       showPopup(event.text);
   };
+  // A cockpit turn can end the cockpit ("exit cockpit"); what is left of it
+  // then shows in the voice card, opened with the message that started it.
+  const emitFromCockpit = (text) => {
+    let inCard = false;
+    return (event) => {
+      if (!inCard && inCockpit()) return emitToPopup(event);
+      if (!inCard) {
+        inCard = true;
+        setLabels(true);
+        emitToCard({ type: 'interruption' });
+        emitToCard({
+          type: 'transcript',
+          role: 'user',
+          text,
+          final: true,
+          full: true,
+        });
+      }
+      emitToCard(event);
+    };
+  };
   const openCockpitField = () => {
     cockpitBox.hidden = false;
     cockpitInput.focus();
@@ -637,7 +658,7 @@ export function installAskClaude({
     showPopup('Thinking… Esc cancels.');
     let outcome;
     try {
-      outcome = await startTurn(text, emitToPopup);
+      outcome = await startTurn(text, emitFromCockpit(text));
     } finally {
       cockpitTurn = false;
     }
@@ -651,10 +672,7 @@ export function installAskClaude({
     }
   };
   const onCockpitChange = (event) => {
-    if (event.detail?.active) return;
-    // Its actions need the cockpit, and the field that could cancel it is gone.
-    if (cockpitTurn) turn?.controller.abort();
-    closeCockpitField();
+    if (!event.detail?.active) closeCockpitField();
   };
 
   const onDocumentKey = (event) => {

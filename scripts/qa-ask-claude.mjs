@@ -41,6 +41,7 @@ const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // messages returning { status, body }, or 'hold' to leave the request open.
 const replies = [];
 const requests = [];
+let held = null; // the last request left open, to answer later by hand
 const answer = (text) => (messages) => ({
   status: 200,
   body: {
@@ -76,6 +77,7 @@ page.on('request', (request) => {
   const { messages } = JSON.parse(request.postData() || '{}');
   requests.push(messages);
   const reply = replies.shift();
+  if (reply === 'hold') held = { request, messages };
   if (!reply || reply === 'hold') return;
   const { status, body } = reply(messages);
   request
@@ -434,10 +436,27 @@ try {
       }),
     );
   });
-  await turnDone();
+  await pause(300);
   check(
-    'leaving cockpit cancels its turn and closes the field',
-    !(await ui()).cockpitOpen,
+    'leaving cockpit closes the field but the turn carries on',
+    !(await ui()).cockpitOpen && (await ui()).cancelShown,
+  );
+  // "exit cockpit" ends the cockpit itself; its reply must still arrive.
+  const { body } = answer('Left the cockpit.')(held.messages);
+  await held.request.respond({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify(body),
+  });
+  await turnDone();
+  state = await ui();
+  check(
+    'the rest of the turn shows in the card',
+    state.cardShown &&
+      state.user === 'and then?' &&
+      state.reply === 'Left the cockpit.' &&
+      state.kicker === 'CLAUDE',
+    JSON.stringify({ user: state.user, reply: state.reply }),
   );
 
   check('no page errors', pageErrors.length === 0, pageErrors.join(' | '));
