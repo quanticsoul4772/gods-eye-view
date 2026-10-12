@@ -605,11 +605,18 @@ export function installAskClaude({
       showPopup(event.text);
   };
   // A cockpit turn can end the cockpit ("exit cockpit"); what is left of it
-  // then shows in the voice card, opened with the message that started it.
+  // then shows in the voice card, opened with the message that started it and
+  // the calls still running, since the card ignores a result it never saw
+  // called.
   const emitFromCockpit = (text) => {
     let inCard = false;
+    const running = new Map();
     return (event) => {
-      if (!inCard && inCockpit()) return emitToPopup(event);
+      if (!inCard && inCockpit()) {
+        if (event.type === 'action-call') running.set(event.callId, event);
+        if (event.type === 'action-result') running.delete(event.callId);
+        return emitToPopup(event);
+      }
       if (!inCard) {
         inCard = true;
         setLabels(true);
@@ -621,6 +628,7 @@ export function installAskClaude({
           final: true,
           full: true,
         });
+        for (const call of running.values()) emitToCard(call);
       }
       emitToCard(event);
     };

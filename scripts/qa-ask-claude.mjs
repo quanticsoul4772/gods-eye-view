@@ -459,6 +459,48 @@ try {
     JSON.stringify({ user: state.user, reply: state.reply }),
   );
 
+  // An action that ends Cockpit, as "exit cockpit" does: the card picks up
+  // the turn with its running step, not just the reply.
+  await page.evaluate(() => {
+    const commands = window.__godsEyeView.voiceCommands;
+    const runner = commands.runner;
+    commands.__qaRunner = runner;
+    commands.runner = async (name, args, options) => {
+      if (name === 'clear_annotations') {
+        document.body.classList.remove('cockpit-mode');
+        dispatchEvent(
+          new CustomEvent('gev:cockpit-mode-changed', {
+            detail: { active: false },
+          }),
+        );
+      }
+      return runner(name, args, options);
+    };
+    document.body.classList.add('cockpit-mode');
+  });
+  replies.push(
+    action('x1', 'clear_annotations', {}),
+    answer('Cockpit is off.'),
+  );
+  await page.keyboard.press('/');
+  await page.keyboard.type('leave and clear');
+  await page.keyboard.press('Enter');
+  await turnDone();
+  state = await ui();
+  check(
+    'a turn that ends Cockpit keeps its step in the card',
+    state.user === 'leave and clear' &&
+      state.steps.length === 1 &&
+      /Clear marks, done/.test(state.steps[0]) &&
+      state.reply === 'Cockpit is off.',
+    JSON.stringify({ steps: state.steps, reply: state.reply }),
+  );
+  await page.evaluate(() => {
+    const commands = window.__godsEyeView.voiceCommands;
+    commands.runner = commands.__qaRunner;
+    delete commands.__qaRunner;
+  });
+
   check('no page errors', pageErrors.length === 0, pageErrors.join(' | '));
 } catch (error) {
   failures.push(error.message);
