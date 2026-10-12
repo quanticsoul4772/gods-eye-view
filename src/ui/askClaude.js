@@ -13,6 +13,7 @@ export const COCKPIT_PREVIEW_CHARS = 140;
 const COCKPIT_POPUP_MS = 10_000;
 /** Statuses that mean Claude cannot be reached at all; shown in the composer. */
 const SETUP_STATUSES = new Set([0, 403, 503]);
+const VOICE_ON_NOTE = 'Voice is on — turn it off to type.';
 
 const STYLE = `
 #gev-voice-control { --gev-composer-h: 2.75rem; }
@@ -447,9 +448,9 @@ export function installAskClaude({
     const blocked = voiceActive();
     send.disabled = blocked || Boolean(turn);
     input.disabled = Boolean(turn);
-    if (blocked && !turn)
-      setStatus('Voice is on — turn it off to type.', 'warn');
-    else if (!turn && status.dataset.tone === 'warn') setStatus('');
+    // Only the gate's own note is cleared here; a setup error has to stay.
+    if (blocked && !turn) setStatus(VOICE_ON_NOTE, 'warn');
+    else if (!turn && statusText.textContent === VOICE_ON_NOTE) setStatus('');
   };
   const syncTurns = () => {
     const count = conversation.turns;
@@ -540,8 +541,7 @@ export function installAskClaude({
       turn = null;
       cancel.hidden = true;
     }
-    if (outcome.refused)
-      setStatus('Voice is on — turn it off to type.', 'warn');
+    if (outcome.refused) setStatus(VOICE_ON_NOTE, 'warn');
     else if (outcome.setup) setStatus(outcome.error, 'warn');
     else setStatus('');
     syncGate();
@@ -629,7 +629,7 @@ export function installAskClaude({
     const text = cockpitInput.value.trim();
     if (!text) return;
     if (voiceActive()) {
-      showPopup('Voice is on — turn it off to type.');
+      showPopup(VOICE_ON_NOTE);
       return;
     }
     if (turn) return;
