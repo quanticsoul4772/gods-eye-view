@@ -1,7 +1,8 @@
 import { serialSupported } from '../meshtastic/session.js';
+import { describeNode } from '../layers/localMeshtastic/index.js';
 
 const STYLE = `
-#meshtastic-card { position: fixed; right: 12px; bottom: 205px; z-index: 40;
+#meshtastic-card { position: fixed; top: 92px; left: 50%; transform: translateX(-50%); z-index: 40;
   width: min(280px, calc(100vw - 24px)); font: 13px/1.4 system-ui, sans-serif;
   color: #e8eef2; background: rgba(8, 14, 20, 0.88);
   border: 1px solid rgba(94, 242, 160, 0.4); border-radius: 6px; padding: 8px; }
@@ -14,6 +15,9 @@ const STYLE = `
   border-radius: 4px; padding: 4px 10px; }
 #meshtastic-card button[disabled] { opacity: 0.5; cursor: wait; }
 #meshtastic-card p { margin: 6px 0 0; color: #b8c4cc; }
+#meshtastic-card .node { white-space: pre-line; color: #e8eef2;
+  border-top: 1px solid rgba(94, 242, 160, 0.25); padding-top: 6px; }
+#meshtastic-card .node:empty { display: none; }
 body.ui-clean-view #meshtastic-card, body.ui-embed #meshtastic-card,
 body:has(#loading-screen:not(.hidden)) #meshtastic-card { display: none; }
 `;
@@ -51,7 +55,10 @@ export function installMeshtasticCard({
   header.append(title, button);
   const text = documentRef.createElement('p');
   text.setAttribute('aria-live', 'polite');
-  root.append(header, text);
+  // The clicked node; plain text, since names come from other people's radios.
+  const detail = documentRef.createElement('p');
+  detail.className = 'node';
+  root.append(header, text, detail);
   documentRef.head.append(style);
   documentRef.body.append(root);
 
@@ -72,6 +79,7 @@ export function installMeshtasticCard({
     if (connected)
       message += ` ${current.known} node(s) known, ${current.nodes.length} with a position.`;
     text.textContent = message;
+    detail.textContent = current.selected ? describeNode(current.selected) : '';
   };
   const unsubscribe = layer.subscribe((update) => {
     current = update;

@@ -23,6 +23,9 @@ export const BAUD_RATE = 115_200;
 export const HEARTBEAT_MS = 5 * 60 * 1000;
 /** Most nodes kept; the firmware's own node database holds a few hundred. */
 export const MAX_NODES = 2000;
+/** 2020-01-01: no Meshtastic radio heard anything before this. */
+const EARLIEST_PLAUSIBLE_MS = Date.UTC(2020, 0, 1);
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Whether this browser can open a serial device. */
 export function serialSupported(navigatorRef = globalThis.navigator) {
@@ -63,8 +66,18 @@ export function createNodeStore({ now = () => Date.now() } = {}) {
       : null;
     record.precisionM = precisionRadiusM(position.precisionBits);
   };
-  const heardAt = (seconds) =>
-    Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : now();
+  // A radio without GPS or a set clock reports times near 1970 (or seconds
+  // since boot); those are not times anyone heard anything.
+  const plausibleMs = (seconds) => {
+    const ms = Number(seconds) * 1000;
+    return Number.isFinite(ms) &&
+      ms >= EARLIEST_PLAUSIBLE_MS &&
+      ms <= now() + DAY_MS
+      ? ms
+      : null;
+  };
+  // A packet arriving now was heard now, whatever its timestamp says.
+  const heardAt = (seconds) => plausibleMs(seconds) ?? now();
 
   return {
     /** Apply one decoded FromRadio; returns whether anything changed. */
@@ -83,7 +96,9 @@ export function createNodeStore({ now = () => Date.now() } = {}) {
         if (record) {
           applyUser(record, info.user);
           applyPosition(record, info.position);
-          if (info.lastHeard) record.lastHeardMs = heardAt(info.lastHeard);
+          // From the radio's database: an untrustworthy time stays unknown.
+          const lastHeard = plausibleMs(info.lastHeard);
+          if (lastHeard != null) record.lastHeardMs = lastHeard;
           if (Number.isFinite(info.snr)) record.snr = info.snr;
           if (info.hopsAway != null) record.hops = info.hopsAway;
           record.viaMqtt = info.viaMqtt === true;
@@ -185,10 +200,37 @@ export function createMeshtasticSession({
         if (changed) notify();
       }
     } catch (problem) {
-      if (port) setState('error', problem?.message || 'Lost the radio');
+      if (port) await lose(problem?.message || 'Lost the radio');
       return;
     }
-    if (port) setState('error', 'The radio disconnected');
+    if (port) await lose('The radio disconnected');
+  };
+
+  /** Stop the heartbeat and release the reader, writer and port. */
+  const release = async () => {
+    const closing = port;
+    port = null;
+    if (heartbeat != null) clearIntervalImpl(heartbeat);
+    heartbeat = null;
+    try {
+      await reader?.cancel();
+    } catch {
+      /* already closed */
+    }
+    reader?.releaseLock?.();
+    writer?.releaseLock?.();
+    reader = null;
+    writer = null;
+    try {
+      await closing?.close();
+    } catch {
+      /* already closed */
+    }
+  };
+  /** The link dropped: free the port so Connect works again, and say why. */
+  const lose = async (message) => {
+    await release();
+    setState('error', message);
   };
 
   return {
@@ -210,7 +252,7 @@ export function createMeshtasticSession({
         reader = port.readable.getReader();
         writer = port.writable.getWriter();
       } catch (problem) {
-        await this.disconnect({ quiet: true });
+        await release();
         // Closing the picker without choosing is not an error.
         setState(
           problem?.name === 'NotFoundError' ? 'idle' : 'error',
@@ -223,10 +265,15 @@ export function createMeshtasticSession({
       store.clear();
       setState('syncing');
       void readLoop();
-      await writer.write(WAKE_BYTES);
-      await delay(100);
-      configNonce = (Math.random() * 0xfffffffe + 1) >>> 0;
-      await send(encodeWantConfig(configNonce));
+      try {
+        await writer.write(WAKE_BYTES);
+        await delay(100);
+        configNonce = (Math.random() * 0xfffffffe + 1) >>> 0;
+        await send(encodeWantConfig(configNonce));
+      } catch (problem) {
+        await lose(problem?.message || 'Could not talk to the radio');
+        return false;
+      }
       heartbeat = setIntervalImpl(() => {
         void send(encodeHeartbeat()).catch(() => {});
       }, heartbeatMs);
@@ -234,24 +281,7 @@ export function createMeshtasticSession({
     },
     /** Stop listening and release the port. */
     async disconnect({ quiet = false } = {}) {
-      const closing = port;
-      port = null;
-      if (heartbeat != null) clearIntervalImpl(heartbeat);
-      heartbeat = null;
-      try {
-        await reader?.cancel();
-      } catch {
-        /* already closed */
-      }
-      reader?.releaseLock?.();
-      writer?.releaseLock?.();
-      reader = null;
-      writer = null;
-      try {
-        await closing?.close();
-      } catch {
-        /* already closed */
-      }
+      await release();
       if (!quiet) setState('idle');
     },
   };

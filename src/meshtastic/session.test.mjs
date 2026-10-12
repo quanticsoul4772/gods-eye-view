@@ -192,3 +192,42 @@ test('the node store caps its size and ignores frames it cannot use', () => {
     store.apply({ nodeInfo: { num, user: {} } });
   assert.equal(store.list().length, 2000);
 });
+
+test('after an unplug the port is released, so Connect works again', async () => {
+  const first = fakePort();
+  const second = fakePort();
+  const ports = [first.port, second.port];
+  const states = [];
+  const session = createMeshtasticSession({
+    serial: { requestPort: async () => ports.shift() },
+    onChange: (update) => states.push(update),
+    delay: async () => {},
+    setIntervalImpl: () => 1,
+    clearIntervalImpl: () => {},
+  });
+  await session.connect();
+  first.radio.unplug();
+  await tick();
+  await tick();
+  assert.equal(states.at(-1).state, 'error');
+  assert.equal(first.port.closed, true, 'the lost port is closed');
+  assert.equal(await session.connect(), true);
+  assert.equal(second.port.opened.baudRate, BAUD_RATE, 'a new port opened');
+  await session.disconnect();
+});
+
+test('times from a radio without a clock are not shown as when a node was heard', () => {
+  const now = Date.UTC(2026, 9, 11, 12);
+  const store = createNodeStore({ now: () => now });
+  // 1970-era seconds (seconds since boot), and a time far in the future.
+  store.apply({ nodeInfo: { num: 1, lastHeard: 5_000 } });
+  store.apply({ nodeInfo: { num: 2, lastHeard: now / 1000 + 10 * 86_400 } });
+  store.apply({ nodeInfo: { num: 3, lastHeard: now / 1000 - 600 } });
+  const byNum = Object.fromEntries(store.list().map((n) => [n.num, n]));
+  assert.equal(byNum[1].lastHeardMs, undefined);
+  assert.equal(byNum[2].lastHeardMs, undefined);
+  assert.equal(byNum[3].lastHeardMs, now - 600_000);
+  // A packet heard live with a bad timestamp was still heard now.
+  store.apply({ packet: { from: 4, rxTime: 12, viaMqtt: false, hops: 0 } });
+  assert.equal(store.list().find((n) => n.num === 4).lastHeardMs, now);
+});

@@ -44,7 +44,7 @@ export function describeNode(node, now = Date.now()) {
   }
   const link = [];
   if (Number.isFinite(node.snr)) link.push(`SNR ${node.snr.toFixed(1)} dB`);
-  if (node.hops != null)
+  if (node.hops != null && !node.self)
     link.push(node.hops === 0 ? 'direct' : `${node.hops} hop(s)`);
   if (node.viaMqtt) link.push('via MQTT');
   if (link.length) lines.push(link.join(' · '));
@@ -61,6 +61,7 @@ export function describeNode(node, now = Date.now()) {
 export function createLocalMeshtasticLayer({
   session = null,
   overlayHost,
+  picking = null,
   now = () => Date.now(),
 } = {}) {
   if (!overlayHost)
@@ -70,7 +71,17 @@ export function createLocalMeshtasticLayer({
   let enabled = false;
   let lastUpdate = null;
   let status = { state: 'idle', nodes: [], known: 0 };
+  let selectedId = null;
+  let clicks = null;
   const listeners = new Set();
+  const entityPrefix = `${LAYER_ID}:`;
+  /** The clicked node's latest record, or null once it is gone. */
+  const selected = () =>
+    status.nodes.find((node) => node.id === selectedId) || null;
+  const emit = () => {
+    const update = { ...status, selected: selected() };
+    for (const listener of listeners) listener(update);
+  };
 
   const draw = () => {
     if (!dataSource) return;
@@ -114,10 +125,6 @@ export function createLocalMeshtasticLayer({
               },
             }
           : {}),
-        description: describeNode(node, time)
-          .split('\n')
-          .map((line) => `<div>${escapeHtml(line)}</div>`)
-          .join(''),
       });
     }
     overlayHost.setEntries(LAYER_ID, names.slice(0, OVERLAY_LIMIT), {
@@ -132,7 +139,18 @@ export function createLocalMeshtasticLayer({
     status = update;
     lastUpdate = now();
     draw();
-    for (const listener of listeners) listener(update);
+    emit();
+  };
+  /** A click on one of this layer's nodes selects it; elsewhere clears it. */
+  const onClick = ({ position }) => {
+    if (!enabled || !viewer) return;
+    const pickedId = picking?.resolvePickId(viewer.scene.pick(position));
+    const next = pickedId?.startsWith(entityPrefix)
+      ? pickedId.slice(entityPrefix.length)
+      : null;
+    if (next === selectedId) return;
+    selectedId = next;
+    emit();
   };
   const radio =
     session || createMeshtasticSession({ onChange: onSessionChange });
@@ -148,7 +166,7 @@ export function createLocalMeshtasticLayer({
     /** Follow connection and node changes; returns an unsubscribe function. */
     subscribe(listener) {
       listeners.add(listener);
-      listener(status);
+      listener({ ...status, selected: selected() });
       return () => listeners.delete(listener);
     },
 
@@ -156,18 +174,25 @@ export function createLocalMeshtasticLayer({
       viewer = nextViewer;
       dataSource = new Cesium.CustomDataSource(LAYER_ID);
       viewer.dataSources.add(dataSource);
+      clicks = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+      clicks.setInputAction(onClick, Cesium.ScreenSpaceEventType.LEFT_CLICK);
     },
     enable() {
       enabled = true;
       if (dataSource) dataSource.show = true;
       overlayHost.setVisible(LAYER_ID, true);
+      // Other layers' click handlers leave this layer's nodes alone.
+      picking?.registerPickOwner(LAYER_ID, (id) => id.startsWith(entityPrefix));
       draw();
     },
     disable() {
       enabled = false;
       if (dataSource) dataSource.show = false;
       overlayHost.setVisible(LAYER_ID, false);
+      picking?.unregisterPickOwner(LAYER_ID);
+      selectedId = null;
       draw();
+      emit();
     },
     /** Redraw so "heard N min ago" and staleness stay current. */
     async update() {
@@ -178,6 +203,9 @@ export function createLocalMeshtasticLayer({
     destroy(nextViewer = viewer) {
       void radio.disconnect({ quiet: true });
       listeners.clear();
+      clicks?.destroy();
+      clicks = null;
+      picking?.unregisterPickOwner(LAYER_ID);
       overlayHost.clearSource(LAYER_ID);
       overlayHost.setVisible(LAYER_ID, false);
       if (dataSource) nextViewer?.dataSources?.remove(dataSource, true);
@@ -193,14 +221,4 @@ export function createLocalMeshtasticLayer({
       };
     },
   };
-}
-
-function escapeHtml(text) {
-  return String(text).replace(
-    /[&<>"']/g,
-    (ch) =>
-      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[
-        ch
-      ],
-  );
 }
