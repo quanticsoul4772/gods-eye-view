@@ -162,7 +162,12 @@ function measureWindow(page, ms, drive = null, everyTick = false) {
   }), ms, drive, everyTick);
 }
 
-/** Time from a camera stop to the first frame that carries billboard changes. */
+/**
+ * Time from a camera stop to the first frame that carries any billboard change
+ * — the forced rotation pass, or an ordinary fleet step if one comes first. It
+ * bounds how long icons can show a stale rotation; it does not isolate the
+ * rotation pass itself.
+ */
 function rotationAfterStop(page) {
   return page.evaluate(() => new Promise((resolve) => {
     const { viewer } = window.__godsEyeView;
@@ -253,8 +258,8 @@ try {
     add(await scenario(page, `flights parked ${round}`));
   }
   add(await scenario(page, 'flights pan', { drive: 'pan' }));
-  report.rotationAfterStopMs = await rotationAfterStop(page);
-  console.log(`  rotation pass after camera stop: ${report.rotationAfterStopMs} ms`);
+  report.firstChangeAfterStopMs = await rotationAfterStop(page);
+  console.log(`  first billboard change after camera stop: ${report.firstChangeAfterStopMs} ms`);
   await new Promise((r) => setTimeout(r, 3_000));
   await page.evaluate(() => window.__godsEyeView.dataManager.setEnabled('military', true, { origin: 'user' }));
   await new Promise((r) => setTimeout(r, 20_000));
