@@ -72,7 +72,13 @@
  * Requires a running dev server. Headless; flags disable occlusion
  * throttling so rAF cadence is trustworthy (hidden-pane gotcha).
  */
-import puppeteer from 'puppeteer';
+import {
+  countFrames as countPageFrames,
+  governorDiagnostics,
+  launchProbeBrowser,
+  parkAndClear,
+  settleUntilQuiet as settlePageUntilQuiet,
+} from './qa-renderProbe.mjs';
 
 const argv = process.argv;
 const url = argv.includes('--url') ? argv[argv.indexOf('--url') + 1] : 'http://localhost:4173';
@@ -84,20 +90,7 @@ function check(name, pass, detail) {
   console.log(`  [${tag}] ${name}${detail ? ` — ${JSON.stringify(detail)}` : ''}`);
 }
 
-const browser = await puppeteer.launch({
-  headless: 'new',
-  protocolTimeout: 300_000,
-  args: [
-    '--no-sandbox',
-    '--disable-setuid-sandbox',
-    '--window-size=1440,900',
-    // Never let background/occlusion throttling freeze rAF or timers — the
-    // measurements below depend on an honest frame clock.
-    '--disable-backgrounding-occluded-windows',
-    '--disable-renderer-backgrounding',
-    '--disable-background-timer-throttling',
-  ],
-});
+const browser = await launchProbeBrowser();
 
 try {
   const page = await browser.newPage();
@@ -108,92 +101,15 @@ try {
   await new Promise((r) => setTimeout(r, 15_000));
 
   // Park deterministically and disable every layer.
-  await page.evaluate(async () => {
-    const gev = window.__godsEyeView;
-    const v = gev.viewer;
-    v.camera.cancelFlight();
-    const ell = v.scene.globe.ellipsoid;
-    v.camera.setView({
-      destination: ell.cartographicToCartesian({
-        longitude: -97.74 * Math.PI / 180, latitude: 30.27 * Math.PI / 180, height: 60_000,
-      }),
-      orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
-    });
-    for (const [id, entry] of gev.dataManager.layers) {
-      if (entry.enabled) { try { await gev.dataManager.setEnabled(id, false, { origin: 'user' }); } catch { /* gate reports via counts */ } }
-    }
-  });
+  await parkAndClear(page);
   // Let tiles finish + fades settle + the settling frames drain.
   await new Promise((r) => setTimeout(r, 12_000));
 
-  /** Count scene postRender fires and rAF ticks over windowMs. */
-  const countFrames = (windowMs) => page.evaluate((ms) => new Promise((resolve) => {
-    const scene = window.__godsEyeView.viewer.scene;
-    let renders = 0; let rafs = 0;
-    const remove = scene.postRender.addEventListener(() => { renders += 1; });
-    const t0 = performance.now();
-    const tick = () => {
-      rafs += 1;
-      if (performance.now() - t0 < ms) requestAnimationFrame(tick);
-      else { remove(); resolve({ renders, rafs }); }
-    };
-    requestAnimationFrame(tick);
-  }), windowMs);
-
-  const diag = () => page.evaluate(() => window.__godsEyeView.getRenderGovernorDiagnostics?.()
-    || window.__gevRenderGovernor?.getDiagnostics?.() || null);
-
-  /**
-   * The HUD's semantic summary refreshes on this cadence (`src/hud.js`,
-   * `HUD_SUMMARY_INTERVAL_MS`). A layer-visibility change marks it dirty, and
-   * the tick that picks that up types the new text in — reflowing an occluder
-   * and, with a paint lane active, costing frames. Mirrored rather than
-   * imported because this harness runs against the built app, not the module.
-   */
-  const HUD_SUMMARY_INTERVAL_MS = 15_000;
-  /** One full refresh period, plus a second of margin, in 1 s windows. */
-  const QUIET_RUN_WINDOWS = Math.ceil(HUD_SUMMARY_INTERVAL_MS / 1_000) + 1;
-
-  /**
-   * Wait until the scene is genuinely settled, and report whether it ever was.
-   * This is the START of the idle windows below — see the header.
-   *
-   * Requires a CONSECUTIVE RUN of empty one-second windows at least one full
-   * summary refresh period long, and resets that run on any activity. One empty
-   * window — or three — proves nothing here: the scene is genuinely idle for the
-   * whole gap between a teardown and the tick that notices it, so a short
-   * confirmation happily reports "quiet" moments before the typewriter fires.
-   * A run longer than the period cannot straddle that gap: it either contains
-   * the burst, and restarts, or it postdates it.
-   *
-   * `quiet: false` is a FAILURE, not a fall-through: a scene rendering every
-   * frame never produces an empty window at all, so this is what catches a real
-   * hot loop — and equally a contaminant that has stopped being a one-shot. The
-   * bound stays comfortably longer than settling takes and comfortably shorter
-   * than forever: worst case is one interrupted run, the burst itself, then a
-   * clean run (~55 s), against a 120 s ceiling.
-   */
-  const settleUntilQuiet = async (maxMs = 120_000, requiredConsecutive = QUIET_RUN_WINDOWS) => {
-    const deadline = Date.now() + maxMs;
-    let windows = 0;
-    let consecutive = 0;
-    let busiest = 0;
-    let restarts = 0;
-    while (Date.now() < deadline) {
-      windows += 1;
-      const { renders } = await countFrames(1_000);
-      busiest = Math.max(busiest, renders);
-      if (renders === 0) consecutive += 1;
-      else { if (consecutive > 0) restarts += 1; consecutive = 0; }
-      if (consecutive >= requiredConsecutive) {
-        return { quiet: true, windows, busiest, restarts, ranFor: consecutive, needRun: requiredConsecutive };
-      }
-    }
-    // A failure here reads as "never held N empty seconds in a row, best run was
-    // M, restarted R times, busiest window was B" — enough to tell a hot loop
-    // from a contaminant that has stopped being a one-shot.
-    return { quiet: false, windows, busiest, restarts, ranFor: consecutive, needRun: requiredConsecutive };
-  };
+  const countFrames = (windowMs) => countPageFrames(page, windowMs);
+  const diag = () => governorDiagnostics(page);
+  // Waits for a quiet run longer than one HUD summary tick — see the header and
+  // `settleUntilQuiet` in qa-renderProbe.mjs.
+  const settleUntilQuiet = () => settlePageUntilQuiet(page);
 
   // ── 1. idle: near-zero renders ────────────────────────────────────────
   const idleSettle = await settleUntilQuiet();
