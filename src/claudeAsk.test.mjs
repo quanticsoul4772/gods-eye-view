@@ -71,6 +71,7 @@ test('Claude gets the app actions and the query tools, without duplicates', () =
     assert.equal(names.includes(left), false, left);
   for (const tool of tools) assert.equal(tool.input_schema.type, 'object');
   assert.match(ASK_SYSTEM, /types instead of speaking/);
+  assert.match(ASK_SYSTEM, /turn that layer on/);
 });
 
 test('query tools run on the server and the answer comes back', async () => {
