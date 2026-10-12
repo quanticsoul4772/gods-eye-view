@@ -16,6 +16,8 @@ const MAX_STEPS = 6;
 const MAX_LINES = 6;
 const MAX_NOTES = 6;
 const MAX_CAPTION = 220;
+/** Typed conversations show whole messages; this only bounds a runaway reply. */
+const MAX_FULL_TEXT = 4000;
 
 const STATUS_TEXT = Object.freeze({
   running: 'in progress',
@@ -46,6 +48,14 @@ function caption(text) {
     .trim();
   return clean.length > MAX_CAPTION
     ? `…${clean.slice(-(MAX_CAPTION - 1))}`
+    : clean;
+}
+
+/** A typed message kept whole, line breaks included (`full: true` events). */
+function fullText(text) {
+  const clean = String(text || '').trim();
+  return clean.length > MAX_FULL_TEXT
+    ? `${clean.slice(0, MAX_FULL_TEXT - 1)}…`
     : clean;
 }
 
@@ -129,7 +139,12 @@ export function reduceVoiceCard(state, event) {
     case 'transcript': {
       const text = event.text || '';
       if (event.role === 'user') {
-        return text ? reveal({ ...state, user: caption(text) }) : state;
+        return text
+          ? reveal({
+              ...state,
+              user: event.full ? fullText(text) : caption(text),
+            })
+          : state;
       }
       if (event.role !== 'assistant' || !text) return state;
       const sameResponse =
@@ -139,7 +154,9 @@ export function reduceVoiceCard(state, event) {
       // transcript is normalized.
       const running = `${sameResponse ? state.assistant : ''}${text}`;
       const assistant = event.final
-        ? caption(text)
+        ? event.full
+          ? fullText(text)
+          : caption(text)
         : running.length > MAX_CAPTION
           ? `…${running.slice(-(MAX_CAPTION - 1))}`
           : running;

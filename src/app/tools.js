@@ -198,7 +198,15 @@ export function createApplicationTools({
       installAskClaude({
         viewer,
         dataManager,
-        run: (name, args) => voiceCommands.runner(name, args, { signal }),
+        // A typed turn's Cancel aborts its actions as well as the app's own.
+        run: (name, args, options = {}) =>
+          voiceCommands.runner(name, args, {
+            signal: options.signal
+              ? AbortSignal.any([signal, options.signal])
+              : signal,
+          }),
+        voiceCard: voiceCommands.voiceCard,
+        session: voiceCommands.session,
       }),
     );
   return { sceneDirector, annotations, voiceCommands };

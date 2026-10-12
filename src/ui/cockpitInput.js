@@ -8,6 +8,8 @@ export function onKeyDown(event) {
     // focus. Its target handler closes the overlay and restores attribution
     // focus; Cockpit must stay active behind it.
     if (event.target?.closest?.('.cesium-credit-lightbox')) return;
+    // The typed Claude field owns Escape (it closes the field), not Cockpit.
+    if (event.target?.closest?.('#gev-ask-cockpit')) return;
     if (
       document
         .getElementById('context-radio-dock')

@@ -207,3 +207,16 @@ test('panel bindings have a single owner and are inert after destruction', () =>
   assert.equal(collapsed, true);
   second.destroy();
 });
+
+test('Escape inside the typed Claude field in Cockpit does not exit Cockpit', () => {
+  let exited = false;
+  const cockpit = { active: true, destroyed: false, exit: () => (exited = true) };
+  const inField = {
+    key: 'Escape',
+    target: { closest: (selector) => (selector === '#gev-ask-cockpit' ? {} : null) },
+    preventDefault() {},
+    stopImmediatePropagation() {},
+  };
+  cockpitKeyDown.call(cockpit, inField);
+  assert.equal(exited, false);
+});

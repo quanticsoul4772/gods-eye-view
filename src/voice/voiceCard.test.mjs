@@ -231,3 +231,55 @@ test('presentation: stale and unmatched events never reopen the card', () => {
   const both = reduceVoiceCard(first, { type: 'outline', id: 'anno-2', status: 'failed' });
   assert.equal(voiceCardView(both).steps[0].detail, 'Outline unavailable');
 });
+
+test('presentation: typed messages marked full keep their whole text and line breaks', () => {
+  const long = `${'Southwest leads with 65 aircraft. '.repeat(10)}\nThen United.`;
+  const view = voiceCardView(
+    fold([
+      { type: 'interruption' },
+      { type: 'transcript', role: 'user', text: 'Which airlines\nlead over Texas?', full: true },
+      { type: 'transcript', role: 'assistant', text: long, final: true, full: true },
+    ]),
+  );
+  assert.equal(view.user.text, 'Which airlines\nlead over Texas?');
+  assert.equal(view.assistant.text, long.trim());
+  assert.ok(view.assistant.text.length > 220, 'no 220-character cap');
+  // Voice captions are unchanged: capped and single-line.
+  const spoken = voiceCardView(
+    fold([
+      { type: 'interruption' },
+      { type: 'transcript', role: 'assistant', text: long, final: true },
+    ]),
+  );
+  assert.ok(spoken.assistant.text.length <= 220);
+  assert.equal(spoken.assistant.text.includes('\n'), false);
+});
+
+test('controls: a held card is not idle-hidden until released', () => {
+  const { root, nodes } = fakeRoot();
+  const timers = new Map();
+  let nextId = 1;
+  const card = new VoiceCardControls({
+    root,
+    idleMs: 1000,
+    setTimer: (fn) => {
+      const id = nextId++;
+      timers.set(id, () => {
+        timers.delete(id);
+        fn();
+      });
+      return id;
+    },
+    clearTimer: (id) => timers.delete(id),
+  });
+  card.hold(true);
+  card.handle({ type: 'interruption' });
+  card.handle({ type: 'transcript', role: 'user', text: 'Fly to Denver', full: true });
+  assert.equal(timers.size, 0, 'no idle timer while held');
+  assert.equal(nodes.get('gev-voice-card').hidden, false);
+  card.hold(false);
+  assert.equal(timers.size, 1, 'releasing starts the idle countdown');
+  [...timers.values()][0]();
+  assert.equal(nodes.get('gev-voice-card').hidden, true);
+  card.destroy();
+});

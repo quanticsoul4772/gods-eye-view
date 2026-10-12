@@ -80,6 +80,7 @@ export class VoiceCardControls {
     );
     this.state = initialVoiceCardState();
     this.hideTimer = null;
+    this.held = false;
     this.destroyed = false;
     this.listeners = new AbortController();
     if (!this.elements.card) return;
@@ -107,8 +108,19 @@ export class VoiceCardControls {
     this.handle({ type: 'outline', id: event?.id, status: event?.status });
   }
 
+  /**
+   * Keep the card up regardless of the idle timer (a typed turn waiting on
+   * the server); releasing it restarts the idle countdown.
+   */
+  hold(on) {
+    this.held = Boolean(on);
+    if (this.held) this.cancelIdle();
+    else if (this.state.visible) this.scheduleIdle();
+  }
+
   scheduleIdle() {
     this.cancelIdle();
+    if (this.held) return;
     this.hideTimer = this.setTimer(() => {
       this.hideTimer = null;
       if (this.destroyed) return;
