@@ -138,6 +138,18 @@ export function createLifecycle({
     state.trailMmsi = null;
     state.trailBackfillToken = 0;
   }
+  /**
+   * Hold the render loop only while there are ships to draw. The layer's
+   * per-frame visibility pass has nothing to do without them, and the layer is
+   * often enabled with none: Contacts (opened by the cockpit) turns it on even
+   * when AIS has no key, which kept the whole scene rendering every frame.
+   */
+  function syncRenderDemand() {
+    if (state.feed.enabled && state.records.byMmsi.size > 0)
+      holdContinuousRender('ais-vessels'); // per-frame animator (perf wave 2)
+    else releaseContinuousRender('ais-vessels');
+  }
+
   const methods = {
     /** Configure the source before initialization; an active layer keeps its owner. */
     setSource(source) {
@@ -167,7 +179,7 @@ export function createLifecycle({
       const wasEnabled = state.feed.enabled;
       state.feed.enabled = true;
       if (!wasEnabled) beginAisSession();
-      holdContinuousRender('ais-vessels'); // per-frame animator (perf wave 2)
+      syncRenderDemand();
       const activeViewer = viewer || state.viewer;
       components.rendering.ensureCollections(activeViewer);
       components.selection.installInteraction(activeViewer);
@@ -266,6 +278,7 @@ export function createLifecycle({
     isDefinitiveTransportFailure,
     markAisUnavailable,
     resetState,
+    syncRenderDemand,
     methods,
   };
 }

@@ -4,6 +4,8 @@ import { createVesselLayer } from './index.js';
 import { createVesselState } from './state.js';
 
 const noop = () => {};
+/** Continuous-render holds taken by the layer, by owner id. */
+const renderHolds = new Set();
 function services() {
   return {
     context: {
@@ -29,7 +31,10 @@ function services() {
       forgetSpriteFocus: noop,
     },
     worldFocus: {},
-    render: { releaseContinuousRender: noop },
+    render: {
+      holdContinuousRender: (owner) => renderHolds.add(owner),
+      releaseContinuousRender: (owner) => renderHolds.delete(owner),
+    },
   };
 }
 function setup(source, options = {}) {
@@ -104,6 +109,29 @@ test('vessel construction is inert and each instance owns its records, icon cach
   layer.testing._beginAisSessionForTest();
   assert.equal(other.getStats().loading, false);
   assert.equal(requested, 0);
+  layer.testing._setVesselStateForTest({ enabled: false });
+});
+
+test('the layer holds the render loop only while it has ships to draw', async () => {
+  // Contacts (opened by the cockpit) enables vessels even without an AIS key;
+  // an empty layer holding continuous render kept the scene drawing every frame.
+  renderHolds.clear();
+  let current = snapshot([]);
+  const { layer } = setup({
+    async getSnapshot() {
+      return current;
+    },
+  });
+  // setup() leaves the feed enabled, as enable() would.
+  await layer.update();
+  assert.equal(renderHolds.has('ais-vessels'), false, 'no ships, no hold');
+  current = snapshot([observation('111')]);
+  await layer.update();
+  assert.equal(renderHolds.has('ais-vessels'), true, 'ships on screen hold it');
+  // An empty update keeps the ships already drawn, and with them the hold.
+  current = snapshot([]);
+  await layer.update();
+  assert.equal(layer.hasContact('111'), renderHolds.has('ais-vessels'));
   layer.testing._setVesselStateForTest({ enabled: false });
 });
 

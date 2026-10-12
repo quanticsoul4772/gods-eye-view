@@ -6,6 +6,7 @@ export function createVesselSnapshotRenderer({
   tracking,
   selection,
   cards,
+  onReconciled = () => {},
 }) {
   function reconcileVessels(viewer, rows, { complete = true } = {}) {
     rendering.ensureCollections(viewer);
@@ -56,6 +57,7 @@ export function createVesselSnapshotRenderer({
     );
     state.lastVisibilityUpdate = 0;
     rendering.updateVisibility(true);
+    onReconciled();
   }
   return { reconcileVessels };
 }
