@@ -10,9 +10,9 @@
  *  2. A discrete mutation while idle (style slider write routed through
  *     governorRequestRender) → at least one render, then settles again.
  *  3. Camera movement while idle → renders happen (Cesium-native path).
- *  4. Flights enabled → paced mode at the fleet's 80 ms step: well under the
- *     render-loop tick rate while parked (≤50% of Cesium ticks), still ≥5× the
- *     idle count, and every tick drawn while the camera moves.
+ *  4. Flights enabled → paced mode at the fleet's 80 ms step: at most 20
+ *     renders/s while parked (the 12.5/s step plus Cesium follow-ups), still
+ *     ≥5× the idle count, and every tick drawn while the camera moves.
  *  5. Flights disabled again → back to idle (near-zero fires).
  *  6. Governor diagnostics agree with the mode at every step.
  *
@@ -306,7 +306,13 @@ try {
   const d4 = await diag();
   check('governor reports paced mode with flights on, at the fleet step',
     d4?.mode === 'paced' && d4.paced?.flights === 80 && !d4.holds.includes('flights'), d4);
-  check('parked flights-on draws at most half the render-loop ticks', active.renders <= active.ticks * 0.5, active);
+  // Absolute, not a share of ticks: on a loaded SwiftShader run the tick rate
+  // can fall to ~22/s, and half of that is below the fleet's own 12.5 steps/s.
+  // Paced draws the steps plus Cesium's after-render follow-ups (resource and
+  // atlas loads), well under 20/s; continuous draws every tick.
+  const parkedRendersPerSec = active.renders / 5;
+  check('parked flights-on draws at the fleet step, not every tick (≤20 renders/s)',
+    parkedRendersPerSec <= 20, { ...active, rendersPerSec: parkedRendersPerSec });
   check('flights-on renders ≥5× idle renders', active.renders >= Math.max(1, idle.renders) * 5, { active: active.renders, idle: idle.renders });
   // Moving the camera every tick must still draw every tick: pacing only saves
   // the frames of a parked view.
