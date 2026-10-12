@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  answerQuestion,
-  askCatalog,
+  ASK_SYSTEM,
+  askTools,
   parseAskRequest,
+  runAskTurn,
 } from '../server/claude/ask.js';
 import { ToolError } from './tools/catalog.js';
 
@@ -25,43 +26,54 @@ function scriptedClient(replies) {
 
 const toolUse = (id, name, input) => ({ type: 'tool_use', id, name, input });
 const text = (value) => ({ type: 'text', text: value });
+const actionNames = new Set(['fly_to_location', 'set_layer_visibility']);
+const question = (content) => [{ role: 'user', content }];
 
-test('the ask request takes a bounded question and an optional camera', () => {
+test('the request is a conversation that starts with a question and ends with the user', () => {
   assert.deepEqual(
-    parseAskRequest(
-      JSON.stringify({
-        question: ' How many planes? ',
-        camera: { lat: 30, lon: -97, altitude_m: 5000 },
-      }),
-    ),
-    {
-      question: 'How many planes?',
-      camera: { lat: 30, lon: -97, altitude_m: 5000 },
-    },
+    parseAskRequest(JSON.stringify({ messages: question('Fly to Paris') })),
+    { messages: question('Fly to Paris') },
   );
-  assert.equal(
-    parseAskRequest(JSON.stringify({ question: 'x', camera: { lat: 1 } }))
-      .camera,
-    null,
-  );
-  assert.ok(parseAskRequest('not json').error);
-  assert.ok(parseAskRequest(JSON.stringify({ question: '  ' })).error);
-  assert.ok(
-    parseAskRequest(JSON.stringify({ question: 'a'.repeat(501) })).error,
-  );
+  for (const body of [
+    'not json',
+    JSON.stringify({}),
+    JSON.stringify({ messages: [] }),
+    JSON.stringify({ messages: [{ role: 'assistant', content: 'hi' }] }),
+    JSON.stringify({ messages: [{ role: 'system', content: 'x' }] }),
+    JSON.stringify({
+      messages: [...question('x'), { role: 'assistant', content: 'y' }],
+    }),
+    JSON.stringify({ messages: question('   ') }),
+    JSON.stringify({ messages: question('a'.repeat(2001)) }),
+  ])
+    assert.ok(parseAskRequest(body).error, body.slice(0, 60));
 });
 
-test('Claude gets the MCP query tools, without links or panels', () => {
-  const { tools } = askCatalog('http://localhost:4173');
+test('Claude gets the app actions and the query tools, without duplicates', () => {
+  const { tools, actionNames: actions } = askTools('http://localhost:4173');
   const names = tools.map((tool) => tool.name);
-  assert.ok(names.includes('aircraft_in_area'));
-  assert.ok(names.includes('get_earthquakes'));
-  assert.equal(names.includes('show_in_gods_eye_view'), false);
-  assert.equal(names.includes('panel_request'), false);
+  for (const name of [
+    'fly_to_location',
+    'set_layer_visibility',
+    'track_entity',
+    'control_cockpit',
+    'annotate_map',
+    'analyst_query',
+  ])
+    assert.ok(actions.has(name) && names.includes(name), name);
+  assert.ok(names.includes('aircraft_in_area'), 'query tools are offered');
+  assert.equal(new Set(names).size, names.length, 'one tool per name');
+  for (const left of [
+    'show_in_gods_eye_view',
+    'panel_request',
+    'get_hud_caption',
+  ])
+    assert.equal(names.includes(left), false, left);
   for (const tool of tools) assert.equal(tool.input_schema.type, 'object');
+  assert.match(ASK_SYSTEM, /types instead of speaking/);
 });
 
-test('a question runs the tools Claude calls and returns its answer and view', async () => {
+test('query tools run on the server and the answer comes back', async () => {
   const view = {
     camera: { lat: 31, lon: -99, altitude_m: 900000 },
     layers: ['flights'],
@@ -77,63 +89,118 @@ test('a question runs the tools Claude calls and returns its answer and view', a
     {
       stop_reason: 'tool_use',
       content: [
-        text('Looking that up.'),
         toolUse('t1', 'aircraft_in_area', { area: { place: 'Texas' } }),
       ],
-      usage: {
-        input_tokens: 100,
-        cache_creation_input_tokens: 4000,
-        output_tokens: 50,
-      },
+      usage: { input_tokens: 10, output_tokens: 5 },
     },
     {
       stop_reason: 'end_turn',
       content: [text('There are 12 aircraft over Texas.')],
-      usage: {
-        input_tokens: 300,
-        cache_read_input_tokens: 4000,
-        output_tokens: 20,
-      },
+      usage: { input_tokens: 20, output_tokens: 8 },
     },
   ]);
-  const outcome = await answerQuestion({
+  const outcome = await runAskTurn({
     client,
     catalog,
     tools: [],
-    question: 'How many planes over Texas?',
-    camera: { lat: 30.2, lon: -97.7, altitude_m: 12000 },
+    actionNames,
+    messages: question('How many planes over Texas?'),
   });
-  assert.deepEqual(outcome, {
-    answer: 'There are 12 aircraft over Texas.',
-    view,
-    tools: ['aircraft_in_area'],
-    // Summed over both rounds, so the cost of a question is visible.
-    usage: {
-      requests: 2,
-      input_tokens: 400,
-      cache_read_input_tokens: 4000,
-      cache_creation_input_tokens: 4000,
-      output_tokens: 70,
-    },
-  });
-  const [first, second] = client.requests;
-  assert.deepEqual(first.cache_control, { type: 'ephemeral' });
-  assert.match(
-    first.messages[0].content,
-    /over 30\.2000, -97\.7000 at 12000 m/,
+  assert.equal(outcome.answer, 'There are 12 aircraft over Texas.');
+  assert.deepEqual(outcome.view, view);
+  assert.equal(outcome.usage.requests, 2);
+  // The conversation grew by appending only: question, call, result, answer.
+  assert.deepEqual(
+    outcome.messages.map((m) => m.role),
+    ['user', 'assistant', 'user', 'assistant'],
   );
-  // The default model is Haiku 5.5, which has no server-side fallback.
-  assert.equal(first.model, 'claude-haiku-5-5');
-  assert.equal('fallbacks' in first, false);
-  assert.equal('betas' in first, false);
-  // The tool result goes back as one user turn after the assistant's turn.
-  const result = second.messages[2].content[0];
-  assert.equal(result.type, 'tool_result');
-  assert.equal(result.tool_use_id, 't1');
-  assert.equal(JSON.parse(result.content).summary, '12 aircraft in Texas.');
+  assert.equal(outcome.messages[2].content[0].tool_use_id, 't1');
+  assert.equal(client.requests[0].system, ASK_SYSTEM);
+  assert.equal('fallbacks' in client.requests[0], false, 'Haiku has none');
 });
 
-test('a failing tool is reported to Claude as an error result', async () => {
+test('app actions go back to the page with the same turn’s query results', async () => {
+  const catalog = {
+    async call() {
+      return { summary: 'Found it.', data: {} };
+    },
+  };
+  const client = scriptedClient([
+    {
+      stop_reason: 'tool_use',
+      content: [
+        text('On it.'),
+        toolUse('q1', 'find_aircraft', { callsign: 'UAL1' }),
+        toolUse('a1', 'fly_to_location', { query: 'Denver' }),
+      ],
+    },
+  ]);
+  const outcome = await runAskTurn({
+    client,
+    catalog,
+    tools: [],
+    actionNames,
+    messages: question('Find UAL1 and fly to Denver'),
+  });
+  assert.deepEqual(outcome.pending, [
+    { id: 'a1', name: 'fly_to_location', input: { query: 'Denver' } },
+  ]);
+  assert.equal(outcome.results.length, 1);
+  assert.equal(outcome.results[0].tool_use_id, 'q1');
+  assert.equal(outcome.answer, undefined);
+  // The assistant turn is kept so the page can append every result after it.
+  assert.equal(outcome.messages.at(-1).role, 'assistant');
+});
+
+test('the page’s action results continue the conversation, and follow-ups append', async () => {
+  const client = scriptedClient([
+    { stop_reason: 'end_turn', content: [text('Flying to Denver.')] },
+    { stop_reason: 'end_turn', content: [text('Flights are on.')] },
+  ]);
+  const afterAction = [
+    ...question('Fly to Denver'),
+    {
+      role: 'assistant',
+      content: [toolUse('a1', 'fly_to_location', { query: 'Denver' })],
+    },
+    {
+      role: 'user',
+      content: [
+        {
+          type: 'tool_result',
+          tool_use_id: 'a1',
+          content: JSON.stringify({ ok: true, action: 'fly_to_location' }),
+        },
+      ],
+    },
+  ];
+  const first = await runAskTurn({
+    client,
+    catalog: {},
+    tools: [],
+    actionNames,
+    messages: afterAction,
+  });
+  assert.equal(first.answer, 'Flying to Denver.');
+  const followUp = await runAskTurn({
+    client,
+    catalog: {},
+    tools: [],
+    actionNames,
+    messages: [
+      ...first.messages,
+      { role: 'user', content: 'Now turn on flights' },
+    ],
+  });
+  assert.equal(followUp.answer, 'Flights are on.');
+  // The second request carried the whole earlier exchange unchanged.
+  assert.deepEqual(
+    client.requests[1].messages.slice(0, first.messages.length),
+    first.messages,
+  );
+});
+
+test('a failing query tool is reported to Claude as an error result', async () => {
   const catalog = {
     async call() {
       throw new ToolError('unavailable', 'The AIS feed needs a key');
@@ -148,56 +215,50 @@ test('a failing tool is reported to Claude as an error result', async () => {
     },
     { stop_reason: 'end_turn', content: [text('Ship data is unavailable.')] },
   ]);
-  const outcome = await answerQuestion({
+  const outcome = await runAskTurn({
     client,
     catalog,
     tools: [],
-    question: 'Ships near Oakland?',
-    camera: null,
+    actionNames,
+    messages: question('Ships near Oakland?'),
   });
   assert.equal(outcome.answer, 'Ship data is unavailable.');
-  assert.equal(outcome.view, null);
   const result = client.requests[1].messages[2].content[0];
   assert.equal(result.is_error, true);
   assert.equal(result.content, 'The AIS feed needs a key');
 });
 
-test('a refusal is reported without an answer', async () => {
-  const client = scriptedClient([{ stop_reason: 'refusal', content: [] }]);
-  const outcome = await answerQuestion({
-    client,
+test('refusals and empty answers are errors, not answers', async () => {
+  const refused = await runAskTurn({
+    client: scriptedClient([{ stop_reason: 'refusal', content: [] }]),
     catalog: {},
     tools: [],
-    question: 'x',
-    camera: null,
+    actionNames,
+    messages: question('x'),
   });
-  assert.equal(outcome.answer, null);
-  assert.match(outcome.error, /declined/);
-});
-
-test('an answer with no text is reported as an error, not an empty answer', async () => {
-  const client = scriptedClient([{ stop_reason: 'end_turn', content: [] }]);
-  const outcome = await answerQuestion({
-    client,
+  assert.equal(refused.answer, null);
+  assert.match(refused.error, /declined/);
+  const empty = await runAskTurn({
+    client: scriptedClient([{ stop_reason: 'end_turn', content: [] }]),
     catalog: {},
     tools: [],
-    question: 'x',
-    camera: null,
+    actionNames,
+    messages: question('x'),
   });
-  assert.equal(outcome.answer, null);
-  assert.match(outcome.error, /no answer/);
+  assert.equal(empty.answer, null);
+  assert.match(empty.error, /no answer/);
 });
 
 test('larger models ask for server-side refusal fallback', async () => {
   const client = scriptedClient([
     { stop_reason: 'end_turn', content: [text('Done.')] },
   ]);
-  await answerQuestion({
+  await runAskTurn({
     client,
     catalog: {},
     tools: [],
-    question: 'x',
-    camera: null,
+    actionNames,
+    messages: question('x'),
     model: 'claude-opus-5-5',
   });
   assert.equal(client.requests[0].fallbacks, 'default');
