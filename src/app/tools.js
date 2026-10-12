@@ -6,6 +6,7 @@ import { createRecentImageryPanel } from '../ui/recentImagery.js';
 import { initGevVoiceCommands } from '../voice/gevRealtime.js';
 import { installViews, isEmbedded, isEmbeddedInline } from './embed.js';
 import { installAskClaude } from '../ui/askClaude.js';
+import { installMeshtasticCard } from '../ui/meshtasticCard.js';
 import { installScopeMask, destroyScopeMask } from '../scopeMask.js';
 import {
   installRenderGovernor,
@@ -189,6 +190,9 @@ export function createApplicationTools({
       signal,
     }),
   );
+  const meshtasticLayer = dataManager.layers?.get('local-meshtastic')?.module;
+  if (!isEmbedded() && meshtasticLayer)
+    defer(installMeshtasticCard({ layer: meshtasticLayer, dataManager }));
   if (!isEmbedded())
     defer(
       installAskClaude({
