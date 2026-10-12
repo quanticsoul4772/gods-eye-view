@@ -34,6 +34,7 @@ import {
   ROTATION_REFRESH_MS,
   COURSE_MAX_DPS,
 } from './policy.js';
+import { AIRCRAFT_ENVIRONMENT_MAP_OPTIONS } from '../../data/aircraftModelLighting.js';
 
 export function createRendering({
   flightState,
@@ -482,6 +483,7 @@ export function createRendering({
       model = await Cesium.Model.fromGltfAsync({
         url: resolveAsset(spec.url),
         asynchronous: false,
+        environmentMapOptions: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
         minimumPixelSize: MODEL_MIN_PX,
         scale: spec.scale,
         color: flightState._irBoost ? Cesium.Color.WHITE : _modelColor(icao24),
@@ -688,6 +690,7 @@ export function createRendering({
       Cesium.Model.fromGltfAsync({
         url: resolveAsset(trackedSpec.url),
         asynchronous: false,
+        environmentMapOptions: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
         minimumPixelSize: TRACKED_MODEL_MIN_PX,
         scale: trackedSpec.scale,
         color: flightState._irBoost ? Cesium.Color.WHITE : Cesium.Color.CYAN,
