@@ -411,7 +411,7 @@ export function installAskClaude({
   const cockpitInput = make('input', {
     type: 'text',
     maxLength: 500,
-    placeholder: 'Ask Claude (Esc to close)',
+    placeholder: 'Ask Claude (Esc cancels or closes)',
   });
   cockpitInput.setAttribute('aria-label', 'Message for Claude');
   const popup = make('div', { className: 'gev-ask-popup', hidden: true });
@@ -613,11 +613,15 @@ export function installAskClaude({
     popup.hidden = true;
     cockpitInput.blur();
   };
+  // Cockpit has no Cancel button: Escape cancels a running turn first, then
+  // closes the field.
+  let cockpitTurn = false;
   const onCockpitKey = async (event) => {
     event.stopPropagation();
     if (event.key === 'Escape') {
       event.preventDefault();
-      closeCockpitField();
+      if (cockpitTurn) turn?.controller.abort();
+      else closeCockpitField();
       return;
     }
     if (event.key !== 'Enter') return;
@@ -628,7 +632,15 @@ export function installAskClaude({
       showPopup('Voice is on — turn it off to type.');
       return;
     }
-    const outcome = await startTurn(text, emitToPopup);
+    if (turn) return;
+    cockpitTurn = true;
+    showPopup('Thinking… Esc cancels.');
+    let outcome;
+    try {
+      outcome = await startTurn(text, emitToPopup);
+    } finally {
+      cockpitTurn = false;
+    }
     if (outcome?.setup) showPopup(outcome.error);
     if (outcome?.answer) cockpitInput.value = '';
   };
@@ -639,7 +651,10 @@ export function installAskClaude({
     }
   };
   const onCockpitChange = (event) => {
-    if (!event.detail?.active) closeCockpitField();
+    if (event.detail?.active) return;
+    // Its actions need the cockpit, and the field that could cancel it is gone.
+    if (cockpitTurn) turn?.controller.abort();
+    closeCockpitField();
   };
 
   const onDocumentKey = (event) => {
