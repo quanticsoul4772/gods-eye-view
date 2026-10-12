@@ -904,6 +904,14 @@ export function createGevActionRunner({
           contextRollback: withContextModeVocabulary(contextRollback),
         };
       }
+      // Leaving Cockpit hands the contact back to map tracking, but
+      // state.activeTracked only describes the Cockpit view and reads false,
+      // which assistants took to mean nothing is followed any more.
+      if (action === 'exit' && cockpitResult?.ok === true)
+        return {
+          ...cockpitResult,
+          cameraFollowing: Boolean(viewer?.trackedEntity),
+        };
       return cockpitResult;
     }
 
@@ -3202,6 +3210,10 @@ function getCurrentViewState(
   const cartographic = Cesium.Cartographic.fromCartesian(
     viewer.camera.positionWC,
   );
+  const cockpit =
+    typeof styleManager.getCockpitState === 'function'
+      ? styleManager.getCockpitState()
+      : null;
   return {
     ok: true,
     action: 'get_current_view_state',
@@ -3222,10 +3234,11 @@ function getCurrentViewState(
               : {}),
           }
         : null,
-    cockpit:
-      typeof styleManager.getCockpitState === 'function'
-        ? styleManager.getCockpitState()
-        : null,
+    cockpit,
+    // Whether the camera follows something, in map tracking or in Cockpit;
+    // cockpit.activeTracked covers only the latter.
+    cameraFollowing:
+      Boolean(viewer.trackedEntity) || cockpit?.activeTracked === true,
     controls:
       typeof styleManager.getControlState === 'function'
         ? styleManager.getControlState()

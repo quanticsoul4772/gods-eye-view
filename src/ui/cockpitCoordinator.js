@@ -182,9 +182,11 @@ export class CockpitCoordinator {
               : null,
           }
         : null,
-      activeTracked: this.cockpitView?.active
-        ? Boolean(this.cockpitView?.trackedEntity)
-        : false,
+      // Only while Cockpit is on: a constant false outside it read to
+      // assistants as "nothing is tracked" when the map still followed it.
+      ...(this.cockpitView?.active
+        ? { activeTracked: Boolean(this.cockpitView?.trackedEntity) }
+        : {}),
       activeMapView: !this.cockpitView?.active && entryAllowed,
     };
   }

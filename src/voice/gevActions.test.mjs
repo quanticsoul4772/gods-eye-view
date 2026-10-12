@@ -1184,6 +1184,37 @@ test('control_cockpit forwards schema-valid navigation filters', async () => {
   assert.equal(calls[1].options.targetLayer, 'military');
 });
 
+test('control_cockpit exit says whether the map still follows the contact', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const subject = { id: 'a335eb', layerId: 'flights', callsign: 'ENY3418' };
+  const viewer = {
+    trackedEntity: undefined,
+    clock: { onTick: { addEventListener: () => () => {} } },
+    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+    camera: { moveEnd: { addEventListener() {} } },
+  };
+  let restore = true;
+  const styleManager = {
+    controlCockpit(action) {
+      // Exit restores map tracking of the contact when it still exists.
+      if (action === 'exit' && restore) viewer.trackedEntity = { id: 'plane' };
+      return { ok: true, state: { active: false, subject } };
+    },
+  };
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager,
+    dataManager: { layers: new Map(), getAll: () => [] },
+  });
+
+  assert.equal((await runner('control_cockpit', { action: 'exit' })).cameraFollowing, true);
+  viewer.trackedEntity = undefined;
+  restore = false;
+  assert.equal((await runner('control_cockpit', { action: 'exit' })).cameraFollowing, false);
+  const next = await runner('control_cockpit', { action: 'next' });
+  assert.equal('cameraFollowing' in next, false, 'only exit reports it');
+});
+
 test('control_cockpit resolves spoken TR-3B spellings to the tr3b class id', async () => {
   globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
   const calls = [];
@@ -3303,6 +3334,35 @@ test('ISS voice lookup uses the registered satellite instance', async () => {
   const result = await runner('next_iss_pass', { latitude: 30, longitude: -97, minElevationDeg: 15 });
   assert.deepEqual(calls, [{ latDeg: 30, lonDeg: -97, minElevDeg: 15 }]);
   assert.match(result.error, /No ISS pass above 15/);
+});
+
+test('get_current_view_state says whether the camera follows something', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const viewer = {
+    trackedEntity: undefined,
+    clock: { onTick: { addEventListener: () => () => {} } },
+    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+    camera: {
+      moveEnd: { addEventListener() {} },
+      positionWC: Cesium.Cartesian3.fromDegrees(-97.7, 30.2, 1000),
+      positionCartographic: { height: 300_000, latitude: 0.52, longitude: -1.71 },
+    },
+  };
+  let cockpit = { active: false };
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager: { activeStyle: 'normal', getCockpitState: () => cockpit, getControlState: () => null },
+    dataManager: { layers: new Map(), isEnabled: () => false, getAll: () => [] },
+  });
+
+  assert.equal((await runner('get_current_view_state')).cameraFollowing, false);
+  // Map tracking, as after leaving Cockpit.
+  viewer.trackedEntity = { id: 'plane' };
+  assert.equal((await runner('get_current_view_state')).cameraFollowing, true);
+  // Cockpit takes the entity off the viewer and follows it itself.
+  viewer.trackedEntity = undefined;
+  cockpit = { active: true, activeTracked: true };
+  assert.equal((await runner('get_current_view_state')).cameraFollowing, true);
 });
 
 test('analyst_query and get_current_view_state carry stale feed provenance', async () => {
