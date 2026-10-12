@@ -356,6 +356,32 @@ test('the latest explicit Radio state wins across a Context session', () => {
   }
 });
 
+test('a Contacts layer the user turns off is not restored when that ends the session', () => {
+  // Flights was on before the cockpit opened Contacts; turning it off ends
+  // Contacts, and the exit restore used to switch it straight back on.
+  for (const origin of ['user', 'voice']) {
+    const snapshot = {
+      enabledLayerIds: new Set(['flights', 'earthquakes']),
+      userAdded: new Set(),
+      userRemoved: new Set(),
+    };
+    const record = (layerId, enabled) => recordContextSessionUserChange({
+      snapshot,
+      change: { type: 'visibility', origin, layerId, enabled },
+      effectiveContextMode: 'flights',
+    });
+
+    assert.equal(record('flights', false), true);
+    assert.deepEqual([...contextRestoreLayerIds(snapshot)], ['earthquakes']);
+    // Turned back on later, it is restored again.
+    assert.equal(record('flights', true), true);
+    assert.deepEqual([...contextRestoreLayerIds(snapshot)], ['flights', 'earthquakes']);
+    // A layer that was not on before the session is not bookkept on disable.
+    assert.equal(record('military', false), false);
+    assert.equal(snapshot.userRemoved.has('military'), false);
+  }
+});
+
 test('only direct UI and voice origins count as explicit Context intent', () => {
   assert.equal(isExplicitUserIntentOrigin('user', 'cctv'), true);
   assert.equal(isExplicitUserIntentOrigin('voice', 'radio'), true);

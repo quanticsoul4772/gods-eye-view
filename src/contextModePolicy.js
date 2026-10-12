@@ -271,7 +271,10 @@ export function recordContextSessionUserChange({
   }
   const isCompanion = CONTEXT_COMPANIONS.has(change.layerId);
   if (change.enabled) {
-    if (CONTEXT_ENTRY_LAYER_IDS.includes(change.layerId)) return false;
+    // Turning a layer back on undoes an earlier explicit removal.
+    const clearedRemoval =
+      !isCompanion && Boolean(snapshot.userRemoved?.delete(change.layerId));
+    if (CONTEXT_ENTRY_LAYER_IDS.includes(change.layerId)) return clearedRemoval;
     if (change.adoptedFromSelection) {
       snapshot.userAdded.add(change.layerId);
       return true;
@@ -280,13 +283,20 @@ export function recordContextSessionUserChange({
       contextAllowedLayerIds(effectiveContextMode).has(change.layerId) &&
       !isCompanion
     )
-      return false;
+      return clearedRemoval;
     snapshot.userAdded.add(change.layerId);
     if (isCompanion) snapshot.userRemoved?.delete(change.layerId);
     return true;
   }
   const removedAddition = snapshot.userAdded.delete(change.layerId);
-  if (isCompanion && snapshot.userRemoved) {
+  // A layer the restore would bring back (it was on before the session) and
+  // the user just turned off must stay off: turning a Contacts layer off is
+  // what ends the session, and restoring it re-enabled the very layer the
+  // user (or Claude, or voice) had just switched off.
+  const wouldRestore = [...(snapshot.enabledLayerIds ?? [])].includes(
+    change.layerId,
+  );
+  if ((isCompanion || wouldRestore) && snapshot.userRemoved) {
     const wasRemoved = snapshot.userRemoved.has(change.layerId);
     snapshot.userRemoved.add(change.layerId);
     return removedAddition || !wasRemoved;
