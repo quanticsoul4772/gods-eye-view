@@ -476,9 +476,12 @@ export function installAskClaude({
     syncGate();
   });
 
+  // Pinned trays stay: the composer already sits above the pinned stack.
   const openTrays = () =>
     [...documentRef.querySelectorAll('#location-bar, #control-panel')].filter(
-      (tray) => !tray.classList.contains('collapsed'),
+      (tray) =>
+        !tray.classList.contains('collapsed') &&
+        !tray.classList.contains('dock-pinned'),
     );
   const openComposer = () => {
     // A dock popover and the composer would overlap; the popover gives way.
@@ -491,15 +494,16 @@ export function installAskClaude({
     syncTurns();
     input.focus();
   };
-  const closeComposer = () => {
+  const closeComposer = ({ restoreFocus = true } = {}) => {
     composer.hidden = true;
     control.classList.remove('composer-open');
     typeButton.setAttribute('aria-expanded', 'false');
-    typeButton.focus();
+    if (restoreFocus) typeButton.focus();
   };
-  // A popover opening later closes the composer.
+  // A popover opening later closes the composer and keeps its own focus.
   const trayWatch = new MutationObserver(() => {
-    if (!composer.hidden && openTrays().length) closeComposer();
+    if (!composer.hidden && openTrays().length)
+      closeComposer({ restoreFocus: false });
   });
   for (const tray of documentRef.querySelectorAll(
     '#location-bar, #control-panel',
@@ -558,6 +562,7 @@ export function installAskClaude({
     }
     setLabels(true);
     const outcome = await startTurn(text, emitToCard);
+    if (outcome?.refused) setLabels(false);
     if (outcome?.answer) input.value = '';
     if (!composer.hidden) input.focus();
   };
