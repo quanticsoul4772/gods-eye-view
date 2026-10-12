@@ -497,7 +497,23 @@ export function planStepLabel(name, args = {}) {
         : 'Mark the map';
     }
     case 'fly_to_location':
-      return `Fly to ${displayName(args.query || args.locationId || 'location', 40)}`;
+      return args.query || args.locationId
+        ? `Fly to ${displayName(args.query || args.locationId, 40)}`
+        : 'Fly to coordinates';
+    case 'track_entity':
+      return `Track ${spokenLabel(args.query || 'target', 32)}`;
+    case 'stop_tracking':
+      return 'Stop tracking';
+    case 'analyst_query': {
+      const layers = (Array.isArray(args.layers) ? args.layers : [])
+        .slice(0, 2)
+        .map((id) => displayName(id, 20));
+      return layers.length ? `Search ${listPhrase(layers)}` : 'Search layers';
+    }
+    case 'clear_annotations':
+      return 'Clear marks';
+    case 'next_iss_pass':
+      return 'Next ISS pass';
     case 'select_nearest_aircraft':
       return `Nearest aircraft to ${displayName(args.locationQuery || args.locationId || 'here', 32)}`;
     case 'set_layer_visibility':
