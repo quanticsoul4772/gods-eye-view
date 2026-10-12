@@ -87,7 +87,8 @@ function installAwarenessRuntime({
   const originalDocument = globalThis.document;
   const listeners = new Map();
   let nextTimer = 1;
-  let preRenderListener = null;
+  // A Set, like a Cesium Event: the render governor listens here too.
+  const preRenderListeners = new Set();
   const createdElements = [];
 
   class FakeElement {
@@ -157,8 +158,8 @@ function installAwarenessRuntime({
       requestRender() { renderRequests.push(Date.now()); },
       preRender: {
         addEventListener(listener) {
-          preRenderListener = listener;
-          return () => { preRenderListener = null; };
+          preRenderListeners.add(listener);
+          return () => { preRenderListeners.delete(listener); };
         },
       },
     },
@@ -203,7 +204,7 @@ function installAwarenessRuntime({
 
   return {
     dispatch: fakeWindow.dispatch.bind(fakeWindow),
-    tick() { preRenderListener?.(); },
+    tick() { for (const listener of [...preRenderListeners]) listener(); },
     viewer,
     renderRequests,
     cameraFlights,

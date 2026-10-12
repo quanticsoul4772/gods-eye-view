@@ -5,6 +5,7 @@ import {
   installRenderGovernor,
   uninstallRenderGovernor,
   holdContinuousRender,
+  holdPacedRender,
   governorRequestRender,
   getRenderGovernorDiagnostics,
 } from '../renderGovernor.js';
@@ -46,6 +47,7 @@ test('uninstall only releases the current viewer and makes later render requests
   };
   installRenderGovernor(viewer);
   holdContinuousRender('fixture');
+  holdPacedRender('paced-fixture', 80);
   uninstallRenderGovernor({});
   assert.equal(getRenderGovernorDiagnostics().installed, true);
   uninstallRenderGovernor(viewer);
@@ -54,4 +56,5 @@ test('uninstall only releases the current viewer and makes later render requests
   assert.equal(renders, before);
   assert.equal(getRenderGovernorDiagnostics().installed, false);
   assert.deepEqual(getRenderGovernorDiagnostics().holds, []);
+  assert.deepEqual(getRenderGovernorDiagnostics().paced, {});
 });

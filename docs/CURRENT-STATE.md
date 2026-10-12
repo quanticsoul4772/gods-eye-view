@@ -1561,7 +1561,13 @@ fetching, trailing-24-hour filtering and partial-success caching are unchanged.
 > governor (`src/renderGovernor.js` — hold/release from every per-frame
 > animator; discrete mutators call `governorRequestRender`). Any NEW
 > per-frame visual animation MUST register a hold; any new discrete scene
-> mutation MUST request a frame — `scripts/qa-perf.mjs` is the gate. The
+> mutation MUST request a frame — `scripts/qa-perf.mjs` is the gate.
+> Since 2026-10-12 (local) an animator that moves on a FIXED STEP takes a
+> paced hold at that step (`holdPacedRender(owner, ms)`), so the scene draws
+> a frame only when the step is due; smooth per-frame motion keeps a
+> continuous hold, which wins. `?pacedRender=0` turns paced holds back into
+> continuous ones; `scripts/qa-paced-render.mjs` measures the difference on a
+> real GPU. The
 > circular scope is an explicit canvas (`src/scopeMask.js`, DISPLAY-rail
 > SCOPE toggle + FEATHER slider, hash keys `sc`/`scf`) — it is NOT the
 > six zero-intensity style stages anymore (those are disabled; see the
