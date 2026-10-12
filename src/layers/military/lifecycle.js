@@ -1,5 +1,5 @@
 import * as Cesium from 'cesium';
-import { JET_MODEL_URL } from './policy.js';
+import { JET_MODEL_URL, FLEET_DR_INTERVAL_MS } from './policy.js';
 
 export function createLifecycle({
   flightState,
@@ -10,7 +10,8 @@ export function createLifecycle({
 }) {
   const { clearFocusTarget } = services.focus;
   const { registerSpriteCollection, restoreSpriteOrder } = services.sprites;
-  const { holdContinuousRender, releaseContinuousRender } = services.render;
+  const { holdPacedRender, releasePacedRender, governorRequestRender } =
+    services.render;
   const { ensureGeoidReady } = services.geoid;
   const { registerPickOwner, unregisterPickOwner } = services.picking;
   const { setMilitaryLayerActive } = services.militaryRegistry;
@@ -115,7 +116,10 @@ export function createLifecycle({
     enable(viewer) {
       if (flightState._billboardCollection)
         flightState._billboardCollection.show = true;
-      holdContinuousRender('military'); // per-frame animator (perf wave 2)
+      // The fleet moves on an 80 ms step, so the scene draws a frame per step
+      // rather than every frame. The tracked plane's smooth follow is held
+      // continuous separately ('tracked-entity').
+      holdPacedRender('military', FLEET_DR_INTERVAL_MS);
       if (flightState._modelCollection)
         flightState._modelCollection.show = true;
       parts.tracking._setCockpitContactMode(
@@ -163,6 +167,8 @@ export function createLifecycle({
           () => {
             flightState._lastCamPoseSig = '';
             flightState._lastFleetTickMs = 0;
+            // Paced rendering would otherwise wait for the next fleet step.
+            governorRequestRender('military-move-end');
           },
         );
       }
@@ -179,7 +185,7 @@ export function createLifecycle({
       parts.tracking._cancelPendingTrackingRestore();
       if (flightState._billboardCollection)
         flightState._billboardCollection.show = false;
-      releaseContinuousRender('military');
+      releasePacedRender('military');
       parts.rendering._releaseModels();
       if (flightState._modelCollection)
         flightState._modelCollection.show = false;
@@ -221,7 +227,7 @@ export function createLifecycle({
     destroy(viewer) {
       flightState.lifetime.abort();
       parts.controller._abortActiveUpdates();
-      releaseContinuousRender('military'); // direct-destroy path (perf wave 2 fix)
+      releasePacedRender('military'); // direct-destroy path (perf wave 2 fix)
       parts.tracking._clearTracking();
       parts.tracking._destroyTrail();
       parts.tracking._cancelPendingTrackingRestore();

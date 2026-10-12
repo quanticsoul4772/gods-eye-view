@@ -274,6 +274,8 @@ test('detection holds nothing, and asks for its own frames instead', async () =>
     'detection must never take a continuous-render hold — that is the regression');
   assert.doesNotMatch(source, /releaseContinuousRender/,
     'and with no hold there is nothing to release');
+  assert.doesNotMatch(source, /holdPacedRender/,
+    'nor a paced one: detection repaints on change, not on a clock');
 
   assert.match(source, /governorRequestRender\('detection-visibility'\)/,
     'mode/suspend transitions request their own repaint');
@@ -452,30 +454,30 @@ test('the render-governor gate covers the parked case, with teeth on the painter
 // until some unrelated frame happens along.
 //
 // It cannot, and the reason is structural rather than lucky: an AIR bracket can
-// only exist while an aircraft layer is enabled, and both aircraft layers take a
-// continuous-render hold for their own per-frame fleet animation. So for exactly
-// as long as there is anything to bracket, the scene is rendering every frame
-// and the overlay repaints with it. (Measured live 2026-08-23 on a parked
-// camera: an outside-aircraft population change moved the painted bracket count
-// with no camera input, holds = ["flights"], requestRenderMode = false.)
+// only exist while an aircraft layer is enabled, and both aircraft layers hold
+// the render loop for their own fleet animation. Since 2026-10-12 that hold is
+// PACED at the fleet's 80 ms step (FLEET_DR_INTERVAL_MS) rather than
+// continuous: the fleet only moves on that step, so a frame per step is a frame
+// for every position change, and the overlay repaints with each one. Brackets
+// therefore track the planes at the planes' own cadence, never staler.
 //
 // That is a COUPLING, so it deserves a pin. If a later perf pass strips these
 // holds the way it stripped detection's — a reasonable-looking change — bracket
 // promptness goes with them, silently. This test is where that shows up.
-test('aircraft brackets stay prompt because the aircraft layers hold the render loop', async () => {
+test('aircraft brackets stay prompt because the aircraft layers pace the render loop at the fleet step', async () => {
   for (const file of ['./flights.js', './militaryFlights.js']) {
     const source = readLayerSource(new URL(file, import.meta.url));
     const enable = /\n([ \t]*)enable\([\s\S]*?\n\1\},/.exec(source)?.[0];
     assert.ok(enable, `${file}: enable() is still identifiable`);
     assert.match(
       enable,
-      /holdContinuousRender\('(flights|military)'\)/,
-      `${file}: enabling the layer must hold continuous render — detection no longer ` +
-      'holds one, so this is what keeps its AIR brackets repainting on a parked scene',
+      /holdPacedRender\('(flights|military)', FLEET_DR_INTERVAL_MS\)/,
+      `${file}: enabling the layer must pace render at the fleet step — detection no ` +
+      'longer holds one, so this is what keeps its AIR brackets repainting on a parked scene',
     );
     assert.match(
       source,
-      /releaseContinuousRender\('(flights|military)'\)/,
+      /releasePacedRender\('(flights|military)'\)/,
       `${file}: and the hold must be released, or the governor can never idle`,
     );
   }

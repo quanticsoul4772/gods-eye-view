@@ -818,6 +818,9 @@ export function createRendering({
         )
       : 0.08;
     flightState._lastFleetTickMs = nowMs;
+    // The step runs after other preRender work, so its own time — not the
+    // frame's start — is what the paced render hold must time the next frame by.
+    services.render?.markPacedStep?.('military');
 
     _drainIrReloadQueue(); // bounded per-tick slice of any pending boost-flip reload
     if (flightState._cockpitContactMode)

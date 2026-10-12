@@ -7,6 +7,7 @@ import {
   governorRequestRender,
   getRenderGovernorDiagnostics,
   holdPacedRender,
+  markPacedStep,
   releasePacedRender,
   uninstallRenderGovernor,
   _resetRenderGovernorForTest,
@@ -311,4 +312,49 @@ test('?pacedRender=0 turns paced holds into continuous ones', () => {
   assert.deepEqual(getRenderGovernorDiagnostics().holds, ['flights']);
   releasePacedRender('flights');
   assert.equal(scene.requestRenderMode, true);
+});
+
+test('an owner whose step runs late in the frame keeps its cadence when it reports the step', () => {
+  // The military fleet ticks after the flights fleet in the same preRender; how
+  // long flights takes varies frame to frame (measured: military fell from
+  // 10.6 to 8.8 steps/s without reporting).
+  const delays = [12, 2, 9, 1, 14, 3, 0, 11];
+  const run = (mode) => {
+    const report = mode === 'reported';
+    const { viewer, scene, clock } = makePacedViewer();
+    installRenderGovernor(viewer);
+    if (mode === 'continuous') holdContinuousRender('military');
+    else holdPacedRender('military', 80);
+    let last = -Infinity;
+    let steps = 0;
+    let frame = 0;
+    scene.preRender.addEventListener(() => {
+      const now = Math.floor(clock.t + delays[frame++ % delays.length]);
+      if (now - last < 80) return;
+      last = now;
+      steps += 1;
+      if (report) {
+        const t = clock.t;
+        clock.t = now;
+        markPacedStep('military');
+        clock.t = t;
+      }
+    });
+    runFor(scene, clock, 10);
+    return steps;
+  };
+  const continuous = run('continuous');
+  const silent = run('silent');
+  const reported = run('reported');
+  assert.ok(reported > silent, `reporting ${reported} vs silent ${silent}`);
+  assert.ok(reported >= continuous * 0.9, `reported ${reported} vs continuous ${continuous}`);
+});
+
+test('an owner that stops stepping does not make the governor draw every tick', () => {
+  const { viewer, scene, clock } = makePacedViewer();
+  installRenderGovernor(viewer);
+  holdPacedRender('flights', 80);
+  markPacedStep('never-held');
+  const drawn = runFor(scene, clock, 2);
+  assert.ok(drawn.length <= 25, `${drawn.length} frames with no step reported`);
 });

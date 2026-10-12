@@ -22,6 +22,8 @@
  *
  * Usage: node scripts/qa-paced-render.mjs [--url http://localhost:4173]
  *          [--out claudedocs/paced-render-after.json] [--shots dir]
+ *          [--detection-off]
+ * Add `?pacedRender=0` to --url for the continuous-render control run.
  * Requires a running dev server. Refuses to run on SwiftShader.
  */
 import { spawn } from 'node:child_process';
@@ -40,6 +42,7 @@ const arg = (name, fallback) =>
 const url = arg('--url', 'http://localhost:4173');
 const out = arg('--out', null);
 const shots = arg('--shots', null);
+const detectionOff = argv.includes('--detection-off');
 const WINDOW_MS = 10_000;
 const DENVER = { lon: -104.99, lat: 39.74, height: 60_000 };
 
@@ -85,16 +88,21 @@ function installProbe(page) {
     };
     walk(window.__godsEyeView.viewer.scene.primitives);
     window.__pacedProbe = {
-      collections: collections.length,
+      collections,
       pending: () => collections.reduce((sum, c) => sum + (c.isDestroyed?.() ? 0 : c._billboardsToUpdateIndex), 0),
     };
     return collections.length;
   });
 }
 
-/** Measure one window in the page; `drive` names an optional per-tick camera driver. */
-function measureWindow(page, ms, drive = null) {
-  return page.evaluate((ms, drive) => new Promise((resolve) => {
+/**
+ * Measure one window in the page. `drive` names an optional per-tick camera
+ * driver; `everyTick` requests a frame on every tick, which draws exactly what
+ * continuous rendering draws — the in-page control for a paced window, under
+ * the same traffic and machine load.
+ */
+function measureWindow(page, ms, drive = null, everyTick = false) {
+  return page.evaluate((ms, drive, everyTick) => new Promise((resolve) => {
     const gev = window.__godsEyeView;
     const scene = gev.viewer.scene;
     const probe = window.__pacedProbe ?? { pending: () => 0 };
@@ -106,8 +114,17 @@ function measureWindow(page, ms, drive = null) {
       ticks += 1;
       frameStart = performance.now();
       if (drive === 'pan') gev.viewer.camera.rotateRight(0.0006);
+      if (everyTick) scene.requestRender();
     };
-    const onPreRender = () => { frameChanged = probe.pending() > 0; };
+    // Per collection too: two fleets stepping on the same frame is one moving
+    // frame, so the per-collection rates show whether each fleet still steps.
+    const perCollection = new Map();
+    const onPreRender = () => {
+      frameChanged = probe.pending() > 0;
+      for (const collection of probe.collections ?? [])
+        if (!collection.isDestroyed?.() && collection._billboardsToUpdateIndex > 0)
+          perCollection.set(collection, (perCollection.get(collection) ?? 0) + 1);
+    };
     const onPostRender = () => {
       const now = performance.now();
       renderMs += now - frameStart;
@@ -138,9 +155,11 @@ function measureWindow(page, ms, drive = null) {
         renderMsPerSec: Math.round(renderMs / ms * 1000),
         tilesPending,
         aircraft: gev.dataManager.layers.get('flights')?.module?.getStats?.()?.count ?? null,
+        // Busiest billboard collections' changed frames per second.
+        collectionStepsPerSec: [...perCollection.values()].sort((a, b) => b - a).slice(0, 3).map(per),
       });
     }, ms);
-  }), ms, drive);
+  }), ms, drive, everyTick);
 }
 
 /** Time from a camera stop to the first frame that carries billboard changes. */
@@ -188,15 +207,15 @@ function trackLatency(page) {
   });
 }
 
-async function scenario(page, label, { drive = null } = {}) {
+async function scenario(page, label, { drive = null, everyTick = false } = {}) {
   await installProbe(page);
   const [window, gpu3dPercent] = await Promise.all([
-    measureWindow(page, WINDOW_MS, drive),
+    measureWindow(page, WINDOW_MS, drive, everyTick),
     sampleGpu(Math.floor(WINDOW_MS / 1000) - 1),
   ]);
   const governor = await governorDiagnostics(page);
   const result = { label, ...window, gpu3dPercent, mode: governor?.mode, holds: governor?.holds, paced: governor?.paced ?? null };
-  console.log(`  ${label.padEnd(26)} ticks ${result.ticksPerSec}/s  renders ${result.rendersPerSec}/s  moving ${result.movingPerSec}/s  wasted ${result.wastedPerSec}/s  gap p95 ${result.gapP95Ms} ms  render JS ${result.renderMsPerSec} ms/s  gpu ${gpu3dPercent}%  tiles ${result.tilesPending}  aircraft ${result.aircraft}  mode ${result.mode}`);
+  console.log(`  ${label.padEnd(30)} ticks ${result.ticksPerSec}/s  renders ${result.rendersPerSec}/s  moving ${result.movingPerSec}/s  wasted ${result.wastedPerSec}/s  per-collection [${result.collectionStepsPerSec}]  gap p95 ${result.gapP95Ms} ms  render JS ${result.renderMsPerSec} ms/s  gpu ${gpu3dPercent}%  tiles ${result.tilesPending}  aircraft ${result.aircraft}  mode ${result.mode}`);
   if (shots) await page.screenshot({ path: path.join(shots, `${label.replace(/\W+/g, '-')}.png`) });
   return result;
 }
@@ -217,6 +236,9 @@ try {
   if (shots) fs.mkdirSync(shots, { recursive: true });
   await new Promise((r) => setTimeout(r, 12_000));
   await parkAndClear(page, DENVER);
+  report.detection = detectionOff ? 'off' : 'default';
+  if (detectionOff)
+    await page.evaluate(() => window.__godsEyeView.styleManager._setDetectionMode('OFF'));
   await new Promise((r) => setTimeout(r, 12_000));
 
   const add = (r) => report.scenarios.push(r);
@@ -224,14 +246,22 @@ try {
   await page.evaluate(() => window.__godsEyeView.dataManager.setEnabled('flights', true, { origin: 'user' }));
   await new Promise((r) => setTimeout(r, 25_000));
   if (!(await installProbe(page))) throw new Error('No billboard collection found to probe');
-  add(await scenario(page, 'flights parked'));
+  // Control (every tick drawn) and paced windows alternate under the same
+  // traffic and machine state; compare them pairwise.
+  for (const round of [1, 2]) {
+    add(await scenario(page, `flights parked control ${round}`, { everyTick: true }));
+    add(await scenario(page, `flights parked ${round}`));
+  }
   add(await scenario(page, 'flights pan', { drive: 'pan' }));
   report.rotationAfterStopMs = await rotationAfterStop(page);
   console.log(`  rotation pass after camera stop: ${report.rotationAfterStopMs} ms`);
   await new Promise((r) => setTimeout(r, 3_000));
   await page.evaluate(() => window.__godsEyeView.dataManager.setEnabled('military', true, { origin: 'user' }));
   await new Promise((r) => setTimeout(r, 20_000));
-  add(await scenario(page, 'flights+military parked'));
+  for (const round of [1, 2]) {
+    add(await scenario(page, `flights+mil parked control ${round}`, { everyTick: true }));
+    add(await scenario(page, `flights+mil parked ${round}`));
+  }
   report.track = await trackLatency(page);
   console.log(`  track ${report.track.callsign}: first frame after ${report.track.firstFrameMs} ms`);
   add(await scenario(page, 'tracked flight'));

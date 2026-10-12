@@ -197,6 +197,22 @@ export function holdPacedRender(ownerId, intervalMs) {
 }
 
 /**
+ * Report that a paced owner just took its step. Optional, and worth it for an
+ * owner whose step runs after other work in the same frame: the governor's own
+ * estimate is the frame's start, so a step taken 10 ms into one frame and 2 ms
+ * into the next would look 8 ms short to the owner's gate and be skipped. The
+ * governor times the next frame from the later of its estimate and this report,
+ * and keeps advancing its estimate when an owner stops reporting, so a silent
+ * owner can't make it ask for every frame.
+ * @param {string} ownerId
+ * @returns {void}
+ */
+export function markPacedStep(ownerId) {
+  const entry = _paced.get(ownerId);
+  if (entry) entry.last = Math.max(entry.last, _now());
+}
+
+/**
  * Release a paced hold. Safe when never held. When the last paced owner goes
  * (and nothing holds continuous), one settling frame paints its final state.
  * @param {string} ownerId

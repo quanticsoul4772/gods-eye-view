@@ -10,8 +10,9 @@
  *  2. A discrete mutation while idle (style slider write routed through
  *     governorRequestRender) → at least one render, then settles again.
  *  3. Camera movement while idle → renders happen (Cesium-native path).
- *  4. Flights enabled → continuous mode (postRender cadence ≈ rAF cadence,
- *     and ≥5× the idle count over the same window).
+ *  4. Flights enabled → paced mode at the fleet's 80 ms step: well under the
+ *     render-loop tick rate while parked (≤50% of Cesium ticks), still ≥5× the
+ *     idle count, and every tick drawn while the camera moves.
  *  5. Flights disabled again → back to idle (near-zero fires).
  *  6. Governor diagnostics agree with the mode at every step.
  *
@@ -293,16 +294,34 @@ try {
   check('camera movement while idle produces renders (≥10 / 2.5s)', duringMove.renders >= 10, duringMove);
   await new Promise((r) => setTimeout(r, 3_000)); // settle
 
-  // ── 4. flights enabled → continuous ───────────────────────────────────
+  // ── 4. flights enabled → paced at the fleet step ──────────────────────
+  // The fleet moves on an 80 ms step, so a parked scene with flights on draws
+  // a frame per step, not per tick. Ratios against Cesium's own ticks (which
+  // targetFrameRate can make fewer than rAF) keep this SwiftShader-safe.
   await page.evaluate(async () => {
     await window.__godsEyeView.dataManager.setEnabled('flights', true, { origin: 'user' });
   });
   await new Promise((r) => setTimeout(r, 5_000));
   const active = await countFrames(5_000);
   const d4 = await diag();
-  check('governor reports continuous mode with flights on', d4?.mode === 'continuous', d4);
-  check('flights-on cadence ≈ rAF cadence (≥70%)', active.renders >= active.rafs * 0.7, active);
+  check('governor reports paced mode with flights on, at the fleet step',
+    d4?.mode === 'paced' && d4.paced?.flights === 80 && !d4.holds.includes('flights'), d4);
+  check('parked flights-on draws at most half the render-loop ticks', active.renders <= active.ticks * 0.5, active);
   check('flights-on renders ≥5× idle renders', active.renders >= Math.max(1, idle.renders) * 5, { active: active.renders, idle: idle.renders });
+  // Moving the camera every tick must still draw every tick: pacing only saves
+  // the frames of a parked view.
+  const flightsMoving = await Promise.all([
+    countFrames(2_500),
+    page.evaluate(() => new Promise((resolve) => {
+      const v = window.__godsEyeView.viewer;
+      const started = performance.now();
+      const remove = v.scene.preUpdate.addEventListener(() => {
+        if (performance.now() - started > 2_400) { remove(); resolve(true); return; }
+        v.camera.rotateRight(0.0005);
+      });
+    })),
+  ]).then(([frames]) => frames);
+  check('flights-on with the camera moving draws ≥70% of ticks', flightsMoving.renders >= flightsMoving.ticks * 0.7, flightsMoving);
 
   // ── 5. flights disabled → idle again ──────────────────────────────────
   await page.evaluate(async () => {

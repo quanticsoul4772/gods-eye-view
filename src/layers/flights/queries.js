@@ -890,6 +890,10 @@ export function createQueries({
               if (!flightState._viewer || !Number.isFinite(startMs))
                 return { ok: false, nowMs: null };
               flightState._viewer.useDefaultRenderLoop = false;
+              // Manual scene.render() calls only draw outside request-render
+              // mode, and the fleet is paced: hold continuous while the
+              // evidence harness drives frames by hand.
+              services.render?.holdContinuousRender?.('flights-frame-clock');
               setFocusEvidenceNowMs(startMs);
               flightState._lastFleetTickMs = startMs - FLEET_DR_INTERVAL_MS;
               // Cross a browser task boundary, then close Cesium's pending-loop
@@ -908,6 +912,7 @@ export function createQueries({
             },
             releaseFrameClock() {
               setFocusEvidenceNowMs(null);
+              services.render?.releaseContinuousRender?.('flights-frame-clock');
               if (flightState._viewer)
                 flightState._viewer.useDefaultRenderLoop = true;
             },

@@ -103,6 +103,7 @@ try {
   assert.equal(after.annotations, 0);
   assert.equal(after.governor.installed, false);
   assert.deepEqual(after.governor.holds, []);
+  assert.deepEqual(after.governor.paced, {});
   assert.equal(after.handlesRemoved, true);
   assert.equal(after.creditsRemoved, true);
   assert.equal(after.welcomeHidden, true);

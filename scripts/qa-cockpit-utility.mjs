@@ -1446,6 +1446,8 @@ try {
     const { styleManager, dataManager, viewer } = window.__godsEyeView;
     const awareness = dataManager.layers.get('military-awareness')?.module;
     const entity = viewer.trackedEntity || styleManager.cockpitView.trackedEntity;
+    // Waits for a frame without requesting one: cockpit holds the render loop
+    // continuous, so a frame always comes. A paced or idle scene would not.
     const nextFrame = () => new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         remove();
