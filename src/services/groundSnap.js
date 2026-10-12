@@ -9,7 +9,8 @@
  * disableDepthTestDistance; a depth-tested glTF model cannot.
  *
  * Discipline (CCTV-B9b style): scene.sampleHeight forces a synchronous offscreen
- * pick render, so it is NEVER called per frame. Each grounded modeled plane gets
+ * pick render, so it is NEVER called per frame — and only with a 3D tileset in
+ * the scene; on the terrain globe alone, globe.getHeight answers from memory. Each grounded modeled plane gets
  * ONE successful sample, cached per icao; the cache stops answering directly when
  * the plane moves >MOVE_INVALIDATE_M from the sampled spot (taxiing). Misses (tiles
  * still streaming, OSM fallback with no tileset skin, sample outside loaded
@@ -142,8 +143,20 @@ const SAMPLE_WINDOW_MS = 250;
  * @returns {boolean}
  */
 function _tilesReady(viewer) {
+  if (!viewer?.scene?.primitives) return false;
+  const tileset = _visibleTileset(viewer);
+  return tileset ? tileset.tilesLoaded === true : true;
+}
+
+/**
+ * The first shown 3D tileset in the scene (duck-typed via its boolean
+ * tilesLoaded), or null when the ground is only the terrain globe.
+ * @param {Cesium.Viewer} viewer
+ * @returns {object|null}
+ */
+function _visibleTileset(viewer) {
   const prims = viewer?.scene?.primitives;
-  if (!prims) return false;
+  if (!prims) return null;
   for (let i = 0; i < prims.length; i++) {
     let p = null;
     try {
@@ -151,11 +164,9 @@ function _tilesReady(viewer) {
     } catch {
       continue;
     }
-    if (p && p.show !== false && typeof p.tilesLoaded === 'boolean') {
-      return p.tilesLoaded === true;
-    }
+    if (p && p.show !== false && typeof p.tilesLoaded === 'boolean') return p;
   }
-  return true;
+  return null;
 }
 
 /**
@@ -344,11 +355,18 @@ export function createGroundSnap({ groundFloor }) {
         Cesium.Ellipsoid.WGS84,
         scratchCarto,
       );
+      // With no 3D tileset the ground IS the terrain globe, and the globe
+      // answers from terrain already in memory — no pick render, no GPU
+      // readback. (Measured on the keyless basemap: these picks were ~4 s of
+      // an 80 s session's main thread around an airport.) A tileset's skin
+      // can sit well off the terrain, so only a pick measures it.
       // sampleHeight throws when unsupported (no depth textures) — that's a miss.
-      sampled = viewer.scene.sampleHeight(
-        carto,
-        getExclusions ? getExclusions() : undefined,
-      );
+      sampled = _visibleTileset(viewer)
+        ? viewer.scene.sampleHeight(
+            carto,
+            getExclusions ? getExclusions() : undefined,
+          )
+        : viewer.scene.globe?.getHeight(carto);
     } catch {
       sampled = undefined;
     }
