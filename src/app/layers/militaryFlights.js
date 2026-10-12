@@ -10,6 +10,7 @@ import * as focus from '../../data/focusDeemphasis.js';
 import * as readout from '../../data/trackedReadout.js';
 import * as context from '../../data/contextStore.js';
 import * as render from '../../renderGovernor.js';
+import * as fleetSync from '../../data/fleetStepSync.js';
 import * as recession from '../../data/aircraftRecession.js';
 
 /** Construct one layer using the application scene owners and a supplied source. */
@@ -39,6 +40,7 @@ export function createApplicationMilitary({
       readout,
       context,
       render,
+      fleetSync,
       groundSnap,
       recession,
     },

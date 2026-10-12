@@ -118,8 +118,9 @@ live counts again and match the focus conditions.
 
 Flights and Military Flights now hold the render loop PACED at their fleet's
 80 ms step instead of continuous (`src/renderGovernor.js`). A parked scene with
-aircraft on therefore draws about 12 frames per second per fleet by design,
-because the aircraft only move on that step; camera motion and a tracked
+aircraft on therefore draws about 12 frames per second by design, because the
+aircraft only move on that step (the two fleets step on the same frames,
+`src/data/fleetStepSync.js`); camera motion and a tracked
 aircraft still draw every frame. A rest FPS near 12 with aircraft on is the
 intended behaviour, not a regression. Compare with `?pacedRender=0`, which
 turns paced holds back into continuous ones.
@@ -132,7 +133,7 @@ camera parked over Denver, about 11,700 aircraft:
 | Scene | Renders/s control → paced | Frames with no change /s | Aircraft steps/s |
 | --- | ---: | ---: | ---: |
 | Flights | 24–27 → 11–15 | 13–16 → 0–4 | 10.9–11.8 → 11.0–11.3 |
-| Flights + Military | 27–45 → 21 | 11–25 → 0.3–0.7 | military 10.7–11.3 → 11.2 |
+| Flights + Military | 31–39 → 12.2–12.3 | 20–27 → 0.3–0.4 | each fleet 11.4–12.2 → 11.8–11.9 |
 
 The remaining unchanged frames come from detection's label-fade follow-ups.
 

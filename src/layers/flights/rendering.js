@@ -825,7 +825,20 @@ export function createRendering({
     // (The tracked trail head is now the per-frame _trailHeadEntity segment — no 1 Hz
     // primitive rebuild needed here anymore.)
 
-    if (nowMs - flightState._lastFleetTickMs < FLEET_DR_INTERVAL_MS) return;
+    // Step when due — or join a step the other aircraft fleet already took in
+    // this frame once most of the interval has passed, so both fleets land on
+    // the same paced frames instead of drawing one each (src/data/fleetStepSync.js).
+    const frame = scene.frameState?.frameNumber ?? -1;
+    const sinceLastMs = nowMs - flightState._lastFleetTickMs;
+    if (
+      sinceLastMs < FLEET_DR_INTERVAL_MS &&
+      !services.fleetSync?.canJoinFleetStep?.(
+        frame,
+        sinceLastMs,
+        FLEET_DR_INTERVAL_MS,
+      )
+    )
+      return;
     const tickDtSec = flightState._lastFleetTickMs
       ? Math.min(
           COURSE_SLEW_DT_MAX_SEC,
@@ -836,6 +849,7 @@ export function createRendering({
     // The step runs after other preRender work, so its own time — not the
     // frame's start — is what the paced render hold must time the next frame by.
     services.render?.markPacedStep?.('flights');
+    services.fleetSync?.noteFleetStep?.(frame);
 
     _drainIrReloadQueue(); // bounded per-tick slice of any pending boost-flip reload
     if (flightState._cockpitContactMode)
