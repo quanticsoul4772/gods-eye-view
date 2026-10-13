@@ -98,10 +98,9 @@ function installHudEnvironment() {
       },
       // A 60° vertical field of view, 900 device pixels tall.
       frustum: { fovy: Math.PI / 3 },
-      computeViewRectangle: () => undefined,
       moveEnd: { addEventListener() {}, removeEventListener() {} },
     },
-    scene: { drawingBufferHeight: 900 },
+    scene: { drawingBufferWidth: 1440, drawingBufferHeight: 900 },
   };
   return {
     elements,
@@ -317,6 +316,26 @@ test('position readouts name the view centre, not the ground under the camera', 
       env.elements.get('hud-bottom-line').textContent,
       /LAT: 35°40'48\.00"N {2}LON: 139°41'24\.00"E/,
     );
+  } finally {
+    hud?.destroy();
+    env.restore();
+  }
+});
+
+test('WINDOW is the ground the view spans at the view centre, not a horizon box', async () => {
+  await ensureGeoidReady();
+  const env = installHudEnvironment();
+  // 1 km straight down, nothing picked: the range is the height. A 60°
+  // vertical field of view over 900 px is 1.283 m per pixel, so 1440x900
+  // pixels span 1.85 x 1.15 km.
+  env.viewer.camera.positionCartographic.height = 1000;
+  let hud;
+  try {
+    hud = new IntelHUD(env.viewer);
+    hud._updateCameraData();
+    const summary = env.elements.get('hud-summary').textContent;
+    assert.match(summary, /\| WINDOW 1\.8KMx1\.2KM \|/, `got ${summary}`);
+    assert.match(env.elements.get('hud-gsd').textContent, /^GSD: 1\.28m/);
   } finally {
     hud?.destroy();
     env.restore();

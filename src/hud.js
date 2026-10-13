@@ -469,6 +469,16 @@ export class IntelHUD {
       altMslM,
       sunEl,
       ona,
+      // The ground the view spans at the view centre's scale: GSD times the
+      // drawing buffer. Exact looking straight down; tilted, it is the span
+      // at the centre, not a lat/lon box that reaches the horizon.
+      windowM:
+        gsd === null
+          ? null
+          : {
+              width: gsd * this.viewer.scene.drawingBufferWidth,
+              height: gsd * this.viewer.scene.drawingBufferHeight,
+            },
     };
 
     // First time we have real telemetry: replace the "Awaiting telemetry..."
@@ -572,35 +582,6 @@ export class IntelHUD {
   }
 
   /**
-   * Compute the approximate width and height (in km) of the camera's
-   * current view rectangle on the ground.
-   * @param {number} latDeg - Center latitude in decimal degrees (for
-   *   longitude-to-km cosine correction).
-   * @returns {{ widthKm: number, heightKm: number }|null} View window
-   *   dimensions, or null if the view rectangle cannot be computed.
-   */
-  _viewWindowKm(latDeg) {
-    const rect = this.viewer.camera.computeViewRectangle();
-    if (!rect) return null;
-    const north = Cesium.Math.toDegrees(rect.north);
-    const south = Cesium.Math.toDegrees(rect.south);
-    let east = Cesium.Math.toDegrees(rect.east);
-    let west = Cesium.Math.toDegrees(rect.west);
-    let lonSpan = Math.abs(east - west);
-    // Handle antimeridian wrap: if span exceeds 180 deg, take the shorter arc
-    if (lonSpan > 180) lonSpan = 360 - lonSpan;
-    const latSpan = Math.abs(north - south);
-    // 111 km/deg is the approximate surface distance per degree of latitude;
-    // longitude distance is scaled by cos(lat) to account for meridian convergence.
-    const widthKm = Math.max(
-      0,
-      lonSpan * 111 * Math.cos(Cesium.Math.toRadians(latDeg)),
-    );
-    const heightKm = Math.max(0, latSpan * 111);
-    return { widthKm, heightKm };
-  }
-
-  /**
    * Compute the great-circle distance between two geographic points
    * using the Haversine formula.
    * @param {number} lat1 - Start latitude (decimal degrees).
@@ -652,7 +633,6 @@ export class IntelHUD {
     const region = this._regionLabel(m.latDeg, m.lonDeg);
     const nearest = this._nearestKnownPoint(m.latDeg, m.lonDeg);
     const band = this._viewBand(m.altM);
-    const window = this._viewWindowKm(m.latDeg);
     // Rough local timezone from longitude (15 deg per hour)
     const utcOffset = Math.round(m.lonDeg / 15);
     const localTag = `UTC${utcOffset >= 0 ? '+' : ''}${utcOffset}`;
@@ -664,8 +644,8 @@ export class IntelHUD {
       altDisplayM >= 1000
         ? `${(altDisplayM / 1000).toFixed(1)}KM`
         : `${Math.round(altDisplayM)}M`;
-    const winTag = window
-      ? `${Math.max(1, Math.round(window.widthKm))}x${Math.max(1, Math.round(window.heightKm))}KM`
+    const winTag = m.windowM
+      ? `${formatRange(m.windowM.width).toUpperCase()}x${formatRange(m.windowM.height).toUpperCase()}`
       : 'N/A';
     // NEAR the nearest catalogued POI at metro range; otherwise the lat/lon sector.
     const localityTag = composeLocalityTag(nearest, m.latDeg, m.lonDeg);
