@@ -4,6 +4,12 @@ import { createTerrainRetryPolicy } from './terrainRetry.js';
 /** Re:Earth / Mapterhorn ellipsoidal quantized mesh, CC BY 4.0. */
 export const KEYLESS_TERRAIN_URL =
   'https://terrain.reearth.land/cesium-mesh/ellipsoid';
+/**
+ * The same tiles through the app's own server, cached on disk
+ * (server/providers/terrainMesh.js), so repeat views do not download them
+ * again from the free service.
+ */
+export const KEYLESS_TERRAIN_PROXY_URL = '/api/terrain/mesh';
 
 /** These factories are lazy: a hidden globe must not trigger terrain loading. */
 export async function createWorldTerrain(accessToken, { signal } = {}) {
@@ -39,15 +45,56 @@ function logThrottle({ statusCode, delayMs, inWindow }) {
  */
 export function createKeylessTerrainResource(
   policy = createTerrainRetryPolicy({ onThrottle: logThrottle }),
+  url = KEYLESS_TERRAIN_URL,
 ) {
   return new Cesium.Resource({
-    url: KEYLESS_TERRAIN_URL,
+    url,
     retryCallback: policy.retryCallback,
     retryAttempts: policy.retryAttempts,
   });
 }
 
+/**
+ * Whether the app's own server is answering the terrain route. Cesium does not
+ * fail on a missing layer.json — it assumes default tiling — so a host without
+ * the server (a static build) would otherwise get a provider whose every tile
+ * 404s. The proxy holds layer.json in memory, so this costs no second upstream
+ * request when Cesium asks for it next.
+ * @param {typeof fetch} [fetchImpl]
+ * @returns {Promise<boolean>}
+ */
+export async function keylessTerrainProxyAvailable(
+  fetchImpl = globalThis.fetch,
+) {
+  try {
+    const response = await fetchImpl(
+      `${KEYLESS_TERRAIN_PROXY_URL}/layer.json`,
+      {
+        signal: AbortSignal.timeout(5000),
+      },
+    );
+    return (
+      response.ok && /json/i.test(response.headers?.get?.('content-type') || '')
+    );
+  } catch {
+    return false;
+  }
+}
+
 export async function createKeylessTerrain() {
+  // The local cache when the app's server answers for it; the public service
+  // otherwise.
+  if (await keylessTerrainProxyAvailable()) {
+    try {
+      return {
+        provider: await Cesium.CesiumTerrainProvider.fromUrl(
+          createKeylessTerrainResource(undefined, KEYLESS_TERRAIN_PROXY_URL),
+        ),
+      };
+    } catch {
+      /* fall through to the public service */
+    }
+  }
   try {
     return {
       provider: await Cesium.CesiumTerrainProvider.fromUrl(

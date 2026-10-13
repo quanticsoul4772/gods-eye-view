@@ -3,6 +3,7 @@ import { celestrakProxy, rocketLaunchesProxy } from './space.js';
 import { tomtomProxy } from './traffic.js';
 import { firmsProxy } from './firms.js';
 import { terrainHeightsProxy } from './terrain.js';
+import { terrainMeshProxy } from './terrainMesh.js';
 import { adsbdbProxy } from './aircraft/enrichment.js';
 import { overpassProxy } from './overpass.js';
 import { militaryInstallationsProxy } from './military-installations.js';
@@ -39,6 +40,7 @@ function localProviderPlugins({ realtime } = {}) {
     firmsProxy(),
     rocketLaunchesProxy(),
     terrainHeightsProxy(),
+    terrainMeshProxy(),
     adsbdbProxy(),
     overpassProxy(),
     militaryInstallationsProxy(),

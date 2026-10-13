@@ -275,3 +275,31 @@ test('a tile cancelled before or during its wait is not re-requested', async () 
   clock.sleeps.at(-1).resolve();
   assert.equal(await pending, false);
 });
+
+test('the terrain proxy is used only when the app server answers layer.json with JSON', async () => {
+  const { keylessTerrainProxyAvailable } = await import('./terrain.js');
+  const reply = (status, type) => async () => ({
+    ok: status === 200,
+    status,
+    headers: new Map([['content-type', type]]),
+  });
+  assert.equal(
+    await keylessTerrainProxyAvailable(reply(200, 'application/json')),
+    true,
+  );
+  // A static host: 404, or its index page served for any path.
+  assert.equal(
+    await keylessTerrainProxyAvailable(reply(404, 'text/html')),
+    false,
+  );
+  assert.equal(
+    await keylessTerrainProxyAvailable(reply(200, 'text/html')),
+    false,
+  );
+  assert.equal(
+    await keylessTerrainProxyAvailable(async () => {
+      throw new TypeError('Failed to fetch');
+    }),
+    false,
+  );
+});
