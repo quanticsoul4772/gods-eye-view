@@ -3945,3 +3945,131 @@ test('analyst-only lookup distinguishes duplicate names and uses canonical aircr
   assert.equal(plane.ok, true);
   assert.equal(plane.latitude, 36, 'canonical ID resolves the current position, not old coordinates');
 });
+
+// ── Ask-live findings (2026-10-13) ───────────────────────────────────────────
+
+test('the place under a resting camera is looked up only once Ask Claude or voice is in use, at most every 10 s', async () => {
+  const saved = { ...globalThis.window };
+  const timers = [];
+  globalThis.window = {
+    ...saved,
+    setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; },
+    clearTimeout: () => {},
+    requestIdleCallback: null,
+  };
+  try {
+    const lookups = [];
+    const placeSearch = {
+      async reverseGeocode(lat, lon) { lookups.push([lat, lon]); return { formattedAddress: 'Austin' }; },
+    };
+    const harness = createPrewarmHarness({
+      positionCartographic: () => Cesium.Cartographic.fromDegrees(-97.74, 30.26, 2000),
+    });
+    const runner = createGevActionRunner({
+      viewer: harness.viewer,
+      styleManager: {},
+      dataManager: {
+        layers: new Map([['satellites', { module: { getNextIssPass: () => ({ status: 'none' }) } }]]),
+        isEnabled: () => false,
+        getAll: () => [],
+      },
+      placeSearch,
+    });
+    const flush = () => { while (timers.length) timers.shift().fn(); };
+
+    harness.fireMoveEnd();
+    flush();
+    assert.equal(lookups.length, 0, 'no coordinates leave the browser before Ask or voice is used');
+
+    await runner('next_iss_pass', { latitude: 30, longitude: -97 });
+    harness.fireMoveEnd();
+    const first = timers.find((t) => t.ms >= 1200);
+    assert.equal(first.ms, 1200, 'the first prefetch waits only for the camera to rest');
+    flush();
+    assert.equal(lookups.length, 1, 'one lookup for the view centre');
+
+    harness.fireMoveEnd();
+    const next = timers.find((t) => t.ms > 1200);
+    assert.ok(next && next.ms > 9000, `a second rest within 10 s waits out the interval (${next?.ms} ms)`);
+  } finally {
+    globalThis.window = saved;
+  }
+});
+
+test('a pass prediction loads the satellite catalog itself instead of failing', async () => {
+  const saved = { ...globalThis.window };
+  globalThis.window = { ...saved, setTimeout: (fn) => { fn(); return 1; }, clearTimeout: () => {}, requestIdleCallback: null };
+  try {
+    let enabled = false;
+    let loaded = false;
+    const pass = { riseMs: Date.now() + 60000, setMs: Date.now() + 360000, maxElevMs: Date.now() + 180000, maxElevDeg: 40, riseAzDeg: 200, visible: true };
+    const module = {
+      resolveSatelliteForPass: (q) => (loaded && q === '25544' ? { status: 'ok', noradId: 25544, name: 'ISS' } : { status: 'not-found' }),
+      getNextIssPass: () => (loaded ? { status: 'ok', pass } : { status: 'no-tle' }),
+    };
+    const dataManager = {
+      layers: new Map([['satellites', { module }]]),
+      isEnabled: () => enabled,
+      async setEnabled(id, on) { assert.equal(id, 'satellites'); enabled = on; loaded = true; return true; },
+      getAll: () => [],
+    };
+    const viewer = { clock: { onTick: { addEventListener: () => () => {} } }, scene: { canvas: { addEventListener() {}, removeEventListener() {} } }, camera: { moveEnd: { addEventListener() {} } } };
+    const runner = createGevActionRunner({ viewer, styleManager: {}, dataManager });
+    const result = await runner('next_iss_pass', { latitude: 64.15, longitude: -21.94 });
+    assert.equal(result.ok, true, result.error);
+    assert.equal(result.satellitesLayerEnabled, true, 'says it turned the layer on');
+    assert.equal(enabled, true);
+    const again = await runner('next_iss_pass', { latitude: 64.15, longitude: -21.94 });
+    assert.equal(again.satellitesLayerEnabled, undefined, 'a loaded catalog changes nothing');
+  } finally {
+    globalThis.window = saved;
+  }
+});
+
+test('a guarded layer refusal reaches the model with its reason', async () => {
+  const listeners = new Set();
+  const reason = 'Space Missions isolates replay data. Exit the mode to enable Earthquakes.';
+  const dataManager = {
+    layers: new Map([['earthquakes', { module: { name: 'Earthquakes' }, enabled: false }]]),
+    isEnabled: () => false,
+    getAll: () => [{ id: 'earthquakes', name: 'Earthquakes', enabled: false }],
+    subscribe(callback) { listeners.add(callback); return () => listeners.delete(callback); },
+    async setEnabled(layerId) {
+      for (const callback of listeners) callback({ type: 'visibility-blocked', layerId, reason });
+      return false;
+    },
+  };
+  const viewer = { clock: { onTick: { addEventListener: () => () => {} } }, scene: { canvas: { addEventListener() {}, removeEventListener() {} } }, camera: { moveEnd: { addEventListener() {} } } };
+  const runner = createGevActionRunner({ viewer, styleManager: {}, dataManager });
+  const result = await runner('set_layer_visibility', { layerId: 'earthquakes', enabled: true });
+  assert.equal(result.ok, false);
+  assert.equal(result.blocked, true);
+  assert.equal(result.error, reason);
+  assert.equal(listeners.size, 0, 'the listener is removed after the change');
+});
+
+test('a layer change that switches others off says which', async () => {
+  const layers = [
+    { id: 'flights', name: 'Live Flights', enabled: true },
+    { id: 'rocket-launches', name: 'Space Missions (30d)', enabled: false },
+  ];
+  const dataManager = {
+    layers: new Map(layers.map((l) => [l.id, { module: { name: l.name }, enabled: l.enabled }])),
+    isEnabled: (id) => layers.find((l) => l.id === id).enabled,
+    getAll: () => layers,
+    subscribe: () => () => {},
+    async setEnabled(id, on) {
+      // Entering Space Missions isolates its replay from live layers.
+      layers.find((l) => l.id === id).enabled = on;
+      layers.find((l) => l.id === 'flights').enabled = false;
+      dataManager.layers.get(id).enabled = on;
+      dataManager.layers.get('flights').enabled = false;
+      return true;
+    },
+  };
+  const viewer = { clock: { onTick: { addEventListener: () => () => {} } }, scene: { canvas: { addEventListener() {}, removeEventListener() {} } }, camera: { moveEnd: { addEventListener() {} } } };
+  const runner = createGevActionRunner({ viewer, styleManager: {}, dataManager });
+  const result = await runner('set_layer_visibility', { layerId: 'rocket-launches', enabled: true });
+  assert.equal(result.ok, true, result.error);
+  assert.deepEqual(result.alsoTurnedOff, ['Live Flights']);
+});

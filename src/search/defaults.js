@@ -3,7 +3,10 @@ import { createGeospatialServices } from './geospatial.js';
 import { createHttpGeospatialProvider } from './http.js';
 import { createPlaceSearch } from './placeSearch.js';
 import { createGoogleGeocoder } from './google.js';
-import { createPhotonGeocoder } from '../keylessGeocoder.js';
+import {
+  createPhotonGeocoder,
+  createPhotonReverseGeocoder,
+} from '../keylessGeocoder.js';
 import { createCoordinateGeocoder } from './coordinateGeocoder.js';
 import { createPresetGeocoder } from './presetGeocoder.js';
 import { createAlpsGeocoder } from './alpsGeocoder.js';
@@ -80,12 +83,32 @@ export function createDefaultPlaceSearch({
     resolveApiKey,
     endpoints,
   });
+  // Google answers reverse lookups only with a key. Without one (or when it
+  // finds nothing) Photon / OpenStreetMap answers, keyless, but only for a
+  // caller that opts in with { keyless: true }: it sends the point to a third
+  // party, so automatic callers (the HUD summary) stay Google-only.
+  const photonReverse = createPhotonReverseGeocoder({
+    fetchImpl,
+    endpoint: endpoints.photonReverse,
+  });
   return {
     ...forward,
     ...createGeospatialServices({
       signal,
       providers: {
         ...operations,
+        async reverseGeocode(latitude, longitude, options) {
+          return (
+            (await operations.reverseGeocode(latitude, longitude, options)) ??
+            (options?.keyless
+              ? photonReverse(latitude, longitude, options)
+              : null)
+          );
+        },
+        attribution: {
+          ...operations.attribution,
+          reverseGeocode: 'Google, or Photon / OpenStreetMap without a key',
+        },
         ...(selected
           ? {
               reverseGeocode: selected.reverseGeocode,

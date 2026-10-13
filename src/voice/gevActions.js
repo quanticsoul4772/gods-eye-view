@@ -42,6 +42,7 @@ import {
 } from '../cameraVerbs.js';
 import * as defaultFloorServices from '../data/groundFloor.js';
 import { isPickedWorldPosition } from '../data/scenePick.js';
+import { ISS_NORAD } from '../layers/satellites/policy.js';
 import { countryNameAt } from '../data/adminBoundaries.js';
 import { unavailablePlaceSearch } from '../search/placeSearch.js';
 import * as defaultAnnotationResolver from '../annotations/annotationResolver.js';
@@ -288,6 +289,18 @@ function cachesFor(service) {
 }
 const VISIBLE_ENTITY_SHORTLIST = 64;
 const BASEMAP_CONTEXT_WAIT_MS = 1500;
+/** How long a pass prediction waits for the satellite catalog to load. */
+const SATELLITE_CATALOG_WAIT_MS = 10_000;
+/**
+ * An uncached place lookup gets longer than the rest of the context: the
+ * keyless reverse geocoder took 2.4–4.4 s (Photon, 2026-10-13), and the place
+ * is what "what am I looking at?" is asking for.
+ */
+const PLACE_LOOKUP_WAIT_MS = 5000;
+/** How long the camera must rest before the place under it is prefetched. */
+const PLACE_PREFETCH_SETTLE_MS = 1200;
+/** At most one prefetch per this interval, however much the camera moves. */
+const PLACE_PREFETCH_MIN_INTERVAL_MS = 10_000;
 const viewTargetCache = new WeakMap();
 
 /** Create application actions over the supplied scene and services. */
@@ -322,7 +335,7 @@ export function createGevActionRunner({
         isWarming: (layerKey) => layerIsWarming(_layerEnabledAt, layerKey),
       }),
     ));
-  installViewTargetPrewarm(viewer);
+  installViewTargetPrewarm(viewer, placeSearch);
   initCameraVerbs(viewer, getViewTargetCartesian);
   // Nested calls (select_nearest_aircraft composing layer + flight) use the
   // raw runner; only the outer call gets a voice envelope.
@@ -332,6 +345,9 @@ export function createGevActionRunner({
     runOptions = {},
   ) {
     const args = rawArgs && typeof rawArgs === 'object' ? rawArgs : {};
+    // Ask Claude or voice is in use: the place under the view may now be
+    // prefetched when the camera rests (installViewTargetPrewarm).
+    viewer.__gevPlacePrefetchArmed = true;
     const current = () =>
       !runOptions.signal?.aborted &&
       (typeof runOptions.isCurrent !== 'function' || runOptions.isCurrent());
@@ -400,6 +416,21 @@ export function createGevActionRunner({
       let changed = false;
       let changeError = null;
       let intentOutcome = null;
+      // A visibility guard (Space Missions isolating replay data, a source
+      // with no key) refuses with a reason; carry it to the model so it can
+      // say why and what would fix it, not just "could not enable".
+      let blockedReason = null;
+      // A change can switch others off (entering Space Missions isolates its
+      // replay from live layers); the model must not report those as on.
+      const enabledBefore = new Set(
+        (dataManager.getAll?.() || [])
+          .filter((layer) => layer.enabled && layer.id !== layerId)
+          .map((layer) => layer.id),
+      );
+      const stopWatchingBlocks = dataManager.subscribe?.((change) => {
+        if (change?.type === 'visibility-blocked' && change.layerId === layerId)
+          blockedReason = change.reason || null;
+      });
       try {
         if (typeof dataManager._setEnabledWithIntent === 'function') {
           const intent = dataManager._setEnabledWithIntent(
@@ -426,6 +457,8 @@ export function createGevActionRunner({
         }
       } catch (error) {
         changeError = error;
+      } finally {
+        stopWatchingBlocks?.();
       }
       const lifecycleSummary = readLayerLifecycleSummary(dataManager, layerId);
       if (
@@ -484,18 +517,26 @@ export function createGevActionRunner({
           ok: false,
           action: 'set_layer_visibility',
           layerId,
-          error: `Could not ${enabled ? 'enable' : 'disable'} the requested layer`,
+          error:
+            blockedReason ||
+            `Could not ${enabled ? 'enable' : 'disable'} the requested layer`,
+          ...(blockedReason ? { blocked: true } : {}),
           ...lifecycleSummary,
         };
       }
       if (enabled) _layerEnabledAt.set(layerId, Date.now());
-      const layer = dataManager.getAll().find((item) => item.id === layerId);
+      const layers = dataManager.getAll();
+      const layer = layers.find((item) => item.id === layerId);
       const snapshot = layer && enabled ? layerSnapshot(layer) : null;
+      const alsoTurnedOff = layers
+        .filter((item) => enabledBefore.has(item.id) && !item.enabled)
+        .map((item) => item.name || item.id);
       return {
         ok: true,
         action: 'set_layer_visibility',
         layerId,
         label: layer?.name || layerId,
+        ...(alsoTurnedOff.length ? { alsoTurnedOff } : {}),
         ...lifecycleSummary,
         ...(snapshot?.feedState ? { feedState: snapshot.feedState } : {}),
         ...(snapshot?.source ? { source: snapshot.source } : {}),
@@ -1008,12 +1049,22 @@ export function createGevActionRunner({
       };
     }
 
-    if (name === 'next_satellite_pass') {
-      return nextSatellitePass(viewer, dataManager, args);
-    }
-
-    if (name === 'next_iss_pass') {
-      return nextIssPass(viewer, dataManager, args);
+    if (name === 'next_satellite_pass' || name === 'next_iss_pass') {
+      const { enabledForLookup } = await ensureSatelliteCatalog(
+        dataManager,
+        runOptions,
+      );
+      const result =
+        name === 'next_iss_pass'
+          ? nextIssPass(viewer, dataManager, args)
+          : nextSatellitePass(viewer, dataManager, args);
+      return enabledForLookup
+        ? {
+            ...result,
+            satellitesLayerEnabled: true,
+            note: 'Turned on the Satellites layer to load orbital elements.',
+          }
+        : result;
     }
 
     if (name === 'analyst_query') {
@@ -2654,13 +2705,50 @@ export async function getBasemapLabelContext(
   };
 }
 
-function installViewTargetPrewarm(viewer) {
+function installViewTargetPrewarm(viewer, service = defaultGeospatial) {
   if (viewer.__gevViewTargetPrewarmInstalled) return;
   viewer.__gevViewTargetPrewarmInstalled = true;
   let timer = null;
+  let placeTimer = null;
+  let lastPlacePrefetchAt = -Infinity;
   let reportedPrewarmFailure = false;
   viewer.camera.moveEnd.addEventListener(() => {
     if (timer) window.clearTimeout(timer);
+    // The place under the view, looked up once the camera has rested, so
+    // "what am I looking at?" finds it cached: the keyless reverse geocoder
+    // (Photon) takes seconds. It sends the view's coordinates to a third
+    // party, so it runs only after Ask Claude or voice has been used this
+    // session (armPlacePrefetch), only zoomed in, and at most once per
+    // PLACE_PREFETCH_MIN_INTERVAL_MS (trailing, so the last rest wins).
+    if (placeTimer) window.clearTimeout(placeTimer);
+    if (viewer.__gevPlacePrefetchArmed) {
+      const sinceLast = performance.now() - lastPlacePrefetchAt;
+      placeTimer = window.setTimeout(
+        () => {
+          placeTimer = null;
+          const heightM = viewer.camera.positionCartographic.height;
+          if (!shouldReverseGeocode(heightM)) return;
+          let target = null;
+          try {
+            target = getViewTargetCartographic(viewer);
+          } catch {
+            return; // the view-target prewarm below reports pick failures once
+          }
+          if (!target) return;
+          lastPlacePrefetchAt = performance.now();
+          void reverseGeocode(
+            Number(Cesium.Math.toDegrees(target.latitude).toFixed(6)),
+            Number(Cesium.Math.toDegrees(target.longitude).toFixed(6)),
+            service,
+            { keyless: true },
+          );
+        },
+        Math.max(
+          PLACE_PREFETCH_SETTLE_MS,
+          PLACE_PREFETCH_MIN_INTERVAL_MS - sinceLast,
+        ),
+      );
+    }
     timer = window.setTimeout(() => {
       timer = null;
       // Belt and braces. Validating the pick is the fix; this catch exists
@@ -2774,6 +2862,33 @@ function compassDir(azDeg) {
   return COMPASS_16[Math.round((((azDeg % 360) + 360) % 360) / 22.5) % 16];
 }
 
+/**
+ * Pass predictions read the Satellites layer's orbital catalog, which loads
+ * only while that layer is on. Rather than fail and have the model enable the
+ * layer and ask again (two more round trips, ~5 s and ~60k input tokens in a
+ * 2026-10-13 live run), turn it on here and wait for the catalog.
+ * @returns {Promise<{enabledForLookup: boolean}>}
+ */
+async function ensureSatelliteCatalog(dataManager, runOptions = {}) {
+  const module = dataManager?.layers?.get('satellites')?.module;
+  const loaded = () =>
+    module.resolveSatelliteForPass(String(ISS_NORAD))?.status === 'ok';
+  if (typeof module?.resolveSatelliteForPass !== 'function' || loaded())
+    return { enabledForLookup: false };
+  const wasEnabled = Boolean(dataManager.isEnabled?.('satellites'));
+  if (!wasEnabled)
+    await dataManager.setEnabled('satellites', true, {
+      origin: 'voice',
+      ...(runOptions.signal ? { signal: runOptions.signal } : {}),
+    });
+  const deadline = performance.now() + SATELLITE_CATALOG_WAIT_MS;
+  while (!loaded() && performance.now() < deadline) {
+    runOptions.signal?.throwIfAborted();
+    await new Promise((resolve) => window.setTimeout(resolve, 250));
+  }
+  return { enabledForLookup: !wasEnabled };
+}
+
 function nextIssPass(viewer, dataManager, args) {
   let latDeg = Number.isFinite(args.latitude) ? args.latitude : null;
   let lonDeg = Number.isFinite(args.longitude) ? args.longitude : null;
@@ -2796,7 +2911,7 @@ function nextIssPass(viewer, dataManager, args) {
       ok: false,
       action: 'next_iss_pass',
       error:
-        'ISS orbital elements not loaded yet — enable the satellites layer once, then ask again.',
+        'ISS orbital elements are still loading in the Satellites layer; ask again in a moment.',
     };
   }
   if (result.status === 'none') {
@@ -2837,7 +2952,7 @@ function nextSatellitePass(viewer, dataManager, args) {
       error:
         identity.status === 'ambiguous'
           ? 'Several loaded satellites match. Choose a NORAD ID from candidates.'
-          : 'No loaded satellite matches. Enable satellites and use an exact name or NORAD ID.',
+          : 'No loaded satellite matches. Use an exact name or NORAD ID.',
     };
   // Reuse the legacy location fallback and result formatting, substituting only
   // this explicitly resolved catalog identity and the optional visibility filter.
@@ -3224,6 +3339,8 @@ function getCurrentViewState(
       heightM: cartographic.height,
     },
     style: styleManager.activeStyle || 'normal',
+    // The HUD's measured readouts (view centre, range, GSD, sun, …).
+    readouts: styleManager.hud?.getReadouts?.() ?? null,
     context:
       typeof styleManager.getContextModeState === 'function'
         ? {
@@ -3955,7 +4072,7 @@ async function getBasemapContext(
       : null;
   const placePromise =
     shouldReverseGeocode(cameraHeightM) && !cachedPlace
-      ? reverseGeocode(latitude, longitude, service)
+      ? reverseGeocode(latitude, longitude, service, { keyless: true })
       : Promise.resolve(cachedPlace);
   const nearbyPlacesPromise =
     shouldFetchNearbyPlaces(cameraHeightM) && !cachedNearbyPlaces
@@ -3968,7 +4085,7 @@ async function getBasemapContext(
         BASEMAP_CONTEXT_WAIT_MS,
         cachedViewportPlaces,
       ),
-      resolveWithin(placePromise, BASEMAP_CONTEXT_WAIT_MS, cachedPlace),
+      resolveWithin(placePromise, PLACE_LOOKUP_WAIT_MS, cachedPlace),
       resolveWithin(
         nearbyPlacesPromise,
         BASEMAP_CONTEXT_WAIT_MS,
@@ -4239,17 +4356,33 @@ async function inferCountryFromSamples(samples) {
   };
 }
 
-async function reverseGeocode(latitude, longitude, service) {
+/**
+ * @param {{keyless?: boolean}} [options] keyless: also ask the keyless
+ *   provider (Photon), which sends the point to a third party. Only a user's
+ *   question and the armed prefetch do; the HUD's automatic summary does not.
+ */
+async function reverseGeocode(
+  latitude,
+  longitude,
+  service,
+  { keyless = false } = {},
+) {
   const { reverseGeocodeCache, reverseGeocodeInFlight } = cachesFor(service);
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
   const key = reverseGeocodeKey(latitude, longitude, service);
   if (reverseGeocodeCache.has(key)) return reverseGeocodeCache.get(key);
-  if (reverseGeocodeInFlight.has(key)) return reverseGeocodeInFlight.get(key);
+  const flightKey = `${key}|${keyless}`;
+  if (reverseGeocodeInFlight.has(flightKey))
+    return reverseGeocodeInFlight.get(flightKey);
 
   const request = (async () => {
     try {
       const place =
-        (await service.reverseGeocode?.(latitude, longitude)) || null;
+        (await service.reverseGeocode?.(
+          latitude,
+          longitude,
+          keyless ? { keyless: true } : undefined,
+        )) || null;
       if (place) {
         reverseGeocodeCache.set(key, place);
         if (reverseGeocodeCache.size > 256)
@@ -4259,10 +4392,10 @@ async function reverseGeocode(latitude, longitude, service) {
     } catch {
       return null;
     } finally {
-      reverseGeocodeInFlight.delete(key);
+      reverseGeocodeInFlight.delete(flightKey);
     }
   })();
-  reverseGeocodeInFlight.set(key, request);
+  reverseGeocodeInFlight.set(flightKey, request);
   return request;
 }
 

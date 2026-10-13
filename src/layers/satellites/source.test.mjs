@@ -151,6 +151,17 @@ test('satellite pass prediction methods report no-tle on cold catalog and coerce
   assert.equal(layer.resolveSatelliteForPass('starlink').totalMatches, 2);
   assert.equal(layer.resolveSatelliteForPass('STARLINK ONE').noradId, 10);
   assert.equal(layer.resolveSatelliteForPass('missing').status, 'not-found');
+  // Everyday names resolve to their catalog entry (ISS is 'ISS (ZARYA)').
+  assert.equal(
+    layer.resolveSatelliteForPass('International Space Station').noradId,
+    25544,
+  );
+  assert.equal(
+    layer.resolveSatelliteForPass('the space station').noradId,
+    25544,
+  );
+  // An alias whose satellite is not in the loaded catalog is not invented.
+  assert.equal(layer.resolveSatelliteForPass('Hubble').status, 'not-found');
   layer._clearDenseCatalogStateForTest();
   assert.equal(layer.resolveSatelliteForPass('25544').status, 'not-found');
 

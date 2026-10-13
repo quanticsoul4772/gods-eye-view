@@ -81,6 +81,29 @@ test('layer toggles confirm the resulting state and fold only material feed tags
   );
   assert.equal(failed.say, "Couldn't turn on traffic.");
   assert.equal(failed.ok, false, 'the envelope never changes the outcome');
+  // Layers a change switched off are spoken, never left implied as on.
+  const isolated = envelope(
+    'set_layer_visibility',
+    { ok: true, layerId: 'rocket-launches', label: 'Space Missions (30d)', enabled: true, alsoTurnedOff: ['Live Flights', 'Military Flights'] },
+    { layerId: 'rocket-launches', enabled: true },
+  );
+  assert.equal(isolated.say, 'Space Missions (30d) on. That turned off Live Flights, Military Flights.');
+  // A guard's refusal is spoken as its reason, which names the fix.
+  const blocked = envelope(
+    'set_layer_visibility',
+    {
+      ok: false,
+      blocked: true,
+      layerId: 'earthquakes',
+      error:
+        'Space Missions isolates replay data. Exit the mode to enable Earthquakes.',
+    },
+    { layerId: 'earthquakes', enabled: true },
+  );
+  assert.equal(
+    blocked.say,
+    'Space Missions isolates replay data. Exit the mode to enable Earthquakes.',
+  );
 });
 
 test('aircraft identity always covers operator, type and route from returned fields only', () => {

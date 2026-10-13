@@ -21,6 +21,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  createPhotonReverseGeocoder,
+  normalizePhotonReverse,
   geocodeKeyless,
   geocodeKeylessWithOutcome,
   normalizePhotonFeature,
@@ -557,3 +559,46 @@ function readGeocodingConsumer(file) {
     ? [file, 'annotations/resolver.js'] : [file];
   return files.map((name) => fs.readFileSync(path.join(ROOT, 'src', name), 'utf8')).join('\n');
 }
+
+// Keyless reverse geocoding. Measured answers (2026-10-13, lang=en): the Palm
+// Jumeirah view returned the hotel, district, emirate and country below.
+test('a Photon reverse result has the Google reverse shape', () => {
+  const place = normalizePhotonReverse({
+    properties: {
+      name: 'Cheval Maison - The Palm',
+      district: 'Nakhlat Jumeira',
+      state: 'Dubai',
+      country: 'United Arab Emirates',
+      osm_key: 'tourism',
+      osm_value: 'hotel',
+    },
+  });
+  assert.equal(place.country, 'United Arab Emirates');
+  assert.equal(place.region, 'Dubai');
+  assert.equal(place.locality, 'Nakhlat Jumeira');
+  assert.match(place.formattedAddress, /The Palm, Nakhlat Jumeira, Dubai, United Arab Emirates/);
+  assert.deepEqual(place.streetLabels, []);
+  assert.equal(normalizePhotonReverse({ properties: {} }), null, 'open sea has no country');
+  assert.equal(normalizePhotonReverse(undefined), null);
+});
+
+test('the Photon reverse request asks in English for one result', async () => {
+  const urls = [];
+  const reverse = createPhotonReverseGeocoder({
+    fetchImpl: async (url) => {
+      urls.push(new URL(url));
+      return {
+        ok: true,
+        json: async () => ({
+          features: [{ properties: { name: 'Covent Garden', city: 'London', country: 'United Kingdom' } }],
+        }),
+      };
+    },
+  });
+  const place = await reverse(51.507, -0.128);
+  assert.equal(place.locality, 'London');
+  assert.equal(urls[0].pathname, '/reverse');
+  assert.equal(urls[0].searchParams.get('lang'), 'en');
+  assert.equal(urls[0].searchParams.get('limit'), '1');
+  assert.equal(urls[0].searchParams.get('lat'), '51.507');
+});

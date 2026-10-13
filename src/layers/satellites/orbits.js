@@ -11,6 +11,21 @@ import { findNextSatellitePass } from '../../data/satellitePass.js';
 import { parseTleText } from '../../sources/tle.js';
 import { ORBIT_PATH_STEPS, ISS_NORAD } from './policy.js';
 
+/**
+ * Everyday names whose CelesTrak catalog name does not contain them ("Hubble"
+ * is "HST", the Chinese station is "CSS (TIANHE)"), so a pass question in plain
+ * words resolves instead of failing and being retried with the catalog name.
+ */
+const COMMON_SATELLITE_NAMES = new Map([
+  ['hubble', 20580],
+  ['hubble space telescope', 20580],
+  ['iss', 25544],
+  ['international space station', 25544],
+  ['space station', 25544],
+  ['tiangong', 48274],
+  ['chinese space station', 48274],
+]);
+
 export function createOrbits({ state: layerState, services, parts, source }) {
   /**
    * Build the rigid ECEF transform that keeps an orbit path baked at one GMST
@@ -193,6 +208,13 @@ export function createOrbits({ state: layerState, services, parts, source }) {
         : { status: 'not-found' };
     }
     const q = text.toLowerCase();
+    const common = COMMON_SATELLITE_NAMES.get(q.replace(/^the\s+/, ''));
+    if (common && layerState._catalog.get(common)?.satrec)
+      return {
+        status: 'ok',
+        noradId: common,
+        name: layerState._catalog.get(common).name,
+      };
     const rows = [...layerState._catalog].filter(([, sat]) => sat.satrec);
     const exact = rows.filter(
       ([, sat]) => String(sat.name).toLowerCase() === q,

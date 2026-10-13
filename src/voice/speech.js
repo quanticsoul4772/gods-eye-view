@@ -104,20 +104,26 @@ function setLayerVisibility(result, args = {}) {
   if (!result?.ok) {
     const wanted = args.enabled === false ? 'off' : 'on';
     return {
-      say: `Couldn't turn ${wanted} ${label}.`,
+      // A guard's refusal says why and what would fix it; speak that.
+      say: result.blocked ? result.error : `Couldn't turn ${wanted} ${label}.`,
       display: { title: label, lines: [result?.error].filter(Boolean) },
     };
   }
   const on = result.enabled !== false;
   const tag = on ? feedTag(result.feedState) : null;
+  const offNote = result.alsoTurnedOff?.length
+    ? ` That turned off ${result.alsoTurnedOff.join(', ')}.`
+    : '';
   const say =
-    tag === 'feed unavailable'
+    (tag === 'feed unavailable'
       ? `${label} on, but its feed is unavailable.`
-      : sentence(`${label} ${on ? 'on' : 'off'}${tag ? `, ${tag}` : ''}`);
+      : sentence(`${label} ${on ? 'on' : 'off'}${tag ? `, ${tag}` : ''}`)) +
+    offNote;
   return {
     say,
     display: {
       title: `${label} ${on ? 'on' : 'off'}`,
+      ...(offNote ? { lines: [offNote.trim()] } : {}),
       chips: on ? feedChips(result.feedState) : [],
       sources: result.source ? [{ label: result.source }] : [],
     },

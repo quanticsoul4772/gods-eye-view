@@ -485,6 +485,63 @@ export async function geocodeKeyless(query, options) {
 }
 
 /** Construct an independent Photon provider with a bounded query cache. */
+const PHOTON_REVERSE_ENDPOINT = 'https://photon.komoot.io/reverse';
+
+/**
+ * A Photon reverse result in the shape normalizeGoogleReverse returns, or null
+ * where Photon knows no country (open sea). Asked with lang=en: Photon
+ * otherwise answers in the place's own language.
+ * @param {object} feature - First entry of Photon's reverse `features`.
+ */
+export function normalizePhotonReverse(feature) {
+  const properties = feature?.properties;
+  if (!properties?.country) return null;
+  const label = photonResultLabel(properties);
+  const street =
+    properties.street ||
+    (properties.osm_key === 'highway' ? properties.name : null);
+  return {
+    formattedAddress: label,
+    locality:
+      properties.city ||
+      properties.locality ||
+      properties.county ||
+      properties.district ||
+      null,
+    region: properties.state || null,
+    country: properties.country,
+    types: photonResultTypes(properties),
+    labels: [label],
+    streetLabels: street ? [street] : [],
+  };
+}
+
+/**
+ * Keyless reverse geocoding over Photon, for installs without a Google key
+ * (which had no reverse geocoder at all). Photon took 2.4–4.4 s per request
+ * (measured 2026-10-13), longer than the voice context waits, so the voice
+ * runner prefetches it when the camera settles.
+ */
+export function createPhotonReverseGeocoder({
+  fetchImpl = (...args) => fetch(...args),
+  endpoint = PHOTON_REVERSE_ENDPOINT,
+} = {}) {
+  return async function reverseGeocode(latitude, longitude, { signal } = {}) {
+    const url = new URL(endpoint);
+    url.searchParams.set('lat', String(latitude));
+    url.searchParams.set('lon', String(longitude));
+    url.searchParams.set('lang', 'en');
+    url.searchParams.set('limit', '1');
+    const deadline = AbortSignal.timeout(PHOTON_TIMEOUT_MS);
+    const response = await fetchImpl(url.toString(), {
+      signal: signal ? AbortSignal.any([signal, deadline]) : deadline,
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    return normalizePhotonReverse(data?.features?.[0]);
+  };
+}
+
 export function createPhotonGeocoder({
   fetchImpl = (...args) => fetch(...args),
   endpoint = PHOTON_ENDPOINT,

@@ -438,6 +438,9 @@ export class IntelHUD {
       altMslM,
       sunEl,
       ona,
+      rangeM,
+      gsd,
+      headingDeg: headingDeg(camera.heading),
       // The ground the view spans at the view centre's scale: GSD times the
       // drawing buffer. Exact looking straight down; tilted, it is the span
       // at the centre, not a lat/lon box that reaches the horizon.
@@ -791,6 +794,39 @@ export class IntelHUD {
     );
     if (!ray) return null;
     return scene.globe.pick(ray, scene, this._scratchTarget) ?? null;
+  }
+
+  /**
+   * The HUD's measured readouts, for voice and Ask Claude answers ("what's
+   * the GSD?"), or null before the first telemetry tick. Same numbers as the
+   * corner readouts; GSD is the rendered pixel's ground footprint at the view
+   * centre, NIIRS a GIQE estimate from it.
+   * @returns {object|null}
+   */
+  getReadouts() {
+    const m = this._latestMetrics;
+    if (!m) return null;
+    const round = (value, digits) =>
+      Number.isFinite(value) ? Number(value.toFixed(digits)) : null;
+    return {
+      viewCenter: {
+        latitude: round(m.latDeg, 5),
+        longitude: round(m.lonDeg, 5),
+      },
+      rangeToCenterM: round(m.rangeM, 0),
+      headingDeg: m.headingDeg,
+      offNadirDeg: round(m.ona, 1),
+      altitudeMslM: round(m.altMslM, 0),
+      sunElevationDeg: round(m.sunEl, 1),
+      gsdMetersPerPixel: m.gsd === null ? null : round(m.gsd, 2),
+      niirsEstimate: m.gsd === null ? null : round(niirsFromGsd(m.gsd), 1),
+      viewSpanM: m.windowM
+        ? {
+            width: round(m.windowM.width, 0),
+            height: round(m.windowM.height, 0),
+          }
+        : null,
+    };
   }
 
   /**
