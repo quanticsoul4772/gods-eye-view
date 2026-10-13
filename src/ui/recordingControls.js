@@ -35,6 +35,8 @@ export class RecordingControls {
     } = options;
     this._recordingMode = !!enabled;
     this._recordingConfig = { hidePanels, hudMode, safeFrame };
+    // REC on the HUD blinks only while recording.
+    this.hud?.setRecording?.(this._recordingMode);
 
     document.body.classList.toggle(
       'recording-mode',

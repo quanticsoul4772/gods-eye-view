@@ -19,6 +19,18 @@ import { forward as toMGRS } from 'mgrs';
 import { CITY_POIS } from './locations.js';
 import { composeLocalityTag } from './hudLocality.js';
 import {
+  aisIdleText,
+  bandForStyle,
+  formatRange,
+  gsdFromRangeM,
+  headingDeg,
+  niirsFromGsd,
+  offNadirDeg,
+  slantRangeFromAltitudeM,
+  stableHudIds,
+  sunElevationDeg,
+} from './hudReadouts.js';
+import {
   ellipsoidalToMslDisplayM,
   ensureGeoidReady,
   geoidHeight,
@@ -165,11 +177,22 @@ export class IntelHUD {
       }
     };
 
-    // Session-consistent pseudorandom identifiers (generated once at construction)
-    this._missionId = `KH11-${4000 + Math.floor(Math.random() * 200)}`;
-    this._sensorId = `OPS-${4100 + Math.floor(Math.random() * 100)}`;
-    this._orbitNum = 47000 + Math.floor(Math.random() * 1000);
-    this._passNum = 100 + Math.floor(Math.random() * 200);
+    // Theme designators: flavour, drawn once and kept across reloads so they
+    // never read as live values (hudReadouts.js).
+    let storage = null;
+    try {
+      storage = globalThis.localStorage;
+    } catch {
+      /* storage blocked: a fresh pair per session */
+    }
+    const ids = stableHudIds(storage);
+    this._missionId = ids.missionId;
+    this._sensorId = ids.sensorId;
+    /** REC blinks only while the app's recording mode is on. */
+    this._recording = false;
+    this._scratchCenter = new Cesium.Cartesian2();
+    this._scratchRay = new Cesium.Ray();
+    this._scratchTarget = new Cesium.Cartesian3();
 
     this._buildDOM();
     this.viewer.camera.moveEnd.addEventListener(this._onCameraMoveEnd);
@@ -209,8 +232,8 @@ export class IntelHUD {
 
       <div class="hud-corner hud-top-right">
         <div class="hud-content" style="text-align:right">
-          <div class="hud-rec"><span id="hud-rec-dot">●</span> REC  <span id="hud-timestamp">2026-01-01 00:00:00Z</span></div>
-          <div class="hud-orbital">ORB: ${this._orbitNum}  PASS: DESC-${this._passNum}</div>
+          <div class="hud-rec"><span id="hud-rec-dot" style="visibility: hidden">●</span> <span id="hud-rec-label" style="visibility: hidden">REC</span>  <span id="hud-timestamp">2026-01-01 00:00:00Z</span></div>
+          <div class="hud-orbital" id="hud-orient">HDG ---°  RNG --</div>
         </div>
         <div class="hud-bracket">┐</div>
       </div>
@@ -233,14 +256,11 @@ export class IntelHUD {
       </div>
 
       <div class="hud-edge hud-left-edge">
-        <div id="hud-coll">COLL: --:--:--Z</div>
         <div id="hud-ona">ONA: --°</div>
       </div>
 
       <div class="hud-edge hud-right-edge">
-        <div>BAND: PAN</div>
-        <div>BITS: 11</div>
-        <div>LVL: 1A</div>
+        <div id="hud-band">BAND: PAN</div>
       </div>
 
       <div class="hud-bottom-bar">
@@ -262,9 +282,9 @@ export class IntelHUD {
       if (el) el.textContent = this._formatUTC();
     }, 1000);
 
-    // REC blink — every 800ms
+    // REC blink — every 800ms, and only while recording mode is on
     this._recBlinkInterval = setInterval(() => {
-      this._recBlinkState = !this._recBlinkState;
+      this._recBlinkState = this._recording && !this._recBlinkState;
       const dot = document.getElementById('hud-rec-dot');
       if (dot)
         dot.style.visibility = this._recBlinkState ? 'visible' : 'hidden';
@@ -344,13 +364,24 @@ export class IntelHUD {
     const lonDeg = Cesium.Math.toDegrees(cartographic.longitude);
     const latDeg = Cesium.Math.toDegrees(cartographic.latitude);
     const altM = cartographic.height;
-    const latDMS = this._toDMS(latDeg, 'lat');
-    const lonDMS = this._toDMS(lonDeg, 'lon');
+    const ona = offNadirDeg(camera.pitch);
+    // The point at the centre of the view, where the reticle aims. MGRS,
+    // lat/lon, range, GSD and the sun are all read there; the camera's own
+    // position is ~1 km away at 60° off nadir and 627 m up. With nothing
+    // under the centre (sky) they fall back to the camera's position.
+    const target = this._viewCenterTarget();
+    const targetCarto = target
+      ? Cesium.Cartographic.fromCartesian(target)
+      : cartographic;
+    const targetLatDeg = Cesium.Math.toDegrees(targetCarto.latitude);
+    const targetLonDeg = Cesium.Math.toDegrees(targetCarto.longitude);
+    const latDMS = this._toDMS(targetLatDeg, 'lat');
+    const lonDMS = this._toDMS(targetLonDeg, 'lon');
     let mgrsLabel = '---';
 
     // MGRS
     try {
-      const mgrsStr = toMGRS([lonDeg, latDeg], 4); // 4 = 10m precision
+      const mgrsStr = toMGRS([targetLonDeg, targetLatDeg], 4); // 4 = 10m precision
       // Format: 18SUJ23370716 → 18S UJ 2337 0716
       const formatted = this._formatMGRS(mgrsStr);
       mgrsLabel = formatted;
@@ -369,16 +400,14 @@ export class IntelHUD {
       bottomEl.textContent = `MGRS: ${mgrsLabel}  LAT: ${latDMS}  LON: ${lonDMS}`;
     }
 
-    // GSD (Ground Sample Distance): approximate resolution in meters per pixel
-    // derived from camera altitude. NIIRS (National Imagery Interpretability
-    // Rating Scale): 0-9 quality rating computed via the General Image Quality
-    // Equation (GIQE) simplified form: NIIRS = 10.25 - 3.32 * log10(GSD_inches).
-    const gsd = Math.max(0.01, altM * 0.000375);
-    const gsdInches = gsd * 39.37;
-    const niirs = Math.max(
-      0,
-      Math.min(9, 10.25 - 3.32 * Math.log10(gsdInches)),
-    );
+    // GSD (Ground Sample Distance) from the slant range to the view centre,
+    // so an oblique view reads as coarse as it is; NIIRS from GSD by the
+    // simplified General Image Quality Equation (hudReadouts.js).
+    const rangeM = target
+      ? Cesium.Cartesian3.distance(camera.positionWC, target)
+      : slantRangeFromAltitudeM(altM, ona);
+    const gsd = gsdFromRangeM(rangeM);
+    const niirs = niirsFromGsd(gsd);
     const gsdEl = document.getElementById('hud-gsd');
     if (gsdEl)
       gsdEl.textContent = `GSD: ${gsd.toFixed(2)}m  NIIRS: ${niirs.toFixed(1)}`;
@@ -391,24 +420,33 @@ export class IntelHUD {
     const altEl = document.getElementById('hud-alt');
     const geoidN = this._geoidUndulationM(latDeg, lonDeg);
     const altMslM = ellipsoidalToMslDisplayM(altM, geoidN);
-    const sunEl = this._estimateSunElevation(latDeg, lonDeg);
+    const sunEl = sunElevationDeg(target ?? camera.positionWC);
     if (altEl)
       altEl.textContent = `ALT: ${Math.round(altMslM)}m   SUN: ${sunEl.toFixed(1)}° EL`;
 
-    // Collection timestamp
-    const collEl = document.getElementById('hud-coll');
-    if (collEl) {
-      const now = new Date();
-      const h = String(now.getUTCHours()).padStart(2, '0');
-      const m = String(now.getUTCMinutes()).padStart(2, '0');
-      const s = String(now.getUTCSeconds()).padStart(2, '0');
-      collEl.textContent = `COLL: ${h}:${m}:${s}Z`;
+    // Heading and slant range to the view centre.
+    const orientEl = document.getElementById('hud-orient');
+    if (orientEl)
+      orientEl.textContent = `HDG ${String(headingDeg(camera.heading)).padStart(3, '0')}°  RNG ${formatRange(rangeM)}`;
+
+    // AIS: a selected vessel's card owns this line (layers/vessels/cards.js);
+    // with none selected, say what is there instead of "--".
+    const aisEl = document.getElementById('hud-ais-vessel');
+    if (
+      aisEl &&
+      (aisEl.textContent === 'AIS: --' ||
+        aisEl.textContent === this._aisIdleShown)
+    ) {
+      const vessels = this._dataManager?.layers?.get?.('ais-live-vessels');
+      const text = aisIdleText({
+        enabled: Boolean(this._dataManager?.isEnabled?.('ais-live-vessels')),
+        count: Number(vessels?.module?.getStats?.()?.count) || 0,
+      });
+      aisEl.textContent = text;
+      this._aisIdleShown = text;
     }
 
-    // Off-nadir angle (ONA): camera pitch of -90 deg is nadir (straight down),
-    // so ONA = 90 + pitch gives 0 at nadir and increases toward the horizon.
-    const pitchDeg = Cesium.Math.toDegrees(camera.pitch);
-    const ona = Math.max(0, 90 + pitchDeg);
+    // Off-nadir angle (ONA): 0 at nadir, rising toward the horizon.
     const onaEl = document.getElementById('hud-ona');
     if (onaEl) onaEl.textContent = `ONA: ${ona.toFixed(1)}°`;
 
@@ -489,42 +527,6 @@ export class IntelHUD {
         ? String(deg).padStart(3, '0')
         : String(deg).padStart(2, '0');
     return `${degStr}°${String(min).padStart(2, '0')}'${String(sec).padStart(5, '0')}"${dir}`;
-  }
-
-  /**
-   * Estimate current solar elevation angle above the horizon.
-   *
-   * Uses a simplified astronomical model: solar declination is approximated
-   * from the day of year, and elevation is derived from the standard
-   * sin(elevation) formula involving latitude, declination, and hour angle.
-   *
-   * @param {number} lat - Observer latitude in decimal degrees.
-   * @param {number} lon - Observer longitude in decimal degrees.
-   * @returns {number} Estimated sun elevation in degrees (negative = below horizon).
-   */
-  _estimateSunElevation(lat, lon) {
-    const now = new Date();
-    // Approximate local solar time by shifting UTC hours by longitude offset
-    const hours = now.getUTCHours() + now.getUTCMinutes() / 60 + lon / 15;
-    const solarNoon = 12;
-    const hourAngle = (hours - solarNoon) * 15;
-    // Solar declination approximation (~23.45 deg amplitude sinusoidal over the year)
-    const declination =
-      23.45 *
-      Math.sin(
-        Cesium.Math.toRadians(
-          (360 / 365) * (now.getUTCDate() + 30 * now.getUTCMonth() - 81),
-        ),
-      );
-    const latRad = Cesium.Math.toRadians(lat);
-    const decRad = Cesium.Math.toRadians(declination);
-    const haRad = Cesium.Math.toRadians(hourAngle);
-    // Standard formula: sin(el) = sin(lat)*sin(dec) + cos(lat)*cos(dec)*cos(ha)
-    const sinEl =
-      Math.sin(latRad) * Math.sin(decRad) +
-      Math.cos(latRad) * Math.cos(decRad) * Math.cos(haRad);
-    // Clamp to [-1,1] to guard against floating-point drift before asin
-    return Cesium.Math.toDegrees(Math.asin(Math.max(-1, Math.min(1, sinEl))));
   }
 
   /**
@@ -812,6 +814,42 @@ export class IntelHUD {
    * @param {string} styleName - Active style key (e.g. `'surveillance'`,
    *   `'thermal'`, `'retro'`, `'normal'`).
    */
+  /**
+   * The globe point at the centre of the view, or null when the centre is sky
+   * (or the globe is not pickable). globe.pick intersects terrain tiles on the
+   * CPU, with no GPU readback.
+   * @returns {Cesium.Cartesian3|null}
+   */
+  _viewCenterTarget() {
+    const scene = this.viewer.scene;
+    const canvas = scene?.canvas;
+    if (!canvas?.clientWidth || typeof scene.globe?.pick !== 'function')
+      return null;
+    this._scratchCenter.x = canvas.clientWidth / 2;
+    this._scratchCenter.y = canvas.clientHeight / 2;
+    const ray = this.viewer.camera.getPickRay(
+      this._scratchCenter,
+      this._scratchRay,
+    );
+    if (!ray) return null;
+    return scene.globe.pick(ray, scene, this._scratchTarget) ?? null;
+  }
+
+  /**
+   * Recording mode on or off (recordingControls.js). REC blinks only while it
+   * is on; it used to blink forever.
+   * @param {boolean} recording
+   */
+  setRecording(recording) {
+    this._recording = Boolean(recording);
+    const label = document.getElementById('hud-rec-label');
+    if (label) label.style.visibility = this._recording ? 'visible' : 'hidden';
+    if (!this._recording) {
+      const dot = document.getElementById('hud-rec-dot');
+      if (dot) dot.style.visibility = 'hidden';
+    }
+  }
+
   onStyleChange(styleName) {
     this._currentStyle = styleName;
 
@@ -821,6 +859,8 @@ export class IntelHUD {
       const modeNames = { surveillance: 'NVG', thermal: 'FLIR', retro: 'CRT' };
       modeEl.textContent = modeNames[styleName] || styleName.toUpperCase();
     }
+    const bandEl = document.getElementById('hud-band');
+    if (bandEl) bandEl.textContent = `BAND: ${bandForStyle(styleName)}`;
     // Update color scheme
     const colors = HUD_COLORS[styleName] || HUD_COLORS._default;
     if (this._el) {
@@ -926,9 +966,15 @@ export class IntelHUD {
     if (typeof this._dataManager?.subscribe === 'function') {
       this._dataManagerUnsubscribe = this._dataManager.subscribe((change) => {
         if (
-          ['visibility', 'refresh-transition', 'refresh-cancelled'].includes(
-            change?.type,
-          )
+          // data-updated and refresh-failed too: a new count or a feed
+          // failing must reach the summary line, not just a layer toggle.
+          [
+            'visibility',
+            'refresh-transition',
+            'refresh-cancelled',
+            'data-updated',
+            'refresh-failed',
+          ].includes(change?.type)
         )
           this._markSummaryDirty();
       });
