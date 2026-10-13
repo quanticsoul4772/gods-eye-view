@@ -11,6 +11,7 @@
  *     answerNot    regex the final answer must not match
  *     cameraNear   { lat, lon, km } the camera ends within km of the point
  *     layersOn     layer ids enabled at the end
+ *     layersOff    layer ids that must NOT be enabled at the end
  *     hudLayout    the HUD layout at the end
  *     maxRounds    at most this many /api/claude/ask round trips
  *
@@ -155,8 +156,12 @@ export const PROMPTS = Object.freeze([
   {
     id: 'everything-on',
     prompt: 'Turn everything on.',
-    // Space Missions refuses ground layers; the refusal must say so.
-    checks: { answer: /Space Missions/i },
+    // Space Missions is a mode that switches live layers off; a bulk request
+    // must leave it out rather than end up with three layers on.
+    checks: {
+      layersOn: ['flights', 'earthquakes', 'local-datacenters'],
+      layersOff: ['rocket-launches'],
+    },
   },
   {
     id: 'flights-not-over-water',

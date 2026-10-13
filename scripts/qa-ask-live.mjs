@@ -209,6 +209,8 @@ function runChecks(checks = {}, calls, state, rounds) {
   }
   for (const id of checks.layersOn || [])
     if (!state.layersOn.includes(id)) failures.push(`layer ${id} not on`);
+  for (const id of checks.layersOff || [])
+    if (state.layersOn.includes(id)) failures.push(`layer ${id} is on`);
   if (checks.maxRounds && rounds > checks.maxRounds)
     failures.push(`${rounds} round trips (max ${checks.maxRounds})`);
   if (checks.hudLayout && state.hudLayout !== checks.hudLayout)
