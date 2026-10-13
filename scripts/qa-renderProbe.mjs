@@ -22,13 +22,49 @@ export function realGpuArgs(platform = process.platform) {
   return [`--use-angle=${angle}`, '--enable-gpu', '--ignore-gpu-blocklist'];
 }
 
-/** Launch headless Chrome; `gpu: true` asks for the real GPU. */
-export function launchProbeBrowser({ gpu = false, headless = 'new' } = {}) {
+/**
+ * Flags that free the frame clock from the display. Headless Chrome on Windows
+ * paces frames from the compositor's vsync, which falls to ~10 Hz when the
+ * display sleeps: a blank page measured 10 rAF/s, then 53 with these.
+ */
+export const UNCAPPED_FRAME_ARGS = ['--disable-gpu-vsync', '--disable-frame-rate-limit'];
+
+/**
+ * Launch headless Chrome; `gpu: true` asks for the real GPU, `uncapped: true`
+ * decouples frames from the display (see UNCAPPED_FRAME_ARGS).
+ */
+export function launchProbeBrowser({ gpu = false, headless = 'new', uncapped = false } = {}) {
   return puppeteer.launch({
     headless,
     protocolTimeout: 300_000,
-    args: [...HONEST_CLOCK_ARGS, ...(gpu ? realGpuArgs() : [])],
+    args: [
+      ...HONEST_CLOCK_ARGS,
+      ...(gpu ? realGpuArgs() : []),
+      ...(uncapped ? UNCAPPED_FRAME_ARGS : []),
+    ],
   });
+}
+
+/** requestAnimationFrame callbacks per second on a blank page (the frame clock). */
+export async function blankPageRafRate(browser, ms = 2000) {
+  const page = await browser.newPage();
+  await page.goto('about:blank');
+  const rate = await page.evaluate(
+    (ms) =>
+      new Promise((resolve) => {
+        let n = 0;
+        const t0 = performance.now();
+        const frame = () => {
+          n += 1;
+          if (performance.now() - t0 < ms) requestAnimationFrame(frame);
+          else resolve(n / ((performance.now() - t0) / 1000));
+        };
+        requestAnimationFrame(frame);
+      }),
+    ms,
+  );
+  await page.close();
+  return rate;
 }
 
 /** The WebGL renderer string the page's Cesium context is using. */
