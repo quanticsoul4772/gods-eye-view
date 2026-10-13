@@ -1544,16 +1544,6 @@
   clip-path: polygon(12px 0, 100% 0, calc(100% - 12px) 100%, 0 100%);
 }
 
-#intel-hud[data-variant='cyber'] .hud-top-bar {
-  display: none;
-}
-
-/* Cyber keeps the useful style and locality readouts, not fictional IDs. */
-#intel-hud[data-variant='cyber'] .hud-top-left .hud-classification,
-#intel-hud[data-variant='cyber'] .hud-top-left .hud-system {
-  display: none;
-}
-
 #intel-hud[data-variant='cyber'] .hud-bottom-bar {
   bottom: calc(2vh + 9.8rem);
   width: min(48vw, 680px);
@@ -1598,11 +1588,6 @@
   pointer-events: none;
 }
 
-#intel-hud[data-variant='cyber'] .hud-bracket {
-  color: var(--cyber-red-bright);
-  text-shadow: none;
-}
-
 #intel-hud[data-variant='cyber'] .hud-mode::after {
   content: ' // CYBER';
   color: var(--cyber-red-bright);
@@ -1631,10 +1616,6 @@
 
   /* Keep the rotated COLL / ONA telemetry in the upper clearance lane. Its
      lower edge follows the panel rail instead of crossing expanded controls. */
-  #intel-hud[data-variant='cyber'] .hud-left-edge {
-    top: calc(var(--cyber-left-rail-top) - 18px);
-    left: 14px;
-  }
 
   :root[data-ui-theme='cyber'] #left-panel-stack {
     top: var(--cyber-left-rail-top) !important;
@@ -1845,7 +1826,6 @@
     background-size: 78px 78px;
   }
 
-  #intel-hud[data-variant='cyber'] .hud-top-bar,
   #intel-hud[data-variant='cyber'] .hud-bottom-bar {
     display: none;
   }

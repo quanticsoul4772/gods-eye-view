@@ -14,6 +14,7 @@ import {
   installScopeMask,
   destroyScopeMask,
   setScopeMaskEnabled,
+  isScopeMaskEnabled,
   setScopeMaskFeather,
   SCOPE_TERMINUS_MIN_PCT,
   SCOPE_TERMINUS_MAX_PCT,
@@ -27,7 +28,17 @@ import {
 } from './scopeMask.js';
 import { KEYHOLE_OUTER_RADIUS } from './celestialRing.js';
 
-beforeEach(() => _resetScopeMaskForTest());
+// The scope starts OFF (it hid 46 % of the map). These tests exercise the mask
+// while it is shown, so each one switches it on first.
+beforeEach(() => {
+  _resetScopeMaskForTest();
+  setScopeMaskEnabled(true);
+});
+
+test('the scope mask starts off', () => {
+  _resetScopeMaskForTest();
+  assert.equal(isScopeMaskEnabled(), false);
+});
 
 test('geometry anchors the visible edge to the shared keyhole radius', () => {
   const geo = scopeMaskGeometry(1440, 860, 0.4);

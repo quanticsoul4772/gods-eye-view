@@ -105,39 +105,6 @@ export function formatRange(rangeM) {
     : `${(rangeM / 1000).toFixed(rangeM < 100_000 ? 1 : 0)}km`;
 }
 
-const HUD_IDS_KEY = 'gev:hud-ids:v1';
-
-/**
- * The theme's mission and sensor designators. They are flavour, not data, so
- * they are drawn once and kept: a number that changed on every reload read as
- * a live value.
- * @param {{getItem: Function, setItem: Function}|null} storage
- * @param {() => number} [random]
- * @returns {{missionId: string, sensorId: string}}
- */
-export function stableHudIds(storage, random = Math.random) {
-  try {
-    const saved = JSON.parse(storage?.getItem(HUD_IDS_KEY) ?? 'null');
-    if (
-      /^KH11-\d{4}$/.test(saved?.missionId) &&
-      /^OPS-\d{4}$/.test(saved?.sensorId)
-    )
-      return saved;
-  } catch {
-    /* fall through to a fresh pair */
-  }
-  const ids = {
-    missionId: `KH11-${4000 + Math.floor(random() * 200)}`,
-    sensorId: `OPS-${4100 + Math.floor(random() * 100)}`,
-  };
-  try {
-    storage?.setItem(HUD_IDS_KEY, JSON.stringify(ids));
-  } catch {
-    /* private mode: the pair lasts this session */
-  }
-  return ids;
-}
-
 /**
  * The AIS line when no vessel is selected: say how to get one rather than
  * show "--" beside ships on screen.

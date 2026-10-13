@@ -5,6 +5,7 @@ import {
   applyHudUiTheme,
   CYBER_VISUAL_DEFAULTS,
   cyberVisualDefaultsForHudTransition,
+  DEFAULT_HUD_LAYOUT,
   HUD_LAYOUTS,
   normalizeHudLayout,
 } from '../hudLayouts.js';
@@ -130,13 +131,14 @@ test('visual styles retain Cyber through real preset application without droppin
 
 test('non-Cyber style presets and explicit HUD choices remain authoritative', (t) => {
   const { owner, hud, root } = styleOwner(t);
-  for (const variant of ['tactical', 'operator', 'minimal']) {
+  // A military style preset brings the default layout (Professional).
+  for (const variant of ['professional', 'tactical', 'operator', 'minimal']) {
     owner._setHudVariant(variant);
     assert.equal(hud.getVariant(), variant);
     assert.equal(root.dataset.uiTheme, undefined);
     owner.setStyle('normal');
     owner.setStyle('surveillance');
-    assert.equal(hud.getVariant(), 'tactical');
+    assert.equal(hud.getVariant(), DEFAULT_HUD_LAYOUT);
   }
 });
 
@@ -533,10 +535,16 @@ test('Cyber side panels share one width and one framed surface material', () => 
   );
 });
 
-test('Cyber is a canonical HUD layout with a safe Tactical fallback', () => {
-  assert.deepEqual(HUD_LAYOUTS, ['tactical', 'operator', 'minimal', 'cyber']);
+test('Cyber is a canonical HUD layout with a safe default fallback', () => {
+  assert.deepEqual(HUD_LAYOUTS, [
+    'professional',
+    'tactical',
+    'operator',
+    'minimal',
+    'cyber',
+  ]);
   assert.equal(normalizeHudLayout('CYBER'), 'cyber');
-  assert.equal(normalizeHudLayout('unknown'), 'tactical');
+  assert.equal(normalizeHudLayout('unknown'), 'professional');
 });
 
 test('the Cyber HUD owns the global shell skin and leaving it restores defaults', () => {
@@ -625,7 +633,11 @@ test('the Display selector, voice schema and final stylesheet expose Cyber', () 
   );
   assert.match(display, /id="cyber-sonar-sector"/);
   assert.deepEqual(setHud.parameters.properties.layout.enum, HUD_LAYOUTS);
-  assert.match(stylesheet, /@import '\.\/src\/ui\/styles\/cyber\.css';\s*$/);
+  // Cyber and Professional load last; each is scoped to its own layout.
+  assert.match(
+    stylesheet,
+    /@import '\.\/src\/ui\/styles\/cyber\.css';\s*@import '\.\/src\/ui\/styles\/professional\.css';\s*$/,
+  );
   assert.match(cyberStyles, /:root\[data-ui-theme='cyber'\]/);
   assert.match(cyberStyles, /\.material-symbols-outlined/);
   assert.match(cyberStyles, /\.pp-label/);
@@ -684,10 +696,6 @@ test('the Display selector, voice schema and final stylesheet expose Cyber', () 
   assert.match(cyberStyles, /\.hud-top-left/);
   assert.match(cyberStyles, /transparent 0 min\(40vw, 52vh\)/);
   assert.match(cyberStyles, /\.hud-bottom-bar \{\s*display: none;/);
-  assert.match(
-    cyberStyles,
-    /#intel-hud\[data-variant='cyber'\] \.hud-top-bar \{\s*display: none;/,
-  );
   // Cyber shares the measured rail/credit keep-out rather than overriding it.
   assert.doesNotMatch(
     cyberStyles,
@@ -705,10 +713,6 @@ test('the Display selector, voice schema and final stylesheet expose Cyber', () 
   assert.match(
     cyberStyles,
     /#left-panel-stack \{[\s\S]*?top: var\(--cyber-left-rail-top\) !important;[\s\S]*?bottom: calc\(2vh \+ 13rem\);/,
-  );
-  assert.match(
-    cyberStyles,
-    /\.hud-left-edge \{\s*top: calc\(var\(--cyber-left-rail-top\) - 18px\);\s*left: 14px;/,
   );
   assert.match(
     rightRail,
@@ -847,11 +851,4 @@ test('Cyber Display uses a red title without a panel-specific center tab', () =>
   assert.doesNotMatch(cyberStyles, /#pp-toggles[^,{]*::after\s*\{/);
   assert.match(cyberStyles, /isolation: isolate;\s*clip-path: none;/);
   assert.match(cyberStyles, /#pp-toggles:not\(\.collapsed\)::before/);
-});
-
-test('Cyber omits only the fictional classification and system header lines', () => {
-  assert.match(
-    cyberStyles,
-    /#intel-hud\[data-variant='cyber'\] \.hud-top-left \.hud-classification,\s*#intel-hud\[data-variant='cyber'\] \.hud-top-left \.hud-system\s*\{\s*display: none;\s*\}/,
-  );
 });

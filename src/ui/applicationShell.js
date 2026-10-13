@@ -23,7 +23,7 @@ import { bindClearLayersControl } from './layers.js';
 import { bindCameraOrientationControls } from './cameraOrientationControls.js';
 import { createMapSourceControls } from './mapSource.js';
 import { STYLES } from './effects.js';
-import { isHudLayout } from '../hudLayouts.js';
+import { DEFAULT_HUD_LAYOUT, isHudLayout } from '../hudLayouts.js';
 import {
   getCyberSonarControlState,
   setCyberSonarControls,
@@ -1138,7 +1138,7 @@ export class StyleManager extends ShellFacade {
 
   /**
    * Switches the HUD layout variant.
-   * @param {'tactical'|'operator'|'minimal'|'cyber'} variantName - Layout variant.
+   * @param {'professional'|'tactical'|'operator'|'minimal'|'cyber'} variantName - Layout variant.
    * @returns {{ok: boolean, layout?: string, visible?: boolean, error?: string}}
    */
   setHudLayout(variantName) {
@@ -1485,7 +1485,7 @@ export class StyleManager extends ShellFacade {
   // ── HUD Toggle ───────────────────────────────
 
   /**
-   * Wires the HUD toggle button, initializes the default HUD variant to 'tactical',
+   * Wires the HUD toggle button, initializes the default HUD variant (DEFAULT_HUD_LAYOUT),
    * and sets up the detection mode cycle button.
    * @returns {void}
    */
@@ -1502,9 +1502,9 @@ export class StyleManager extends ShellFacade {
 
   _initHUDToggle() {
     if (this._hudLayoutSelect) {
-      this._hudLayoutSelect.value = 'tactical';
+      this._hudLayoutSelect.value = DEFAULT_HUD_LAYOUT;
     }
-    this._setHudVariant('tactical');
+    this._setHudVariant(DEFAULT_HUD_LAYOUT);
     this.hud.setMode('on');
     this._updateHudButtonState();
 

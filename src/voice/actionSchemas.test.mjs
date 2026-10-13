@@ -20,14 +20,15 @@ const stable = (value) =>
       : value;
 
 test('the complete Realtime tool payload pins the manifest-generated layer release', () => {
+  const tools = structuredClone(GEV_REALTIME_TOOLS).filter(
+    (tool) => tool.name !== 'set_cyber_sonar',
+  );
+  // The Professional HUD layout is a deliberate addition to set_hud's enum.
+  const layout = tools.find((tool) => tool.name === 'set_hud').parameters
+    .properties.layout;
+  layout.enum = layout.enum.filter((name) => name !== 'professional');
   const digest = createHash('sha256')
-    .update(
-      JSON.stringify(
-        stable(
-          GEV_REALTIME_TOOLS.filter((tool) => tool.name !== 'set_cyber_sonar'),
-        ),
-      ),
-    )
+    .update(JSON.stringify(stable(tools)))
     .digest('hex');
   assert.equal(
     digest,
@@ -109,6 +110,9 @@ test('all legacy action arguments are byte-identical after removing the delibera
   panels.enum = panels.enum.filter(
     (id) => !['weather-panel', 'recent-imagery-panel'].includes(id),
   );
+  // The Professional HUD layout is additive too.
+  const hudLayout = property('set_hud').layout;
+  hudLayout.enum = hudLayout.enum.filter((name) => name !== 'professional');
   for (const tool of legacy) {
     // Point-and-ask adds `referent` arguments and 'pointer' enum values.
     delete tool.parameters.properties.referent;

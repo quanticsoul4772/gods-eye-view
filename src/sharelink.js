@@ -5,6 +5,7 @@ import {
   normalizeAllocationStrategy,
 } from './data/detectionPolicy.js';
 import { clampScopeTerminusPct } from './scopeMask.js';
+import { DEFAULT_HUD_LAYOUT } from './hudLayoutPolicy.js';
 import {
   decodeLayerStateParams,
   encodeLayerStateParams,
@@ -98,7 +99,7 @@ export class ShareLinkManager {
     this._bloomIntensity = BLOOM_INTENSITY_DEFAULT;
     this._bloomVersion = BLOOM_SCALE_VERSION;
     this._sharpenIntensity = 49;
-    this._hudVariant = 'tactical';
+    this._hudVariant = DEFAULT_HUD_LAYOUT;
     this._hudVisible = false;
     this._detectionMode = 'OFF';
     this._detectionDensity = 50;
@@ -111,7 +112,7 @@ export class ShareLinkManager {
     // question and deliberately stays at 5.
     this._detectionOutsideOpacityPct = 1;
     this._celestialRingEnabled = false;
-    this._scopeEnabled = true;
+    this._scopeEnabled = false;
     // Feather opens on a soft 11% scope-mask edge (owner final lock 2026-08-24,
     // superseding the 08-22 hard-crop and 08-23 8% rulings) — mirrors
     // SCOPE_FEATHER_RATIO_DEFAULT in scopeMask.js and the slider's markup value.
@@ -191,7 +192,7 @@ export class ShareLinkManager {
       bloomIntensity: parseOr(params.get('bi'), LEGACY_BLOOM_FALLBACK),
       bloomVersion: parseOr(params.get('bv'), 1),
       sharpenIntensity: parseOr(params.get('si'), 49),
-      hudVariant: params.get('hud') || 'tactical',
+      hudVariant: params.get('hud') || DEFAULT_HUD_LAYOUT,
       hudVisible: params.get('hv') === '1',
       detectionMode: restoredDetection.enabled
         ? restoredDetection.profile
@@ -214,7 +215,7 @@ export class ShareLinkManager {
         Math.min(100, Math.round(parseOr(params.get('ko'), 5))),
       ),
       celestialRing: params.has('cr') ? params.get('cr') === '1' : false,
-      scopeEnabled: params.has('sc') ? params.get('sc') === '1' : true,
+      scopeEnabled: params.has('sc') ? params.get('sc') === '1' : false,
       // Deliberately still 35 through both later default moves (0 on
       // 2026-08-22, 8 on 2026-08-23). This is the PARSE fallback for a link that
       // predates `scf` entirely, and such a link was authored when 35 was what

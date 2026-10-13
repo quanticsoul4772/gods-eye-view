@@ -27,7 +27,6 @@ import {
   niirsFromGsd,
   offNadirDeg,
   slantRangeFromAltitudeM,
-  stableHudIds,
   sunElevationDeg,
 } from './hudReadouts.js';
 import {
@@ -177,17 +176,6 @@ export class IntelHUD {
       }
     };
 
-    // Theme designators: flavour, drawn once and kept across reloads so they
-    // never read as live values (hudReadouts.js).
-    let storage = null;
-    try {
-      storage = globalThis.localStorage;
-    } catch {
-      /* storage blocked: a fresh pair per session */
-    }
-    const ids = stableHudIds(storage);
-    this._missionId = ids.missionId;
-    this._sensorId = ids.sensorId;
     /** REC blinks only while the app's recording mode is on. */
     this._recording = false;
     this._scratchCenter = new Cesium.Cartesian2();
@@ -211,17 +199,8 @@ export class IntelHUD {
     this._el.innerHTML = `
       <div class="hud-sonar" aria-hidden="true"></div>
 
-      <div class="hud-top-bar">
-        <span class="hud-top-bar-left">TOP SECRET // SI-TK // NOFORN</span>
-        <span class="hud-top-bar-center">${this._missionId}</span>
-        <span class="hud-top-bar-right">PAGE 1/1</span>
-      </div>
-
       <div class="hud-corner hud-top-left">
-        <div class="hud-bracket">┌</div>
         <div class="hud-content">
-          <div class="hud-classification">TOP SECRET // SI-TK // NOFORN</div>
-          <div class="hud-system">${this._missionId}  ${this._sensorId}</div>
           <div class="hud-mode" id="hud-mode">NORMAL</div>
           <div class="hud-summary-wrap">
             <div class="hud-summary-label">SUMMARY</div>
@@ -235,11 +214,9 @@ export class IntelHUD {
           <div class="hud-rec"><span id="hud-rec-dot" style="visibility: hidden">●</span> <span id="hud-rec-label" style="visibility: hidden">REC</span>  <span id="hud-timestamp">2026-01-01 00:00:00Z</span></div>
           <div class="hud-orbital" id="hud-orient">HDG ---°  RNG --</div>
         </div>
-        <div class="hud-bracket">┐</div>
       </div>
 
       <div class="hud-corner hud-bottom-left">
-        <div class="hud-bracket">└</div>
         <div class="hud-content">
           <div id="hud-mgrs">MGRS: ---</div>
           <div id="hud-latlon">--°--'--"N ---°--'--"W</div>
@@ -250,17 +227,9 @@ export class IntelHUD {
         <div class="hud-content" style="text-align:right">
           <div id="hud-gsd">GSD: --m  NIIRS: --</div>
           <div id="hud-alt">ALT: --m   SUN: --° EL</div>
+          <div><span id="hud-ona">ONA: --°</span>   <span id="hud-band">BAND: PAN</span></div>
           <div id="hud-ais-vessel" class="hud-ais-vessel">AIS: --</div>
         </div>
-        <div class="hud-bracket">┘</div>
-      </div>
-
-      <div class="hud-edge hud-left-edge">
-        <div id="hud-ona">ONA: --°</div>
-      </div>
-
-      <div class="hud-edge hud-right-edge">
-        <div id="hud-band">BAND: PAN</div>
       </div>
 
       <div class="hud-bottom-bar">
@@ -912,10 +881,10 @@ export class IntelHUD {
   }
 
   /**
-   * Switch the HUD layout variant. Falls back to `'tactical'` if the
+   * Switch the HUD layout variant. Falls back to DEFAULT_HUD_LAYOUT if the
    * name is unrecognized. Cyber also applies a coordinated skin to the full
    * application shell; leaving Cyber restores the standard shell tokens.
-   * @param {string} variantName - One of `'tactical'`, `'operator'`, `'minimal'`, `'cyber'`.
+   * @param {string} variantName - One of HUD_LAYOUTS (src/hudLayoutPolicy.js).
    */
   setVariant(variantName) {
     this._variant = normalizeHudLayout(variantName);

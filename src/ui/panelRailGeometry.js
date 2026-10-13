@@ -1,3 +1,5 @@
+import { railsYieldToHudCorners } from '../hudLayoutPolicy.js';
+
 /**
  * Resolve a vertically centered panel slot inside a HUD rail while respecting
  * live rectangles that intersect that rail above or below the viewport center.
@@ -74,5 +76,5 @@ export function shouldHideCollapsedRightPanels({
   hudVariant,
   hasExpandedPanel,
 }) {
-  return hudVariant === 'tactical' && Boolean(hasExpandedPanel);
+  return railsYieldToHudCorners(hudVariant) && Boolean(hasExpandedPanel);
 }

@@ -205,10 +205,11 @@ test('no unchanged Realtime tool definition drifts silently', () => {
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((tool) => structuredClone(tool))
     .filter((tool) => tool.name !== 'set_cyber_sonar');
-  // Cyber adds one HUD choice and the sonar tool; retain the existing pin for every legacy field.
+  // Cyber adds one HUD choice and the sonar tool, Professional one more HUD
+  // choice; retain the existing pin for every legacy field.
   const hudLayout = unchanged.find((tool) => tool.name === 'set_hud').parameters.properties.layout;
-  assert.deepEqual(hudLayout.enum, ['tactical', 'operator', 'minimal', 'cyber']);
-  hudLayout.enum = hudLayout.enum.filter((layout) => layout !== 'cyber');
+  assert.deepEqual(hudLayout.enum, ['professional', 'tactical', 'operator', 'minimal', 'cyber']);
+  hudLayout.enum = hudLayout.enum.filter((layout) => !['cyber', 'professional'].includes(layout));
   assert.equal(unchanged.length, 14);
   const digest = createHash('sha256')
     .update(JSON.stringify(unchanged))

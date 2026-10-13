@@ -1,0 +1,141 @@
+/* ── Professional layout ─────────────────────────────────────────────────────
+   The default HUD layout (src/hudLayoutPolicy.js). Every rule is scoped to
+   :root[data-hud-layout='professional'] (set by applyHudUiTheme), so Tactical,
+   Operator, Minimal and Cyber keep the original look, and this file is the
+   only place the professional look lives.
+
+   What it changes, and why (claudedocs/analysis_hud_chrome_2026-10-13.md):
+   - readouts sit on translucent plates with a dark halo, not a coloured glow,
+     so they read over any imagery (WCAG 1.4.3, 4.5:1);
+   - secondary and dim text clear 4.5:1 on the panel glass;
+   - no decorative halos, tagline, title glow or duplicate style name;
+   - letter-spacing ≤ 1px and type ≥ 11px: tracking added nothing to legibility;
+   - the key-setup chip is an icon whose label opens on hover or focus. */
+
+:root[data-hud-layout='professional'] {
+  --text-secondary: rgba(232, 234, 237, 0.78);
+  --text-dim: rgba(232, 234, 237, 0.62);
+}
+
+/* Title: a compact wordmark on the same plate as the readouts. */
+:root[data-hud-layout='professional'] #title-bar {
+  padding: 6px 12px 6px 8px;
+  border: 1px solid rgba(214, 246, 250, 0.16);
+  border-radius: 6px;
+  background: rgba(4, 8, 12, 0.55);
+}
+
+:root[data-hud-layout='professional'] #title-bar h1 {
+  font-size: 17px;
+  letter-spacing: 1px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+
+:root[data-hud-layout='professional'] #title-bar .title-logo {
+  width: 32px;
+}
+
+:root[data-hud-layout='professional'] #title-bar .subtitle,
+:root[data-hud-layout='professional'] #title-bar .title-glow,
+:root[data-hud-layout='professional'] #style-indicator,
+:root[data-hud-layout='professional'] .panel-glow {
+  display: none;
+}
+
+/* Panel titles: readable, not tracked out. */
+:root[data-hud-layout='professional'] .panel-title {
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--text-secondary);
+}
+
+/* The per-panel collapsed rules are id-scoped (8px, 1.8px tracking), so the
+   override matches their specificity with :is(#…). */
+:root[data-hud-layout='professional']
+  :is(
+    #data-panel,
+    #scene-panel,
+    #cctv-panel,
+    #radio-panel,
+    #weather-panel,
+    #recent-imagery-panel,
+    #street-level-panel,
+    #global-context-panel
+  ).collapsed
+  .panel-title,
+:root[data-hud-layout='professional'] #pp-toggles .pp-header-label {
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--text-secondary);
+}
+
+/* HUD readouts on plates. */
+:root[data-hud-layout='professional'] #intel-hud {
+  --hud-color: rgba(214, 246, 250, 0.95) !important;
+  --hud-border: rgba(214, 246, 250, 0.16) !important;
+}
+
+:root[data-hud-layout='professional'] #intel-hud * {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+
+:root[data-hud-layout='professional'] #intel-hud .hud-corner {
+  padding: 6px 10px;
+  border: 1px solid var(--hud-border);
+  border-radius: 6px;
+  background: rgba(4, 8, 12, 0.55);
+}
+
+:root[data-hud-layout='professional'] #intel-hud .hud-content {
+  font-size: 12px;
+  letter-spacing: 0.5px;
+}
+
+:root[data-hud-layout='professional'] #intel-hud .hud-mode {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  margin-top: 0;
+}
+
+:root[data-hud-layout='professional'] #intel-hud .hud-summary-label {
+  display: none;
+}
+
+:root[data-hud-layout='professional'] #intel-hud .hud-summary {
+  font-size: 12px;
+  letter-spacing: 0.3px;
+  opacity: 0.9;
+}
+
+:root[data-hud-layout='professional'] #intel-hud .hud-rec,
+:root[data-hud-layout='professional'] #intel-hud .hud-orbital {
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  opacity: 1;
+}
+
+/* Key setup: an icon; the label opens on hover or keyboard focus. The label
+   stays in the accessibility tree either way (it is the button's name). */
+:root[data-hud-layout='professional'] #key-setup-chip {
+  gap: 0;
+  padding: 0.4rem;
+}
+
+:root[data-hud-layout='professional']
+  #key-setup-chip
+  [data-key-setup-chip-label] {
+  display: inline-block;
+  max-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  vertical-align: middle;
+  transition: max-width 0.2s ease;
+}
+
+:root[data-hud-layout='professional']
+  #key-setup-chip:is(:hover, :focus-visible)
+  [data-key-setup-chip-label] {
+  max-width: 22rem;
+  padding-left: 0.4rem;
+}

@@ -10,7 +10,6 @@ import {
   niirsFromGsd,
   offNadirDeg,
   slantRangeFromAltitudeM,
-  stableHudIds,
   sunElevationDeg,
 } from './hudReadouts.js';
 
@@ -72,51 +71,6 @@ test('range prints metres below 1 km, one decimal below 100 km', () => {
   assert.equal(formatRange(12_400), '12.4km');
   assert.equal(formatRange(250_000), '250km');
   assert.equal(formatRange(Number.NaN), '--');
-});
-
-function memoryStorage() {
-  const data = new Map();
-  return {
-    getItem: (k) => (data.has(k) ? data.get(k) : null),
-    setItem: (k, v) => data.set(k, String(v)),
-  };
-}
-
-test('HUD designators persist across reloads', () => {
-  const storage = memoryStorage();
-  const first = stableHudIds(storage, () => 0.5);
-  assert.deepEqual(first, { missionId: 'KH11-4100', sensorId: 'OPS-4150' });
-  assert.deepEqual(
-    stableHudIds(storage, () => 0),
-    first,
-  );
-});
-
-test('malformed saved designators are replaced', () => {
-  const storage = memoryStorage();
-  storage.setItem('gev:hud-ids:v1', '{"missionId":"x","sensorId":"OPS-4100"}');
-  assert.deepEqual(
-    stableHudIds(storage, () => 0),
-    {
-      missionId: 'KH11-4000',
-      sensorId: 'OPS-4100',
-    },
-  );
-  storage.setItem('gev:hud-ids:v1', 'not json');
-  assert.equal(stableHudIds(storage, () => 0).missionId, 'KH11-4000');
-});
-
-test('blocked or missing storage still yields designators', () => {
-  const blocked = {
-    getItem() {
-      throw new Error('SecurityError');
-    },
-    setItem() {
-      throw new Error('SecurityError');
-    },
-  };
-  assert.match(stableHudIds(blocked).missionId, /^KH11-\d{4}$/);
-  assert.match(stableHudIds(null).sensorId, /^OPS-\d{4}$/);
 });
 
 test('AIS idle line says what is there', () => {

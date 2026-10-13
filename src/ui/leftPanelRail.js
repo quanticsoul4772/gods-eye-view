@@ -5,6 +5,7 @@ import {
   resolvePanelStackCorridor,
 } from '../panelStackLayout.js';
 import { measurePanelNaturalHeight } from './panelMeasurement.js';
+import { railsYieldToHudCorners } from '../hudLayoutPolicy.js';
 
 /**
  * Measure and place the left panel rail for one synchronous layout pass.
@@ -38,7 +39,7 @@ export function layoutLeftPanelRail({
 
   const panels = [...stack.querySelectorAll(':scope > [data-panel-id]')];
   if (!panels.length) return;
-  if (!hud.visible || hud.variant !== 'tactical') {
+  if (!hud.visible || !railsYieldToHudCorners(hud.variant)) {
     for (const panel of panels.filter((item) =>
       item.classList.contains('layout-auto-collapsed'),
     )) {
@@ -237,7 +238,7 @@ export function layoutLeftPanelRail({
     ? panelStackAutoCollapseIndices({
         naturalHeights: naturalExpandedHeights,
         allocatedHeights: allocatedExpandedHeights,
-        collapseLaterPanels: shouldFocus && hud.variant === 'tactical',
+        collapseLaterPanels: shouldFocus && railsYieldToHudCorners(hud.variant),
       })
     : [];
   if (autoCollapseIndices.length) {

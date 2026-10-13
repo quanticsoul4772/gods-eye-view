@@ -8,6 +8,7 @@ import {
 } from './panelRailGeometry.js';
 
 import { displayPanelScroller } from './displayPanelScroll.js';
+import { railsYieldToHudCorners } from '../hudLayoutPolicy.js';
 
 const pendingCollapseRetries = new WeakSet();
 
@@ -74,7 +75,7 @@ export function layoutRightPanelRail({
     (panel) =>
       panel.matches('[data-panel-id]:not(.panel-floating)') && !panel.hidden,
   );
-  if (!hud.visible || hud.variant !== 'tactical') {
+  if (!hud.visible || !railsYieldToHudCorners(hud.variant)) {
     for (const panel of panels.filter((item) =>
       item.classList.contains('layout-auto-collapsed'),
     )) {
@@ -276,7 +277,7 @@ export function layoutRightPanelRail({
   // Other HUD variants restore automatic collapse at the start of each pass.
   // Do not immediately collapse those panels again and schedule a loop.
   const autoCollapseIndices =
-    hud.visible && hud.variant === 'tactical'
+    hud.visible && railsYieldToHudCorners(hud.variant)
       ? panelStackAutoCollapseIndices({
           naturalHeights: expandedPanels.map((panel) =>
             naturalHeights.get(panel),

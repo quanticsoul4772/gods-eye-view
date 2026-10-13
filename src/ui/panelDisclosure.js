@@ -81,6 +81,7 @@ export function createHoverDisclosure({
   onEscape,
   focusTarget = null,
   isActive = () => true,
+  isPinned = () => panelEl.classList.contains('dock-pinned'),
   openDelayMs = 850,
   closeDelayMs = 1000,
   documentRef = panelEl?.ownerDocument,
@@ -165,7 +166,7 @@ export function createHoverDisclosure({
       closeTimer = null;
       if (destroyed || !isActive()) return;
       if (panelEl.matches(':hover') || keyboardFocusInside()) return;
-      if (panelEl.classList.contains('dock-pinned')) return;
+      if (isPinned()) return;
       if (panelEl.classList.contains('collapsed')) return;
       onChange(true);
     }, closeDelayMs);

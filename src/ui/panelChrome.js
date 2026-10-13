@@ -7,6 +7,15 @@ import {
   collapsePanelOnEscape,
   createHoverDisclosure,
 } from './panelDisclosure.js';
+/** Left-stack and right-rail panels that open on hover (_initRailHoverPanels). */
+const RAIL_HOVER_PANEL_IDS = Object.freeze([
+  'data-panel',
+  'scene-panel',
+  'pp-toggles',
+  'cctv-panel',
+  'street-level-panel',
+  'global-context-panel',
+]);
 const SHARE_PANEL_STATE_SPECS = Object.freeze([
   { id: 'control-panel', pinnable: true },
   { id: 'location-bar', pinnable: true },
@@ -144,6 +153,7 @@ export class PanelChrome {
       openDelayMs: 140,
       closeDelayMs: 420,
     });
+    this._initRailHoverPanels();
     this._initCommandDockPins();
     this._initCommandDockTrayMetrics();
     this._maybeNotifyLayoutReset();
@@ -267,6 +277,64 @@ export class PanelChrome {
     if (panelId === 'control-panel') {
       this._cancelMapSourceFocus?.();
       this._cancelMapSourceFocus = controller.cancelPendingFocus;
+    }
+  }
+
+  /**
+   * In the Professional layout, rail panels open while the pointer rests on
+   * them and close shortly after it leaves, so the map keeps the space
+   * between uses. Hovering only peeks:
+   * the open state is not saved or shared. Pressing anywhere inside an open
+   * panel keeps it open until it is collapsed (its button or Escape), and a
+   * panel dragged out to float stays put.
+   */
+  _initRailHoverPanels() {
+    this._hoverPanelControls ??= new Map();
+    this._railHoverPinned ??= new Set();
+    for (const panelId of RAIL_HOVER_PANEL_IDS) {
+      const panel = document.getElementById(panelId);
+      if (!panel) continue;
+      this._hoverPanelControls.get(panelId)?.destroy();
+      const pin = (event) => {
+        if (!panel.classList.contains('collapsed') && !event.defaultPrevented)
+          this._railHoverPinned.add(panelId);
+      };
+      panel.addEventListener('pointerdown', pin);
+      const controller = createHoverDisclosure({
+        panel,
+        documentRef: document,
+        openDelayMs: 200,
+        closeDelayMs: 600,
+        isActive: () =>
+          !this._disposed &&
+          document.documentElement.dataset.hudLayout === 'professional',
+        isPinned: () =>
+          this._railHoverPinned.has(panelId) ||
+          panel.classList.contains('panel-floating'),
+        onChange: (collapsed, options) => {
+          if (options?.explicit) {
+            if (collapsed) this._railHoverPinned.delete(panelId);
+            else this._railHoverPinned.add(panelId);
+            this.setPanelCollapsed(panelId, collapsed, options);
+            return;
+          }
+          if (!collapsed) this._railHoverPinned.delete(panelId);
+          this.setPanelCollapsed(panelId, collapsed, {
+            persist: false,
+            syncShare: false,
+          });
+        },
+        onEscape: (event) => {
+          this._railHoverPinned.delete(panelId);
+          this._collapsePanelOnEscape(event, panelId);
+        },
+      });
+      this._hoverPanelControls.set(panelId, {
+        destroy: () => {
+          panel.removeEventListener('pointerdown', pin);
+          controller.destroy();
+        },
+      });
     }
   }
 
