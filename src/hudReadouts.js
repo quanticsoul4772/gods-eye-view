@@ -7,23 +7,19 @@ import * as Cesium from 'cesium';
  */
 
 /**
- * Metres of ground per pixel, per metre of distance to the ground: the HUD's
- * notional sensor resolves 0.375 mm per metre of range (GSD 0.23 m at 627 m).
- */
-export const GSD_PER_METRE_RANGE = 0.000375;
-
-/**
- * Ground sample distance at the view centre, from the slant range to it.
- * Looking 60° off straight down doubles the range and so the GSD; reading it
- * from the altitude alone made oblique views look twice as sharp as they are.
+ * Ground sample distance at the view centre: the width of ground one rendered
+ * pixel covers there, across the line of sight. It is the view's own pixel
+ * footprint (slant range × 2·tan(fovy/2) ÷ drawing-buffer height), not a
+ * sensor constant, so zooming, tilting, resizing the window or a different
+ * device pixel ratio all move it as they move the picture.
  * @param {number} rangeM Camera-to-ground distance along the view axis.
- * @returns {number} Metres per pixel, at least 0.01.
+ * @param {number} fovyRad The camera frustum's vertical field of view.
+ * @param {number} pixelHeight Drawing-buffer height in device pixels.
+ * @returns {number|null} Metres per pixel (at least 0.01); null with no pixels.
  */
-export function gsdFromRangeM(rangeM) {
-  return Math.max(
-    0.01,
-    (Number.isFinite(rangeM) ? rangeM : 0) * GSD_PER_METRE_RANGE,
-  );
+export function gsdFromRangeM(rangeM, fovyRad, pixelHeight) {
+  if (!(pixelHeight > 0) || !Number.isFinite(rangeM)) return null;
+  return Math.max(0.01, (rangeM * 2 * Math.tan(fovyRad / 2)) / pixelHeight);
 }
 
 /**

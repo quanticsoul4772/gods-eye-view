@@ -400,17 +400,24 @@ export class IntelHUD {
       bottomEl.textContent = `MGRS: ${mgrsLabel}  LAT: ${latDMS}  LON: ${lonDMS}`;
     }
 
-    // GSD (Ground Sample Distance) from the slant range to the view centre,
-    // so an oblique view reads as coarse as it is; NIIRS from GSD by the
-    // simplified General Image Quality Equation (hudReadouts.js).
+    // GSD (Ground Sample Distance): the ground one rendered pixel covers at
+    // the view centre, from the slant range, the field of view and the
+    // drawing-buffer height; NIIRS from GSD by the simplified General Image
+    // Quality Equation (hudReadouts.js).
     const rangeM = target
       ? Cesium.Cartesian3.distance(camera.positionWC, target)
       : slantRangeFromAltitudeM(altM, ona);
-    const gsd = gsdFromRangeM(rangeM);
-    const niirs = niirsFromGsd(gsd);
+    const gsd = gsdFromRangeM(
+      rangeM,
+      camera.frustum.fovy,
+      this.viewer.scene.drawingBufferHeight,
+    );
     const gsdEl = document.getElementById('hud-gsd');
     if (gsdEl)
-      gsdEl.textContent = `GSD: ${gsd.toFixed(2)}m  NIIRS: ${niirs.toFixed(1)}`;
+      gsdEl.textContent =
+        gsd === null
+          ? 'GSD: --m  NIIRS: --'
+          : `GSD: ${gsd.toFixed(2)}m  NIIRS: ${niirsFromGsd(gsd).toFixed(1)}`;
 
     // Altitude — reported as height above MEAN SEA LEVEL. `altM` is the raw
     // ellipsoidal camera height, which reads far below zero wherever the geoid

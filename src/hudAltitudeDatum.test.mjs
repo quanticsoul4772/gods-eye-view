@@ -96,9 +96,12 @@ function installHudEnvironment() {
         longitude: (SFO.lonDeg * Math.PI) / 180,
         height: SFO_ELLIPSOIDAL_M,
       },
+      // A 60° vertical field of view, 900 device pixels tall.
+      frustum: { fovy: Math.PI / 3 },
       computeViewRectangle: () => undefined,
       moveEnd: { addEventListener() {}, removeEventListener() {} },
     },
+    scene: { drawingBufferHeight: 900 },
   };
   return {
     elements,
@@ -186,7 +189,7 @@ test('the sensor model keeps the ellipsoidal height it was tuned against', () =>
   // never from the display datum.
   assert.equal(
     has(
-      /: slantRangeFromAltitudeM\(altM, ona\);\s*const gsd = gsdFromRangeM\(rangeM\);/,
+      /: slantRangeFromAltitudeM\(altM, ona\);\s*const gsd = gsdFromRangeM\(\s*rangeM,\s*camera\.frustum\.fovy,\s*this\.viewer\.scene\.drawingBufferHeight,\s*\);/,
     ),
     true,
     'GSD must keep reading camera geometry (slant range, or the raw camera height)',
