@@ -35,6 +35,7 @@
  *   node scripts/qa-bench.mjs --only layers --layers cctv,radio   chosen layers
  *   node scripts/qa-bench.mjs --reps 3                3 windows per sample (median; default 2)
  *   node scripts/qa-bench.mjs --profile               also save .cpuprofile per window
+ *   node scripts/qa-bench.mjs --uncapped              frames not tied to the display (noisier; see below)
  *   node scripts/qa-bench.mjs --allow-software        permit SwiftShader (numbers are relative only)
  *
  * Output: qa-shots/bench/<stamp>/results.json and report.md (gitignored).
@@ -102,17 +103,27 @@ const COMBINED = [
   'local-datacenters',
 ];
 
-/** Regression thresholds for --compare (relative to the baseline). */
+/**
+ * Regression thresholds for --compare (relative to the baseline), set from two
+ * identical runs on the Arc baseline machine (2026-10-13):
+ * - heap, retained heap, startup timings and bytes repeated within ~5 %;
+ * - fps of the heavy scenes (flights ~12k, cables, CCTV, combined) within
+ *   ~15-25 %;
+ * - fps of mid-weight scenes was bimodal (datacenters 30 vs 59, satellites 34
+ *   vs 59): one run cannot judge them, so a flag there needs a second run;
+ * - layer activation swung 2-4x with the network (CCTV 4.3-15.5 s), so it is
+ *   reported, not gated, until layers have recorded fixtures.
+ */
 const THRESHOLDS = {
-  fps: -0.1, // 10 % lower
-  frameP95Ms: 0.2,
-  scriptMsPerSec: 0.2,
-  heapMiB: 0.15,
-  activationMs: 0.25,
-  firstDataMs: 0.25,
-  appReadyMs: 0.2,
-  settledMs: 0.2,
-  retainedMiB: 0.5,
+  fps: -0.25,
+  frameP95Ms: 0.5,
+  heapMiB: 0.1,
+  heapDeltaMiB: 0.1,
+  retainedMiB: 0.15,
+  appReadyMs: 0.15,
+  tilesLoadedMs: 0.2,
+  settledMs: 0.15,
+  networkMiB: 0.1,
 };
 
 const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
@@ -534,15 +545,20 @@ function compare(current, baseline) {
 
 // ── run ─────────────────────────────────────────────────────────────────────
 
-// Frames are decoupled from the display (UNCAPPED_FRAME_ARGS): with the
-// display asleep the compositor paces headless Chrome at ~10 Hz, which made a
-// whole run read 7-9 fps. Cesium still caps its loop at 60.
-const browser = await launchProbeBrowser({ gpu: true, uncapped: true });
+// Frames follow the display's vsync, as in a real browser. With the display
+// asleep the compositor paces headless Chrome at ~10 Hz (a whole run read
+// 7-9 fps), so a blank-page check refuses to measure then. --uncapped frees
+// the clock from the display (UNCAPPED_FRAME_ARGS) for a machine whose display
+// cannot stay awake, but it also lets light scenes run rAF at 100-300/s,
+// which made fps noisy between runs; vsync is the default.
+const UNCAPPED = argv.includes('--uncapped');
+const browser = await launchProbeBrowser({ gpu: true, uncapped: UNCAPPED });
 const frameClock = await blankPageRafRate(browser);
-if (frameClock < 50) {
+const MIN_FRAME_CLOCK = UNCAPPED ? 50 : 55;
+if (frameClock < MIN_FRAME_CLOCK) {
   await browser.close();
   console.error(
-    `The frame clock runs at ${frameClock.toFixed(1)}/s on a blank page (need ≥ 50). Wake the display (a sleeping display throttles the GPU even with vsync off), close GPU-heavy apps, and run again. Not measuring.`,
+    `The frame clock runs at ${frameClock.toFixed(1)}/s on a blank page (need ≥ ${MIN_FRAME_CLOCK}). Wake the display (a sleeping display throttles frames), close GPU-heavy apps, and run again. Not measuring.`,
   );
   process.exit(2);
 }
@@ -562,7 +578,7 @@ const results = {
     windowMs: WINDOW_MS,
     reps: REPS,
     isolation: 'fresh page per scenario',
-    frameClock: `uncapped (${UNCAPPED_FRAME_ARGS.join(' ')}), blank page ${frameClock.toFixed(0)} rAF/s`,
+    frameClock: `${UNCAPPED ? `uncapped (${UNCAPPED_FRAME_ARGS.join(' ')})` : 'display vsync'}, blank page ${frameClock.toFixed(0)} rAF/s`,
     park: PARK,
     appUrl: APP_URL,
   },

@@ -76,17 +76,32 @@ parked scene that is working correctly draws nothing.
 - **Same machine, same conditions.** 1440×900 at DPR 1, focused headless
   page, park over Austin at 60 km.
 
+## Run-to-run noise (measured)
+
+Two identical runs on the Arc baseline machine, same conditions:
+
+| Metric family                                            | Repeat spread                                        | Gate in `--compare`                  |
+| -------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------ |
+| Heap while on, heap kept after off, startup heap         | within ~5 % (datacenters +149.3 / +149.8 MiB)        | +10 % / +15 % retained               |
+| Startup timings and bytes                                | within ~5 % (ready 872 / 872 ms, 18.2 / 18.3 MiB)    | +15 % (+10 % bytes)                  |
+| fps, heavy scenes (flights ~12k, cables, CCTV, combined) | ~15–25 % (flights 30.4 / 30.6, combined 11.3 / 14.5) | −25 %                                |
+| fps, mid-weight scenes (datacenters, satellites, dams)   | **bimodal**: 30 vs 59 fps                            | flag only; confirm with a second run |
+| Layer activation                                         | 2–4× (CCTV 4.3–15.5 s): it measures the network      | reported, not gated                  |
+
+A single run can therefore judge memory, startup and the heavy scenes. A
+mid-weight fps change needs two runs that agree, and activation needs recorded
+fixtures before it can be judged at all.
+
 ## Judging a change
 
-1. Measure noise first: run the baseline twice on an idle machine and note the
-   run-to-run spread of each metric. A threshold below twice the noise is noise.
+1. Know the noise (above). A threshold below twice the noise is noise; re-measure
+   it when the machine, browser or GPU driver changes.
 2. Form a hypothesis from a profile (`qa-bench --profile`, then
    `node scripts/qa-bench-profile-top.mjs <file>.cpuprofile`), not from reading.
 3. Change one thing. Re-run the affected scenarios with
    `--compare bench/baselines/<name>.json`.
 4. Accept when the target metric moves beyond noise and nothing regresses past
-   the thresholds in `qa-bench.mjs` (fps −10 %, frame p95 / script ms +20 %,
-   heap +15 %, activation +25 %, startup +20 %, retained heap +50 %).
+   the thresholds in `qa-bench.mjs` (set from the noise table above).
 5. Save a new baseline (`--save-baseline <name>`; `--only` merges into it) only
    with the change that earned it, and say so in the commit.
 
