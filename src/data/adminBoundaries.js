@@ -335,6 +335,7 @@ const loadCountries = createRetryableLoader(async () => {
   packLoads.countries += 1;
   const pack = await loadBundledJson(PACKS.countries.url);
   const index = new Map();
+  const entries = [];
   for (const feature of pack.features || []) {
     const entry = {
       kind: 'country',
@@ -344,11 +345,78 @@ const loadCountries = createRetryableLoader(async () => {
       country: normalizeAdminName(feature.country),
       iso2: feature.iso2?.toLowerCase(),
     };
+    entries.push(entry);
     for (const name of [feature.name, ...(feature.alt || [])])
       addKey(index, normalizeAdminName(name), entry, 0);
   }
-  return { index };
+  return { index, entries };
 });
+
+/**
+ * Distance (km) from a point to the nearest edge of an open [lon, lat] ring,
+ * on a local equirectangular projection: exact enough within a few km, where
+ * the coastal tolerance applies. Simplified coasts have vertices >10 km apart
+ * (Dubai), so the nearest vertex is not the nearest coast.
+ */
+function ringEdgeDistanceKm(ring, lat, lon) {
+  const kmPerDegLat = (Math.PI * EARTH_RADIUS_KM) / 180;
+  const kmPerDegLon = kmPerDegLat * Math.cos(toRad(lat));
+  let best = Infinity;
+  for (let i = 0; i < ring.length; i++) {
+    const [aLon, aLat] = ring[i];
+    const [bLon, bLat] = ring[(i + 1) % ring.length];
+    const ax = (aLon - lon) * kmPerDegLon;
+    const ay = (aLat - lat) * kmPerDegLat;
+    const dx = (bLon - aLon) * kmPerDegLon;
+    const dy = (bLat - aLat) * kmPerDegLat;
+    const lengthSq = dx * dx + dy * dy;
+    const t = lengthSq
+      ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / lengthSq))
+      : 0;
+    best = Math.min(best, Math.hypot(ax + t * dx, ay + t * dy));
+  }
+  return best;
+}
+
+/**
+ * How far off a country's mapped coast a point still takes its name. The pack
+ * is simplified at 0.01° (~1.1 km), and reclaimed land such as Palm Jumeirah
+ * reaches ~5 km past the mapped Dubai coast.
+ */
+const COAST_TOLERANCE_KM = 6;
+
+/**
+ * The country whose Natural Earth polygon contains a point, by its sovereign
+ * name ("United Kingdom" for a point in England); else the nearest country
+ * whose mapped coast is within COAST_TOLERANCE_KM; else null (open sea).
+ * @param {number} lat
+ * @param {number} lon
+ * @returns {Promise<string|null>}
+ */
+export async function countryNameAt(lat, lon) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  const { entries } = await loadCountries();
+  const nameOf = (entry) => entry.feature.country || entry.feature.name;
+  const nearby = [];
+  for (const entry of entries) {
+    const geometry = geometryOf(entry);
+    if (boxDistanceKm(geometry.bbox, lat, lon) > COAST_TOLERANCE_KM) continue;
+    if (polygonsContain(geometry.polygons, lat, lon)) return nameOf(entry);
+    nearby.push({ entry, polygons: geometry.polygons });
+  }
+  let best = null;
+  let bestKm = COAST_TOLERANCE_KM;
+  for (const { entry, polygons } of nearby) {
+    for (const [outer] of polygons) {
+      const km = ringEdgeDistanceKm(outer, lat, lon);
+      if (km <= bestKm) {
+        bestKm = km;
+        best = entry;
+      }
+    }
+  }
+  return best ? nameOf(best) : null;
+}
 
 async function countryCandidates(parsed) {
   if (!['any', 'country'].includes(parsed.kind)) return [];

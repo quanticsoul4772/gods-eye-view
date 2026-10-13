@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, statSync } from 'node:fs';
 import {
+  countryNameAt,
   decodeRing,
   findAdminArea,
   findAdminAreaAt,
@@ -478,4 +479,31 @@ test('UK constituent countries retain their own identity and extent from any cam
     (await findAdminArea('County Durham, England', { near: AUSTIN })).country,
     'United Kingdom',
   );
+});
+
+// The voice view-context fallback names the country under the view from these
+// polygons. It used hand-drawn boxes, first match winning, and the Iran box
+// covered the Gulf states: a view of Dubai was reported as Iran.
+test('countryNameAt resolves Gulf cities to their own countries', async () => {
+  assert.equal(await countryNameAt(25.2, 55.27), 'United Arab Emirates');
+  assert.equal(await countryNameAt(25.29, 51.53), 'Qatar');
+  assert.equal(await countryNameAt(26.22, 50.58), 'Bahrain');
+  assert.equal(await countryNameAt(29.37, 47.98), 'Kuwait');
+  assert.equal(await countryNameAt(35.69, 51.39), 'Iran');
+});
+
+test('countryNameAt keeps coastal and reclaimed land in its country', async () => {
+  // On land, but outside the simplified coastline.
+  assert.equal(await countryNameAt(25.1, 55.14), 'United Arab Emirates'); // Dubai Marina
+  assert.equal(await countryNameAt(25.112, 55.139), 'United Arab Emirates'); // Palm Jumeirah
+  assert.equal(await countryNameAt(25.31, 51.53), 'Qatar'); // Doha West Bay
+  // Mid-Gulf is open sea.
+  assert.equal(await countryNameAt(26.5, 52.5), null);
+});
+
+test('countryNameAt names the sovereign country and is null at sea', async () => {
+  assert.equal(await countryNameAt(51.507, -0.128), 'United Kingdom');
+  assert.equal(await countryNameAt(-18.14, 178.44), 'Fiji');
+  assert.equal(await countryNameAt(0, 0), null);
+  assert.equal(await countryNameAt(Number.NaN, 10), null);
 });

@@ -42,6 +42,7 @@ import {
 } from '../cameraVerbs.js';
 import * as defaultFloorServices from '../data/groundFloor.js';
 import { isPickedWorldPosition } from '../data/scenePick.js';
+import { countryNameAt } from '../data/adminBoundaries.js';
 import { unavailablePlaceSearch } from '../search/placeSearch.js';
 import * as defaultAnnotationResolver from '../annotations/annotationResolver.js';
 import { normalizeRadioCountryInput } from '../data/radioCountry.js';
@@ -3930,17 +3931,11 @@ async function getBasemapContext(
 
   const latitude = Number(Cesium.Math.toDegrees(target.latitude).toFixed(6));
   const longitude = Number(Cesium.Math.toDegrees(target.longitude).toFixed(6));
-  const inferredCountry = inferCountryFromSamples(samples);
+  const inferredCountryPromise = inferCountryFromSamples(samples);
   const knownLandmarks = nearbyKnownLandmarks(
     latitude,
     longitude,
     cameraHeightM,
-  );
-  const fallbackPlace = coarseBasemapPlace(
-    viewScale,
-    latitude,
-    longitude,
-    inferredCountry,
   );
   const cachedPlace = shouldReverseGeocode(cameraHeightM)
     ? reverseGeocodeCache.get(
@@ -3966,7 +3961,7 @@ async function getBasemapContext(
     shouldFetchNearbyPlaces(cameraHeightM) && !cachedNearbyPlaces
       ? fetchNearbyPlaces(latitude, longitude, cameraHeightM, service)
       : Promise.resolve(cachedNearbyPlaces);
-  const [viewportPlaces, resolvedPlace, resolvedNearbyPlaces] =
+  const [viewportPlaces, resolvedPlace, resolvedNearbyPlaces, inferredCountry] =
     await Promise.all([
       resolveWithin(
         viewportPlacesPromise,
@@ -3979,8 +3974,11 @@ async function getBasemapContext(
         BASEMAP_CONTEXT_WAIT_MS,
         cachedNearbyPlaces,
       ),
+      resolveWithin(inferredCountryPromise, BASEMAP_CONTEXT_WAIT_MS, null),
     ]);
-  const place = resolvedPlace || fallbackPlace;
+  const place =
+    resolvedPlace ||
+    coarseBasemapPlace(viewScale, latitude, longitude, inferredCountry);
   const nearbyPlaces = resolvedNearbyPlaces || [];
   return {
     source: 'Google Photorealistic 3D Tiles / Cesium basemap',
@@ -4216,11 +4214,18 @@ function sampleViewportCartographics(viewer) {
   return samples;
 }
 
-function inferCountryFromSamples(samples) {
+/**
+ * The country most viewport samples fall in, by Natural Earth polygon. It
+ * used to be a list of hand-drawn boxes where the first match won, and the
+ * Iran box covered Dubai, Doha, Manama and Kuwait City.
+ */
+async function inferCountryFromSamples(samples) {
   if (!samples.length) return null;
   const counts = new Map();
-  for (const sample of samples) {
-    const country = inferCountry(sample.latitude, sample.longitude);
+  const countries = await Promise.all(
+    samples.map((sample) => countryNameAt(sample.latitude, sample.longitude)),
+  );
+  for (const country of countries) {
     if (!country) continue;
     counts.set(country, (counts.get(country) || 0) + 1);
   }
@@ -4232,40 +4237,6 @@ function inferCountryFromSamples(samples) {
     sampleCount: count,
     totalSamples: samples.length,
   };
-}
-
-function inferCountry(latitude, longitude) {
-  const regions = [
-    { name: 'Iran', south: 24.0, north: 40.2, west: 44.0, east: 63.5 },
-    { name: 'Iraq', south: 29.0, north: 37.5, west: 38.5, east: 49.0 },
-    { name: 'Turkey', south: 35.5, north: 42.5, west: 25.5, east: 45.2 },
-    { name: 'Saudi Arabia', south: 16.0, north: 32.5, west: 34.0, east: 56.5 },
-    { name: 'Afghanistan', south: 29.0, north: 38.8, west: 60.0, east: 75.5 },
-    { name: 'Pakistan', south: 23.0, north: 37.2, west: 60.5, east: 77.5 },
-    { name: 'Turkmenistan', south: 35.0, north: 42.9, west: 52.0, east: 66.8 },
-    { name: 'Azerbaijan', south: 38.3, north: 41.9, west: 44.6, east: 50.8 },
-    { name: 'Armenia', south: 38.7, north: 41.4, west: 43.4, east: 46.7 },
-    { name: 'Japan', south: 24.0, north: 46.5, west: 122.0, east: 146.5 },
-    { name: 'South Korea', south: 33.0, north: 38.8, west: 124.0, east: 132.0 },
-    { name: 'North Korea', south: 37.5, north: 43.2, west: 124.0, east: 131.0 },
-    { name: 'China', south: 18.0, north: 53.8, west: 73.0, east: 135.2 },
-    { name: 'Russia', south: 41.0, north: 82.0, west: 19.0, east: 180.0 },
-    {
-      name: 'United States',
-      south: 24.0,
-      north: 49.8,
-      west: -125.0,
-      east: -66.0,
-    },
-  ];
-  const region = regions.find(
-    (item) =>
-      latitude >= item.south &&
-      latitude <= item.north &&
-      longitude >= item.west &&
-      longitude <= item.east,
-  );
-  return region?.name || null;
 }
 
 async function reverseGeocode(latitude, longitude, service) {
