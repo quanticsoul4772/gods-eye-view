@@ -303,3 +303,38 @@ test('the terrain proxy is used only when the app server answers layer.json with
     false,
   );
 });
+
+test('a tile the proxy cannot serve is fetched from the public service instead', async () => {
+  const { withPublicTileFallback } = await import('./terrain.js');
+  const delegated = [];
+  const policy = withPublicTileFallback({
+    retryAttempts: 3,
+    retryCallback: async (_resource, error) => {
+      delegated.push(error?.statusCode);
+      return false;
+    },
+  });
+  assert.equal(policy.retryAttempts, 4, 'one more attempt for the fallback');
+  for (const statusCode of [404, 502, undefined]) {
+    const tile = {
+      url: 'http://localhost:4173/api/terrain/mesh/8/119/177.terrain',
+    };
+    assert.equal(
+      await policy.retryCallback(tile, { statusCode }),
+      true,
+      String(statusCode),
+    );
+    assert.equal(tile.url, `${KEYLESS_TERRAIN_URL}/8/119/177.terrain`);
+  }
+  // Throttling keeps its backoff; a public-service tile is not rewritten again.
+  const throttled = {
+    url: 'http://localhost:4173/api/terrain/mesh/8/1/2.terrain',
+  };
+  assert.equal(
+    await policy.retryCallback(throttled, { statusCode: 429 }),
+    false,
+  );
+  const direct = { url: `${KEYLESS_TERRAIN_URL}/8/1/2.terrain` };
+  assert.equal(await policy.retryCallback(direct, { statusCode: 404 }), false);
+  assert.deepEqual(delegated, [429, 404]);
+});

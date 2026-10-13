@@ -55,6 +55,33 @@ export function createKeylessTerrainResource(
 }
 
 /**
+ * Wraps a retry policy for the proxy resource: a tile the app's server cannot
+ * serve — the route gone (404, e.g. while a dev server restarts), the proxy
+ * down (no status) or failing (502) — is fetched from the public service
+ * instead. Without this an open page whose server lost the route marked every
+ * tile failed and the globe disappeared. Throttling (429) and the upstream's
+ * own errors still go through the wrapped policy's backoff.
+ * @param {ReturnType<typeof createTerrainRetryPolicy>} policy
+ */
+export function withPublicTileFallback(policy) {
+  const marker = `${KEYLESS_TERRAIN_PROXY_URL}/`;
+  return {
+    ...policy,
+    retryAttempts: policy.retryAttempts + 1,
+    async retryCallback(resource, error) {
+      const url = String(resource?.url ?? '');
+      const at = url.indexOf(marker);
+      const status = error?.statusCode;
+      if (at !== -1 && (status === 404 || status === 502 || status == null)) {
+        resource.url = `${KEYLESS_TERRAIN_URL}/${url.slice(at + marker.length)}`;
+        return true;
+      }
+      return policy.retryCallback(resource, error);
+    },
+  };
+}
+
+/**
  * Whether the app's own server is answering the terrain route. Cesium does not
  * fail on a missing layer.json — it assumes default tiling — so a host without
  * the server (a static build) would otherwise get a provider whose every tile
@@ -88,7 +115,12 @@ export async function createKeylessTerrain() {
     try {
       return {
         provider: await Cesium.CesiumTerrainProvider.fromUrl(
-          createKeylessTerrainResource(undefined, KEYLESS_TERRAIN_PROXY_URL),
+          createKeylessTerrainResource(
+            withPublicTileFallback(
+              createTerrainRetryPolicy({ onThrottle: logThrottle }),
+            ),
+            KEYLESS_TERRAIN_PROXY_URL,
+          ),
         ),
       };
     } catch {
