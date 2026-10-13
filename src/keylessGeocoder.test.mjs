@@ -30,6 +30,7 @@ import {
   photonResultTypes,
   photonSearchUrl,
   selectPhotonFeature,
+  selectAirportFeature,
   selectQualifiedFeature,
 } from './keylessGeocoder.js';
 import { geocodeNavigationMode } from './locations.js';
@@ -333,6 +334,63 @@ test('a region nearby fits nothing, so the unbiased answer decides', async () =>
 
   assert.equal(Math.round(result.lat), 34, `got ${result.label}`);
   assert.equal(fetchImpl.urls.length, 2);
+});
+
+/** Photon's real unbiased answer for "Atlanta airport" (2026-10-12), in order. */
+const ATLANTA_ID_AIRSTRIP = {
+  geometry: { type: 'Point', coordinates: [-115.1199, 43.8105] },
+  properties: { osm_key: 'aeroway', osm_value: 'aerodrome', type: 'other', name: 'Atlanta Airport', state: 'ID', country: 'United States', countrycode: 'US' },
+};
+const ATLANTA_TANK_FARM = {
+  geometry: { type: 'Point', coordinates: [-84.44, 33.65] },
+  properties: { osm_key: 'landuse', osm_value: 'industrial', type: 'other', name: 'Atlanta Airport Tank Farm', city: 'College Park', state: 'Georgia', country: 'United States' },
+};
+const HARTSFIELD_JACKSON = {
+  geometry: { type: 'Point', coordinates: [-84.4277, 33.6367] },
+  properties: { osm_key: 'aeroway', osm_value: 'aerodrome', type: 'other', name: 'Hartsfield–Jackson Atlanta International Airport', city: 'Atlanta', state: 'GA', country: 'United States', countrycode: 'US' },
+};
+const ATLANTA_ANSWER = [ATLANTA_ID_AIRSTRIP, ATLANTA_TANK_FARM, HARTSFIELD_JACKSON];
+
+test('"Atlanta airport" is the airport in Atlanta, not an airstrip named that in Idaho', async () => {
+  // Asked from Chicago: the biased answer offered only the Idaho airstrip, whose
+  // name equals the query; the unbiased one lists Hartsfield–Jackson third.
+  const fetchImpl = photonPair([ATLANTA_ID_AIRSTRIP], ATLANTA_ANSWER);
+
+  const result = await geocodeKeyless('Atlanta airport', { bias: '41.80,-87.70|41.90,-87.60', fetchImpl });
+
+  assert.equal(Math.round(result.lat), 34, `got ${result.label}`);
+  assert.equal(fetchImpl.urls.length, 1, 'an airport query skips the camera-biased search');
+});
+
+test('an airport query picks an aerodrome located in the place', () => {
+  assert.equal(selectAirportFeature(ATLANTA_ANSWER, 'Atlanta airport'), HARTSFIELD_JACKSON);
+  assert.equal(selectAirportFeature(ATLANTA_ANSWER, 'atlanta international airport'), HARTSFIELD_JACKSON);
+  // Not an airport query, or no aerodrome in the place: the name rules decide.
+  assert.equal(selectAirportFeature(ATLANTA_ANSWER, 'Atlanta'), null);
+  assert.equal(selectAirportFeature(ATLANTA_ANSWER, 'Boise airport'), null);
+  assert.equal(selectAirportFeature(undefined, 'Atlanta airport'), null);
+});
+
+test('of several airports in the place, an international one goes first', () => {
+  const executive = { properties: { osm_key: 'aeroway', osm_value: 'aerodrome', name: 'Dallas Executive Airport', city: 'Dallas' } };
+  const dfw = { properties: { osm_key: 'aeroway', osm_value: 'aerodrome', name: 'Dallas/Fort Worth International Airport', city: 'Dallas' } };
+  assert.equal(selectAirportFeature([executive, dfw], 'Dallas airport'), dfw);
+  assert.equal(selectAirportFeature([executive], 'Dallas airport'), executive);
+  // Photon sometimes files DFW under Euless, where it physically sits.
+  const dfwInEuless = { properties: { ...dfw.properties, city: 'Euless' } };
+  assert.equal(selectAirportFeature([executive, dfwInEuless], 'Dallas airport'), dfwInEuless);
+});
+
+test('an airport named for the place beats a non-airport named for it', () => {
+  const carRental = { properties: { osm_key: 'amenity', osm_value: 'car_rental', name: 'Seattle Airport Car Rental', city: 'SeaTac' } };
+  const seaTac = { properties: { osm_key: 'aeroway', osm_value: 'aerodrome', name: 'Seattle–Tacoma International Airport', city: 'SeaTac' } };
+  assert.equal(selectAirportFeature([carRental, seaTac], 'Seattle airport'), seaTac);
+});
+
+test('an airport query with no aerodrome in the place still falls back to the name match', async () => {
+  const fetchImpl = photonPair([], [ATLANTA_ID_AIRSTRIP]);
+  const result = await geocodeKeyless('Atlanta airport', { fetchImpl });
+  assert.equal(Math.round(result.lat), 44, `got ${result.label}`);
 });
 
 test('accents and punctuation do not change what a name compares as', () => {

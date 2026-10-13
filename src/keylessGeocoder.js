@@ -300,6 +300,46 @@ export function selectQualifiedFeature(features, query) {
   );
 }
 
+/** "Atlanta airport", "Denver International Airport" → "atlanta" / "denver". */
+const AIRPORT_QUERY = /^(.+?)\s+(?:international\s+)?airport$/i;
+
+/**
+ * For a "place airport" query, pick the airport that lies in that place.
+ * "Atlanta airport" names Hartsfield–Jackson, but Photon ranks a small Idaho
+ * airstrip literally named "Atlanta Airport" first: matched by name, it won.
+ * So the place is checked against where each aerodrome is (its city or
+ * county) first, and only then against aerodrome names.
+ * @param {object[]} features - Photon features, in the order returned.
+ * @param {string} query - The query as typed.
+ * @returns {?object} null when the query names no airport or none lies there.
+ */
+export function selectAirportFeature(features, query) {
+  const match = AIRPORT_QUERY.exec(String(query ?? '').trim());
+  const place = normalizeToponym(match?.[1]);
+  if (!place) return null;
+  const aerodromes = (Array.isArray(features) ? features : []).filter(
+    (feature) => feature?.properties?.osm_value === 'aerodrome',
+  );
+  const has = (text) => ` ${normalizeToponym(text)} `.includes(` ${place} `);
+  const located = aerodromes.filter(({ properties }) =>
+    has([properties.city, properties.county].join(' ')),
+  );
+  // An airport serving the place from outside it still names it: Seattle–
+  // Tacoma lies in SeaTac, and Photon files DFW under Euless.
+  const named = aerodromes.filter(({ properties }) => has(properties.name));
+  // "Dallas airport" means DFW, not Dallas Executive: an international airport
+  // in or named for the place goes first, then any airport in it, then any
+  // named for it.
+  return (
+    [...located, ...named].find(({ properties }) =>
+      /\binternational\b/i.test(properties.name ?? ''),
+    ) ??
+    located[0] ??
+    named[0] ??
+    null
+  );
+}
+
 /** Evict the oldest memo entries until the cache is within its cap. */
 function trimPhotonCache(cache) {
   while (cache.size > PHOTON_CACHE_MAX) {
@@ -381,7 +421,10 @@ export async function geocodeKeylessWithOutcome(
   // A query naming a region is only answered nearby by a match inside it.
   let feature = null;
   let everyAskAnswered = true;
-  if (bias) {
+  // "Dallas airport" names its city, so the camera adds nothing but a short,
+  // nearby-weighted list: from Seattle it held only Dallas Executive, and DFW
+  // never had a chance. An airport query asks the whole map.
+  if (bias && !AIRPORT_QUERY.test(trimmed)) {
     const biased = await ask(photonSearchUrl(trimmed, { bias, endpoint }));
     if (biased === null) everyAskAnswered = false;
     else
@@ -402,6 +445,7 @@ export async function geocodeKeylessWithOutcome(
       // the thing being searched for; the tail only says where to look.
       const head = normalizeToponym(trimmed.split(',')[0]);
       feature =
+        selectAirportFeature(anywhere, trimmed) ||
         selectQualifiedFeature(anywhere, trimmed) ||
         selectPhotonFeature(anywhere, head, { allowContains: true }) ||
         anywhere[0];
