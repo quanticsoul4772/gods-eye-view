@@ -114,8 +114,11 @@ export function createTerrainMeshCache({
       try {
         return await fs.readFile(path.join(dir, name));
       } catch {
-        index.delete(name);
-        total -= entry.bytes;
+        // Eviction may already have removed it (and its bytes) mid-read.
+        if (index.get(name) === entry) {
+          index.delete(name);
+          total -= entry.bytes;
+        }
         return null;
       }
     },

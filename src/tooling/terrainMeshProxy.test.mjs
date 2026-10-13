@@ -147,3 +147,23 @@ test('only layer.json and tile paths are proxied; layer.json is held in memory',
   await get('/layer.json');
   assert.equal(urls.length, 1);
 });
+
+test('a tile evicted while it is being read is not counted twice', async (t) => {
+  const dir = await tempDir(t);
+  let releaseRead;
+  const readGate = new Promise((resolve) => { releaseRead = resolve; });
+  // Real fs, with readFile held until eviction has removed the tile.
+  const gatedFs = {
+    ...fs,
+    readFile: async (file, ...rest) => { await readGate; return fs.readFile(file, ...rest); },
+  };
+  let clock = 1000;
+  const cache = createTerrainMeshCache({ dir, maxBytes: 1000, fs: gatedFs, now: () => clock });
+  await cache.put('old', bytes(500));
+  const reading = cache.get('old');
+  clock += 10;
+  await cache.put('new', bytes(600)); // 1,100 > 1,000: 'old' is evicted mid-read
+  releaseRead();
+  assert.equal(await reading, null);
+  assert.equal((await cache.stats()).bytes, 600, 'the evicted tile is subtracted once');
+});
