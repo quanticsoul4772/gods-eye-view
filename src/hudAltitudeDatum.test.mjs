@@ -290,3 +290,35 @@ test('the corrected readouts are the MSL datum, not a coincidence of the SFO sig
     env.restore();
   }
 });
+
+// ── Where the HUD says the view is ──────────────────────────────────────────
+//
+// MGRS, lat/lon and the summary's NEAR place, region and UTC offset name the
+// point at the centre of the view, where the reticle aims. An oblique camera
+// can be kilometres from what it is looking at; here the camera is over SFO
+// and the view centre is Tokyo, so every one of them must say Tokyo.
+
+test('position readouts name the view centre, not the ground under the camera', async () => {
+  await ensureGeoidReady();
+  const env = installHudEnvironment();
+  const tokyo = Cesium.Cartesian3.fromDegrees(139.69, 35.68, 0);
+  env.viewer.scene.canvas = { clientWidth: 1440, clientHeight: 900 };
+  env.viewer.scene.globe = { pick: () => tokyo };
+  env.viewer.camera.getPickRay = () => new Cesium.Ray();
+  let hud;
+  try {
+    hud = new IntelHUD(env.viewer);
+    hud._updateCameraData();
+    const summary = env.elements.get('hud-summary').textContent;
+    assert.match(summary, /\| ASIA \|/, `region, got ${summary}`);
+    assert.match(summary, /\| UTC\+9$/, `UTC offset, got ${summary}`);
+    assert.match(summary, /NEAR .*TOKYO/, `NEAR place, got ${summary}`);
+    assert.match(
+      env.elements.get('hud-bottom-line').textContent,
+      /LAT: 35°40'48\.00"N {2}LON: 139°41'24\.00"E/,
+    );
+  } finally {
+    hud?.destroy();
+    env.restore();
+  }
+});

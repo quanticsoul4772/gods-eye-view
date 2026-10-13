@@ -459,10 +459,12 @@ export class IntelHUD {
 
     // `altM` stays the raw ellipsoidal camera height the sensor model reads
     // (GSD/NIIRS, view band). `altMslM` is the ADDITIVE display datum — the
-    // only one any readout string should print.
+    // only one any readout string should print. latDeg/lonDeg are the view
+    // centre, like MGRS: the summary's NEAR place, region and UTC offset name
+    // what is being looked at, not the ground under an oblique camera.
     this._latestMetrics = {
-      latDeg,
-      lonDeg,
+      latDeg: targetLatDeg,
+      lonDeg: targetLonDeg,
       altM,
       altMslM,
       sunEl,
