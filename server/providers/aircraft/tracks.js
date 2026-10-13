@@ -5,8 +5,10 @@ import { readCappedResponseText } from '../common/http.js';
  *
  * /api/flights/track?icao24=<hex6> — OpenSky GET /tracks/all (experimental;
  *   own credit bucket, 4 credits per call on the free tier). OAuth via the
- *   shared coalesced token. 60s per-icao cache; 404/429 forwarded so the
- *   client can fall back to its accumulated trail silently.
+ *   shared coalesced token. 60s per-icao cache. An upstream 404 ("no track
+ *   known") is answered 200 with an empty track: to the client that is the
+ *   same "nothing to backfill", without a 404 in the browser console on every
+ *   track. 429 and other errors are forwarded so it falls back silently.
  * /api/military/track?hex=<hex> — adsb.lol tar1090 readsb trace
  *   (undocumented but live; no browser CORS, hence this proxy). Up to ~24h
  *   of real history per aircraft. Treat as best-effort; data is ODbL —
@@ -27,7 +29,7 @@ export function trackBackfillProxies() {
     }
   }
 
-  async function proxyJson(res, key, upstreamUrl, headers = {}) {
+  async function proxyJson(res, key, upstreamUrl, headers = {}, emptyTrack) {
     const cached = cache.get(key);
     if (cached && Date.now() - cached.at < TRACK_CACHE_MS) {
       res.statusCode = cached.status;
@@ -49,6 +51,9 @@ export function trackBackfillProxies() {
     if (tooLarge) {
       status = 502;
       body = JSON.stringify({ error: 'Upstream track response too large' });
+    } else if (upstream.status === 404 && emptyTrack) {
+      status = 200;
+      body = JSON.stringify(emptyTrack);
     } else if (!upstream.ok) {
       // Sanitize upstream error surface; status code is signal enough
       body = JSON.stringify({ error: `Track source HTTP ${upstream.status}` });
@@ -85,6 +90,7 @@ export function trackBackfillProxies() {
           `osky:${icao24}`,
           `https://opensky-network.org/api/tracks/all?icao24=${icao24}&time=0`,
           token ? { Authorization: `Bearer ${token}` } : {},
+          { icao24, path: [] },
         );
       } catch (error) {
         res.statusCode = 502;
@@ -111,6 +117,8 @@ export function trackBackfillProxies() {
           res,
           `lol:${hex}`,
           `https://adsb.lol/data/traces/${hex.slice(-2)}/trace_full_${hex}.json`,
+          {},
+          { icao: hex, trace: [] },
         );
       } catch (error) {
         res.statusCode = 502;

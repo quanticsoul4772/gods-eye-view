@@ -408,6 +408,32 @@ test('military cooldown bounds untrusted Retry-After and defaults server errors'
   }
 });
 
+test('a track the upstream does not know is an empty track, not a 404', async (t) => {
+  const tracks = install(providers.trackBackfillProxies(), true);
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls++;
+    return {
+      ok: false,
+      status: 404,
+      headers: new Map(),
+      body: (async function* () {
+        yield Buffer.from('not found');
+      })(),
+    };
+  });
+
+  const flight = await tracks('/api/flights/track', '?icao24=a8f0bd');
+  assert.equal(flight.statusCode, 200);
+  assert.deepEqual(JSON.parse(flight.body), { icao24: 'a8f0bd', path: [] });
+  const military = await tracks('/api/military/track', '?hex=ae1234');
+  assert.equal(military.statusCode, 200);
+  assert.deepEqual(JSON.parse(military.body), { icao: 'ae1234', trace: [] });
+  // Cached like any answer: no second upstream call (OpenSky charges per call).
+  await tracks('/api/flights/track', '?icao24=a8f0bd');
+  assert.equal(calls, 2);
+});
+
 test('track backfill proxy returns 502 on an oversized upstream body and caches it as an error', async (t) => {
   const tracks = install(providers.trackBackfillProxies(), true);
   let callCount = 0;
