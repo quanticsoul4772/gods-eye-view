@@ -98,6 +98,10 @@ fixtures before it can be judged at all.
    it when the machine, browser or GPU driver changes.
 2. Form a hypothesis from a profile (`qa-bench --profile`, then
    `node scripts/qa-bench-profile-top.mjs <file>.cpuprofile`), not from reading.
+   For memory a layer keeps after it is off, `node scripts/qa-heap-diff.mjs
+--layer <id>` (dev server, for readable names) prints what grew between
+   snapshots taken before and after, and saves both for retainer paths in
+   DevTools > Memory.
 3. Change one thing. Re-run the affected scenarios with
    `--compare bench/baselines/<name>.json`.
 4. Accept when the target metric moves beyond noise and nothing regresses past

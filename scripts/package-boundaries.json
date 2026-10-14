@@ -2215,7 +2215,8 @@
       "src/tools/functions.js",
       "src/voice/actionSchemas.js",
       "src/view/index.js",
-      "src/app/embed.js"
+      "src/app/embed.js",
+      "src/sceneCommandRelease.js"
     ],
     "external": [
       "hls.js",
