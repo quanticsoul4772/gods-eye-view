@@ -18,7 +18,7 @@ import {
 import { formatOfDomain } from '../../src/data/sourceDomains.js';
 
 export const SOURCE_DIRECTORY_URL =
-  'https://quanticsoul4772.github.io/gev-open-sources/directory.json';
+  'https://quanticsoul4772.github.io/gev-open-sources/v1/index.json';
 export const SOURCE_DIRECTORY_REFRESH_MS = 24 * 60 * 60 * 1000;
 const SNAPSHOT_URL = new URL('./sourceDirectorySnapshot.json', import.meta.url);
 const ID_PATTERN = /^[a-z0-9][a-z0-9-]{1,63}$/;
@@ -242,6 +242,80 @@ export async function publicOnlyFetch(url, init = {}, lookupImpl = lookup) {
   );
 }
 
+// A domain file the v1 index names: a plain file name beside the index.
+const INDEX_FILE = /^[a-z0-9][a-z0-9.-]*\.json$/;
+
+/**
+ * Read one JSON document, https (conditional on `etag`) or `file:` (a local
+ * build; fetch() can't read one). Resolves null when unchanged (304).
+ */
+async function readJson(url, fetchImpl, etag) {
+  if (url.startsWith('file:'))
+    return {
+      body: JSON.parse(await fs.promises.readFile(new URL(url), 'utf8')),
+      tag: null,
+    };
+  const response = await fetchImpl(url, {
+    headers: etag ? { 'If-None-Match': etag } : {},
+    signal: AbortSignal.timeout(60_000),
+  });
+  if (response.status === 304) return null;
+  if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
+  return { body: await response.json(), tag: response.headers.get('etag') };
+}
+
+/**
+ * Load the directory from `url`: a v1 index, whose domain files are each
+ * fetched unless unchanged since `cache` (per-file ETag and entries), or a
+ * whole directory file. The full directory file is never fetched through an
+ * index. Resolves null when the index (or file) is unchanged; a domain file
+ * that can't be read rejects the whole load.
+ * @param {string} url
+ * @param {{fetchImpl?: typeof fetch, cache?: Map<string, {tag: string|null, entries?: object[]}>}} [options]
+ * @returns {Promise<{directory: object, cache: Map<string, object>}|null>}
+ */
+export async function loadDirectory(
+  url,
+  { fetchImpl = fetch, cache = new Map() } = {},
+) {
+  const top = await readJson(url, fetchImpl, cache.get(url)?.tag);
+  if (!top) return null;
+  const next = new Map([[url, { tag: top.tag }]]);
+  if (!Array.isArray(top.body?.files))
+    return { directory: top.body, cache: next };
+  const entries = [];
+  for (const file of top.body.files) {
+    if (typeof file?.domain !== 'string' || !INDEX_FILE.test(file.path || ''))
+      continue;
+    const fileUrl = new URL(file.path, url).href;
+    const known = cache.get(fileUrl);
+    const read = await readJson(
+      fileUrl,
+      fetchImpl,
+      known?.entries && known.tag,
+    );
+    if (read && !Array.isArray(read.body?.entries))
+      throw new Error(`${fileUrl}: no entries`);
+    // A domain file carries only its own domain.
+    const domainEntries = read
+      ? read.body.entries.filter((e) => e?.domain === file.domain)
+      : known.entries;
+    next.set(fileUrl, {
+      tag: read ? read.tag : known.tag,
+      entries: domainEntries,
+    });
+    entries.push(...domainEntries);
+  }
+  return {
+    directory: {
+      version: top.body.version,
+      generated_at: top.body.generated_at,
+      entries,
+    },
+    cache: next,
+  };
+}
+
 function readSnapshot() {
   try {
     return JSON.parse(fs.readFileSync(SNAPSHOT_URL, 'utf8'));
@@ -266,35 +340,20 @@ export function createSourceDirectory({
   // The size guard compares live copies only: a bundled snapshot can be far
   // older than the live directory, which grows, and must not pin the app to it.
   let live = false;
-  let etag = null;
+  let cache = new Map();
   let timer = null;
   let usable = current.entries.filter(isUsableEntry);
 
-  // A `file:` URL is a local build of the directory (fetch() can't read one).
-  async function load() {
-    if (url.startsWith('file:'))
-      return {
-        body: JSON.parse(await fs.promises.readFile(new URL(url), 'utf8')),
-        tag: null,
-      };
-    const response = await fetchImpl(url, {
-      headers: etag ? { 'If-None-Match': etag } : {},
-      signal: AbortSignal.timeout(60_000),
-    });
-    if (response.status === 304 || !response.ok) return null;
-    return { body: await response.json(), tag: response.headers.get('etag') };
-  }
-
   async function refresh() {
     try {
-      const loaded = await load();
+      const loaded = await loadDirectory(url, { fetchImpl, cache });
       if (!loaded) return false;
-      const next = mergeDirectory(loaded.body, live ? current : null);
+      const next = mergeDirectory(loaded.directory, live ? current : null);
       if (!next) return false;
       current = cleanDirectory(next);
       live = true;
       usable = current.entries.filter(isUsableEntry);
-      etag = loaded.tag;
+      cache = loaded.cache;
       return true;
     } catch {
       return false;

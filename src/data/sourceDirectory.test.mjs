@@ -236,6 +236,97 @@ test('directory refresh: a stale snapshot never pins the app; live copies are si
   assert.equal(directory.generatedAt(), 'b');
 });
 
+test('a v1 index: domain files fetched once, unchanged ones by ETag, never the full file', async () => {
+  const base = 'https://dir.example/v1/';
+  const transit = (n) =>
+    Array.from({ length: n }, (_, i) => entry({ id: `mdb-${i}` }));
+  const bike = entry({
+    id: 'gbfs-a',
+    domain: 'bikeshare.stations',
+    format: 'gbfs.station-status',
+    access: {
+      url: 'https://gbfs.example.org/station_status.json',
+      related: {
+        station_information:
+          'https://gbfs.example.org/station_information.json',
+      },
+    },
+  });
+  const files = {
+    'index.json': {
+      generated_at: 'g1',
+      files: [
+        { path: 'directory.json', domain: null },
+        { path: 'transit.vehicles.json', domain: 'transit.vehicles' },
+        { path: 'bikeshare.stations.json', domain: 'bikeshare.stations' },
+        { path: '../escape.json', domain: 'transit.vehicles' },
+      ],
+    },
+    // A stray entry of another domain is dropped.
+    'transit.vehicles.json': { entries: [...transit(3), bike] },
+    'bikeshare.stations.json': { entries: [bike] },
+  };
+  const tags = {
+    'index.json': '"i1"',
+    'transit.vehicles.json': '"t1"',
+    'bikeshare.stations.json': '"b1"',
+  };
+  const requests = [];
+  const fetchImpl = async (url, { headers }) => {
+    const name = url.slice(base.length);
+    requests.push(`${name} ${headers['If-None-Match'] || ''}`.trim());
+    if (!(name in files)) return new Response('', { status: 404 });
+    if (headers['If-None-Match'] === tags[name])
+      return new Response(null, { status: 304 });
+    return new Response(JSON.stringify(files[name]), {
+      headers: { etag: tags[name] },
+    });
+  };
+  const directory = createSourceDirectory({
+    url: `${base}index.json`,
+    snapshot: null,
+    fetchImpl,
+  });
+  assert.equal(await directory.refresh(), true);
+  assert.deepEqual(requests, [
+    'index.json',
+    'transit.vehicles.json',
+    'bikeshare.stations.json',
+  ]);
+  assert.equal(directory.generatedAt(), 'g1');
+  assert.equal(directory.usable('transit.vehicles').length, 3);
+  assert.equal(directory.usable('bikeshare.stations').length, 1);
+
+  // Unchanged index: nothing else is asked.
+  requests.length = 0;
+  assert.equal(await directory.refresh(), false);
+  assert.deepEqual(requests, ['index.json "i1"']);
+
+  // A new index where only transit changed: bike share answers 304.
+  files['index.json'] = { ...files['index.json'], generated_at: 'g2' };
+  tags['index.json'] = '"i2"';
+  files['transit.vehicles.json'] = { entries: transit(4) };
+  tags['transit.vehicles.json'] = '"t2"';
+  requests.length = 0;
+  assert.equal(await directory.refresh(), true);
+  assert.deepEqual(requests, [
+    'index.json "i1"',
+    'transit.vehicles.json "t1"',
+    'bikeshare.stations.json "b1"',
+  ]);
+  assert.equal(directory.generatedAt(), 'g2');
+  assert.equal(directory.usable('transit.vehicles').length, 4);
+  assert.equal(directory.usable('bikeshare.stations').length, 1);
+
+  // A domain file that can't be read keeps the copy in use.
+  files['index.json'] = { ...files['index.json'], generated_at: 'g3' };
+  tags['index.json'] = '"i3"';
+  delete files['bikeshare.stations.json'];
+  tags['bikeshare.stations.json'] = '"b2"';
+  assert.equal(await directory.refresh(), false);
+  assert.equal(directory.generatedAt(), 'g2');
+});
+
 test('a file: directory URL is read from disk (a local build)', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gev-dir-'));
   const file = path.join(dir, 'directory.json');
