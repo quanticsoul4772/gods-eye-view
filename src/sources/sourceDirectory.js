@@ -7,14 +7,17 @@ export function createSourceDirectorySource({
 } = {}) {
   return {
     /**
-     * @param {{lat?: number, lon?: number, domain?: string, usable?: boolean,
-     *   limit?: number, signal?: AbortSignal}} query
+     * @param {{lat?: number, lon?: number, bbox?: number[], domain?: string,
+     *   usable?: boolean, limit?: number, signal?: AbortSignal}} query
+     *   `bbox` is `[south, west, north, east]`: sources overlapping that area.
      * @returns {Promise<{generatedAt: string|null, total: number, sources: object[]}>}
      */
-    async find({ lat, lon, domain, usable, limit = 10, signal } = {}) {
+    async find({ lat, lon, bbox, domain, usable, limit = 10, signal } = {}) {
       signal?.throwIfAborted();
       const params = new URLSearchParams();
-      if (Number.isFinite(lat) && Number.isFinite(lon)) {
+      if (Array.isArray(bbox) && bbox.length === 4)
+        params.set('bbox', bbox.join(','));
+      else if (Number.isFinite(lat) && Number.isFinite(lon)) {
         params.set('lat', String(lat));
         params.set('lon', String(lon));
       }
@@ -42,58 +45,77 @@ export function createSourceDirectorySource({
 
 /** Listed-source counts are kept per cell of this many degrees. */
 export const LISTED_SOURCES_CELL_DEG = 0.5;
+/** A count request gives up after this long, so one stuck request can't block the rest. */
+export const LISTED_SOURCES_TIMEOUT_MS = 10_000;
 
 /**
- * How many sources the directory lists, but the app can't show, around a
- * point in one domain: one request per 0.5° cell, one in flight at a time,
- * each cell's count kept for the page's lifetime.
- * @param {{domain: string, directory?: ReturnType<typeof createSourceDirectorySource>}} options
+ * How many sources the directory lists, but the app can't show, in the 0.5°
+ * cell around a point in one domain: sources whose coverage overlaps the cell.
+ * One request per cell, one in flight at a time (the latest point asked
+ * meanwhile is asked next), each cell's count kept for the page's lifetime.
+ * @param {{domain: string, directory?: ReturnType<typeof createSourceDirectorySource>,
+ *   timeoutMs?: number}} options
  */
 export function createListedSourceCounter({
   domain,
   directory = createSourceDirectorySource(),
+  timeoutMs = LISTED_SOURCES_TIMEOUT_MS,
 }) {
   const counts = new Map();
-  let inFlight = null;
+  let inFlight = false;
+  let waiting = null;
   const cell = (lat, lon) => {
     const row = Math.floor(lat / LISTED_SOURCES_CELL_DEG);
     const col = Math.floor(lon / LISTED_SOURCES_CELL_DEG);
     return {
       key: `${row}:${col}`,
-      lat: (row + 0.5) * LISTED_SOURCES_CELL_DEG,
-      lon: (col + 0.5) * LISTED_SOURCES_CELL_DEG,
+      bbox: [
+        row * LISTED_SOURCES_CELL_DEG,
+        col * LISTED_SOURCES_CELL_DEG,
+        (row + 1) * LISTED_SOURCES_CELL_DEG,
+        (col + 1) * LISTED_SOURCES_CELL_DEG,
+      ],
     };
   };
+  async function request(lat, lon) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
+    const target = cell(lat, lon);
+    if (counts.has(target.key)) return false;
+    if (inFlight) {
+      waiting = { lat, lon };
+      return false;
+    }
+    inFlight = true;
+    try {
+      const { total } = await directory.find({
+        bbox: target.bbox,
+        domain,
+        usable: false,
+        limit: 1,
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      counts.set(target.key, total);
+      return true;
+    } catch {
+      // A failed or timed-out count is asked again on a later settled camera.
+      return false;
+    } finally {
+      inFlight = false;
+      if (waiting) {
+        const next = waiting;
+        waiting = null;
+        void request(next.lat, next.lon);
+      }
+    }
+  }
   return {
     /** The count for a point's cell, or null until it has been asked. */
     count(lat, lon) {
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
       return counts.get(cell(lat, lon).key) ?? null;
     },
-    /** Ask for a point's cell unless known or a request is out; resolves true when a count arrived. */
-    async request(lat, lon) {
-      if (!Number.isFinite(lat) || !Number.isFinite(lon) || inFlight)
-        return false;
-      const target = cell(lat, lon);
-      if (counts.has(target.key)) return false;
-      inFlight = target.key;
-      try {
-        const { total } = await directory.find({
-          lat: target.lat,
-          lon: target.lon,
-          domain,
-          usable: false,
-          limit: 1,
-        });
-        counts.set(target.key, total);
-        return true;
-      } catch {
-        // A failed count is asked again on the next settled camera.
-        return false;
-      } finally {
-        inFlight = null;
-      }
-    },
+    /** Ask for a point's cell unless known; resolves true when a count arrived. */
+    request,
   };
 }
 

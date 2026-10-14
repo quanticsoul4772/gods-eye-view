@@ -74,6 +74,7 @@ export function createControls({ state: layerState, services, parts, source }) {
       if (layerState._error) stats.error = layerState._error;
       else if (
         layerState._altitudeGateEnabled &&
+        layerState._systemsReady &&
         layerState._activeCityIds.size === 0 &&
         !layerState._loading
       ) {

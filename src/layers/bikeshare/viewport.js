@@ -213,7 +213,8 @@ export function createViewport({ state: layerState, services, parts, source }) {
     if (layerState._activeCityIds.size === 0) {
       layerState._count = 0;
       // No system here: ask what the source directory lists instead.
-      void source.listed?.request(center.lat, center.lon);
+      if (layerState._systemsReady)
+        void source.listed?.request(center.lat, center.lon);
       return;
     }
 

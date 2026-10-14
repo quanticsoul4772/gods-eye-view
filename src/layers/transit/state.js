@@ -41,6 +41,8 @@ export function createState({ services }) {
   state._altitudeGateOpen = false;
   /** The look-at point of the last settled camera below the gate. */
   state._center = null;
+  /** Whether the served catalog has loaded this enable (directory feeds known). */
+  state._catalogReady = false;
   /** Camera sensitivity as we found it, so disable() can hand it back. */
   state._priorPercentageChanged = null;
   /** The value this layer actually wrote, for an identity-guarded restore. */

@@ -96,8 +96,10 @@ export function createLifecycle({
         layerState._cameraChangedAttached = true;
       }
 
+      layerState._systemsReady = typeof source?.getSystems !== 'function';
       void parts.viewport.runProximityCheck();
-      // Directory systems join once the server's list arrives.
+      // Directory systems join once the server's list arrives; only then is
+      // "no system here" known, so that status and its count wait for it.
       if (typeof source?.getSystems === 'function')
         void source
           .getSystems()
@@ -114,10 +116,13 @@ export function createLifecycle({
                 layerState._cities.set(system.id, Object.freeze({ ...system }));
                 added += 1;
               }
-            if (added && layerState._enabled)
-              void parts.viewport.runProximityCheck();
+            return added;
           })
-          .catch(() => {});
+          .catch(() => 0)
+          .then(() => {
+            layerState._systemsReady = true;
+            if (layerState._enabled) void parts.viewport.runProximityCheck();
+          });
       restoreSpriteOrder(viewer);
     },
 

@@ -43,6 +43,10 @@ export function createState({ services }) {
 
   layerState._center = null;
 
+  /** Whether the server's directory systems have loaded this enable. */
+
+  layerState._systemsReady = false;
+
   /** Monotonic generation counter; incremented on each proximity check to cancel stale work. */
 
   layerState._proximityGeneration = 0;

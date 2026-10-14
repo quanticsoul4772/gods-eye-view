@@ -194,12 +194,15 @@ export function createLifecycle({ state, services, parts }) {
           parts.rendering.onPreRender,
         );
       }
+      state._catalogReady = false;
       parts.viewport.runProximityCheck();
-      // Directory feeds join once the served catalog arrives.
+      // Directory feeds join once the served catalog arrives; only then is
+      // "no feed here" known, so the listed-source count waits for it too.
       const generation = state._generation;
-      void parts.catalog.load().then((changed) => {
-        if (changed && state._enabled && generation === state._generation)
-          parts.viewport.runProximityCheck();
+      void parts.catalog.load().then(() => {
+        if (!state._enabled || generation !== state._generation) return;
+        state._catalogReady = true;
+        parts.viewport.runProximityCheck();
       });
       restoreSpriteOrder(viewer);
     },

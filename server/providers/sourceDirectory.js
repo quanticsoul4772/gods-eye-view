@@ -22,13 +22,15 @@ export const SOURCE_DIRECTORY_URL =
 export const SOURCE_DIRECTORY_REFRESH_MS = 24 * 60 * 60 * 1000;
 const SNAPSHOT_URL = new URL('./sourceDirectorySnapshot.json', import.meta.url);
 const ID_PATTERN = /^[a-z0-9][a-z0-9-]{1,63}$/;
-// The credential rule the directory publishes under (gev-open-sources): a
-// parameter (query or fragment) named like a credential, a path segment after
-// a key-like segment (`/key/<key>/`), or a value that looks like a token.
+// The credential rule: a parameter (query, fragment, or `;name=value` in a
+// path segment) named like a credential, a path segment after a key-like
+// segment (`/key/<key>/`, `/api-key/<key>/`), or a value that looks like a
+// token (JWT, AWS, Google, OpenAI, GitHub, Slack, a Bearer header).
 const CREDENTIAL_PARAM =
   /key|token|secret|passw|pwd|signature|credential|appid|app_id|app_code|client_id|session|jwt|bearer|^(sig|auth|code|sid|pass|user|username|login|access|k|p)$/i;
-const CREDENTIAL_SEGMENT = /^(key|token|apikey|api_key|auth|secret)$/i;
-const TOKEN_VALUE = /^(eyJ|AKIA|sk-|ghp_|xox)/;
+const CREDENTIAL_SEGMENT =
+  /^(key|token|secret|auth|api[-_]?key|access[-_]?token|auth[-_]?token)$/i;
+const TOKEN_VALUE = /^(eyJ|AKIA|AIza|sk-|ghp_|xox|[Bb]earer\s)/;
 const SAFE_HEADERS = new Set(['et-client-name', 'user-agent', 'accept']);
 const TEXT_MAX = 120;
 const ATTRIBUTION_MAX = 300;
@@ -53,7 +55,8 @@ export function hasCredential(value) {
     return true;
   }
   if (url.username || url.password) return true;
-  const segments = url.pathname.split('/').filter(Boolean).map(decode);
+  const raw = url.pathname.split('/').filter(Boolean);
+  const segments = raw.map((segment) => decode(segment.split(';')[0]));
   if (
     segments.some(
       (segment, i) =>
@@ -62,11 +65,19 @@ export function hasCredential(value) {
     )
   )
     return true;
+  // Path parameters: `/feed;apikey=…`.
+  const pathParams = raw.flatMap((segment) =>
+    segment
+      .split(';')
+      .slice(1)
+      .map((pair) => pair.split('=').map(decode)),
+  );
   for (const params of [
     url.searchParams,
     new URLSearchParams(url.hash.slice(1)),
+    pathParams,
   ])
-    for (const [name, param] of params)
+    for (const [name, param = ''] of params)
       if (CREDENTIAL_PARAM.test(name) || TOKEN_VALUE.test(param)) return true;
   return false;
 }
@@ -86,17 +97,51 @@ export function isSafeSourceUrl(value) {
   return !hasCredential(value);
 }
 
+// Parents shared by unrelated owners: a redirect "sibling" under one of these
+// could belong to anyone.
+const SHARED_PARENTS = new Set([
+  'github.io',
+  'gitlab.io',
+  'amazonaws.com',
+  's3.amazonaws.com',
+  'cloudfront.net',
+  'azurewebsites.net',
+  'blob.core.windows.net',
+  'core.windows.net',
+  'herokuapp.com',
+  'appspot.com',
+  'firebaseapp.com',
+  'web.app',
+  'netlify.app',
+  'vercel.app',
+  'pages.dev',
+  'workers.dev',
+  'googleapis.com',
+  'storage.googleapis.com',
+]);
+// Second-level labels under a country code (bikes.co.uk → co.uk).
+const COUNTRY_SECOND_LEVEL = /^(co|com|net|org|gov|ac|edu|or|ne|go|gob|gouv)$/;
+
 /**
  * A redirect host the proxy may follow: a DNS name under the feed host's
- * parent domain (data.example.org → download.example.org), never elsewhere.
+ * parent domain (data.example.org → download.example.org), never elsewhere,
+ * and never a parent shared by unrelated owners (co.uk, github.io, …).
  */
 function isSiblingHost(host, feedUrl) {
   if (!/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(host) || /^[\d.]+$/.test(host))
     return false;
-  const labels = new URL(feedUrl).hostname.split('.').slice(1);
+  const labels = new URL(feedUrl).hostname.toLowerCase().split('.').slice(1);
   if (labels.length < 2) return false;
+  if (
+    labels.length === 2 &&
+    labels[1].length === 2 &&
+    COUNTRY_SECOND_LEVEL.test(labels[0])
+  )
+    return false;
   const parent = labels.join('.');
-  return host === parent || host.endsWith(`.${parent}`);
+  if (SHARED_PARENTS.has(parent)) return false;
+  const name = host.toLowerCase();
+  return name === parent || name.endsWith(`.${parent}`);
 }
 
 /** A licence link the UI may render: http(s) only (never `javascript:` etc.). */
@@ -190,8 +235,11 @@ const countByDomain = (entries) => {
 /**
  * Merge a newly fetched directory into the one in use, domain by domain: a
  * domain whose entry count drops by more than 20 %, or more than doubles once
- * it has 50 entries, keeps its current entries. Returns null when the new
- * copy is malformed or empty, or when every domain in it was refused.
+ * it has 50 entries, keeps its current entries. A domain missing from the new
+ * copy counts as a full drop, so it too keeps its entries: a domain the
+ * directory retires stays until the server restarts on a snapshot without it.
+ * Returns null when the new copy is malformed or empty, or when every domain
+ * in it was refused.
  */
 export function mergeDirectory(next, current) {
   if (!next || !Array.isArray(next.entries) || !next.entries.length)
@@ -285,9 +333,15 @@ export async function loadDirectory(
     return { directory: top.body, cache: next };
   const entries = [];
   for (const file of top.body.files) {
-    if (typeof file?.domain !== 'string' || !INDEX_FILE.test(file.path || ''))
+    if (typeof file?.domain !== 'string') continue; // the full file
+    if (!INDEX_FILE.test(file.path || '')) {
+      console.warn(
+        `[sources] index lists an unusable file name: ${String(file.path).slice(0, 80)}`,
+      );
       continue;
+    }
     const fileUrl = new URL(file.path, url).href;
+    if (next.has(fileUrl)) continue; // listed twice
     const known = cache.get(fileUrl);
     const read = await readJson(
       fileUrl,
@@ -349,13 +403,21 @@ export function createSourceDirectory({
       const loaded = await loadDirectory(url, { fetchImpl, cache });
       if (!loaded) return false;
       const next = mergeDirectory(loaded.directory, live ? current : null);
-      if (!next) return false;
+      if (!next) {
+        console.warn(
+          `[sources] directory refresh refused by the size guard: ${url}`,
+        );
+        return false;
+      }
       current = cleanDirectory(next);
       live = true;
       usable = current.entries.filter(isUsableEntry);
       cache = loaded.cache;
       return true;
-    } catch {
+    } catch (error) {
+      console.warn(
+        `[sources] directory refresh failed: ${error?.message || error}`,
+      );
       return false;
     }
   }
@@ -385,13 +447,28 @@ export function createSourceDirectory({
   };
 }
 
+const URL_MAX = 500;
+
+/** A `south,west,north,east` area, or null. */
+export function parseArea(value) {
+  const parts = String(value ?? '')
+    .split(',')
+    .map(Number);
+  if (parts.length !== 4 || !parts.every(Number.isFinite)) return null;
+  const [south, west, north, east] = parts;
+  return south <= north && west <= east ? { south, west, north, east } : null;
+}
+
 /**
- * Every directory entry that covers a point (or all, without one), for
- * referral: what can be shown now, and what exists. Never returns feed URLs.
+ * Every directory entry that covers a point or overlaps an area (or all,
+ * without either), for referral: what can be shown now, and what exists.
+ * Never returns feed URLs; every text field is cleaned, since rows reach the
+ * assistant.
  * @param {object[]} entries
- * @param {{lat?: number, lon?: number, domain?: string, usable?: boolean}} query
+ * @param {{lat?: number, lon?: number, area?: {south: number, west: number,
+ *   north: number, east: number}|null, domain?: string, usable?: boolean}} query
  */
-function referralRows(entries, { lat, lon, domain, usable } = {}) {
+function referralRows(entries, { lat, lon, area, domain, usable } = {}) {
   const hasPoint = Number.isFinite(lat) && Number.isFinite(lon);
   const rows = [];
   for (const e of entries) {
@@ -399,20 +476,39 @@ function referralRows(entries, { lat, lon, domain, usable } = {}) {
     if (typeof usable === 'boolean' && isUsableEntry(e) !== usable) continue;
     const b = e.coverage?.bbox;
     if (
+      area &&
+      !(
+        Array.isArray(b) &&
+        b[0] <= area.north &&
+        b[2] >= area.south &&
+        b[1] <= area.east &&
+        b[3] >= area.west
+      )
+    )
+      continue;
+    if (
+      !area &&
       hasPoint &&
       !(b && lat >= b[0] && lat <= b[2] && lon >= b[1] && lon <= b[3])
     )
       continue;
+    const licenceUrl = isWebLink(e.licence?.url) ? String(e.licence.url) : '';
     rows.push({
-      id: e.id,
-      domain: e.domain,
+      id: cleanText(e.id),
+      domain: cleanText(e.domain),
       name: e.name,
       provider: e.provider,
-      countries: e.coverage?.countries || [],
-      status: e.health?.status || 'candidate',
+      countries: (Array.isArray(e.coverage?.countries)
+        ? e.coverage.countries
+        : []
+      )
+        .slice(0, 20)
+        .map((c) => cleanText(c, 8)),
+      status: cleanText(e.health?.status || 'candidate', 20),
       usable: isUsableEntry(e),
-      licence: e.licence?.id || null,
-      licenceUrl: isWebLink(e.licence?.url) ? e.licence.url : null,
+      licence: cleanText(e.licence?.id) || null,
+      licenceUrl:
+        licenceUrl && licenceUrl.length <= URL_MAX ? licenceUrl : null,
       display: e.licence?.display === true,
     });
   }
@@ -425,8 +521,8 @@ function referralRows(entries, { lat, lon, domain, usable } = {}) {
 /**
  * The first `limit` (1–100) referral rows.
  * @param {object[]} entries
- * @param {{lat?: number, lon?: number, domain?: string, usable?: boolean,
- *   limit?: number}} query
+ * @param {{lat?: number, lon?: number, area?: object|null, domain?: string,
+ *   usable?: boolean, limit?: number}} query
  */
 export function referralEntries(entries, { limit = 25, ...query } = {}) {
   return referralRows(entries, query).slice(0, clampLimit(limit));
@@ -437,7 +533,7 @@ const clampLimit = (limit) =>
 
 /**
  * Vite plugin: loads the directory (snapshot, then daily refresh) and serves
- *   GET /api/sources/directory?lat=&lon=&domain=&usable=&limit=
+ *   GET /api/sources/directory?lat=&lon=|bbox=s,w,n,e&domain=&usable=&limit=
  *     → the first `limit` referral rows, and `total` matching rows
  * @param {ReturnType<typeof createSourceDirectory>} directory
  */
@@ -457,12 +553,13 @@ export function sourceDirectoryProxy(directory) {
       const rows = referralRows(directory.entries(), {
         lat: num('lat'),
         lon: num('lon'),
+        area: parseArea(url.searchParams.get('bbox')),
         domain: url.searchParams.get('domain') || undefined,
         usable:
           usable === 'true' ? true : usable === 'false' ? false : undefined,
       });
       const body = JSON.stringify({
-        generatedAt: directory.generatedAt(),
+        generatedAt: cleanText(directory.generatedAt(), 40) || null,
         total: rows.length,
         sources: rows.slice(0, clampLimit(num('limit'))),
       });

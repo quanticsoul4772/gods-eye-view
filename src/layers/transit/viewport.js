@@ -118,7 +118,7 @@ export function createViewport({ state, services, parts, source }) {
       }
     }
     // Nothing to poll here: ask what the source directory lists instead.
-    if (center && desired.size === 0)
+    if (center && desired.size === 0 && state._catalogReady)
       void source.listed?.request(center.lat, center.lon);
     parts.ingestion.sweepAgedVehicles(Date.now());
     parts.rendering.syncRenderHold();

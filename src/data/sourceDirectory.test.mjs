@@ -85,12 +85,20 @@ test('credentials: names, path keys, fragments, token values, userinfo', () => {
     // The two real shapes found in the directory: a key as a path segment.
     'https://api.transitime.org/api/v1/key/dca04420/agency/x/command/gtfs-rt/vehiclePositions',
     'https://ex.org/api/v1/key/3e1f2497/agency/tt/command/gtfs-rt/vehiclePositions',
+    'https://ex.org/api-key/abc123/vp',
+    'https://ex.org/access_token/abc/vp',
+    'https://ex.org/feed;apikey=abc',
+    'https://ex.org/feed;x=AIzaSyExample',
+    'https://ex.org/vp?id=AIzaSyExample',
+    'https://ex.org/vp?x=Bearer%20abc',
   ])
     assert.equal(hasCredential(url), true, url);
   for (const url of [
     'https://ex.org/vp?datasource=1&dataset=2&provider=3&dataFormat=4',
     'https://ex.org/vp?src=1&network=2&tcar=3&tae=4&tni=5&useoriginalId=6',
     'https://ex.org/gbfs/key',
+    'https://ex.org/feed;v=2/vp',
+    'https://ex.org/transitous-sk-zsr/vp',
   ])
     assert.equal(hasCredential(url), false, url);
 });
@@ -158,6 +166,19 @@ test('usable entries: verified, display allowed, known format, safe URLs', () =>
     ),
     false,
   );
+  // A parent shared by unrelated owners never opens up to its other names.
+  for (const [url, host] of [
+    ['https://bikes.co.uk/gbfs/station_status.json', 'evil.co.uk'],
+    ['https://x.github.io/feed.pb', 'y.github.io'],
+    ['https://b.s3.amazonaws.com/feed.pb', 'c.s3.amazonaws.com'],
+  ])
+    assert.equal(
+      isUsableEntry(
+        entry({ access: { ...entry().access, url, redirectHosts: [host] } }),
+      ),
+      false,
+      `${url} → ${host}`,
+    );
   assert.equal(isUsableEntry(entry({ id: 'Bad Id' })), false);
 });
 
@@ -236,7 +257,7 @@ test('directory refresh: a stale snapshot never pins the app; live copies are si
   assert.equal(directory.generatedAt(), 'b');
 });
 
-test('a v1 index: domain files fetched once, unchanged ones by ETag, never the full file', async () => {
+test('a v1 index: domain files fetched once, unchanged ones by ETag, the full file (no domain) skipped', async () => {
   const base = 'https://dir.example/v1/';
   const transit = (n) =>
     Array.from({ length: n }, (_, i) => entry({ id: `mdb-${i}` }));
@@ -323,8 +344,72 @@ test('a v1 index: domain files fetched once, unchanged ones by ETag, never the f
   tags['index.json'] = '"i3"';
   delete files['bikeshare.stations.json'];
   tags['bikeshare.stations.json'] = '"b2"';
-  assert.equal(await directory.refresh(), false);
+  const warnings = [];
+  const warn = console.warn;
+  console.warn = (message) => warnings.push(message);
+  try {
+    assert.equal(await directory.refresh(), false);
+  } finally {
+    console.warn = warn;
+  }
   assert.equal(directory.generatedAt(), 'g2');
+  assert.match(warnings[0], /directory refresh failed: .*HTTP 404/);
+});
+
+test('an index listing a file twice reads it once; a bad file name is logged and skipped', async () => {
+  const base = 'https://dir.example/v1/';
+  const files = {
+    'index.json': {
+      generated_at: 'g',
+      files: [
+        { path: 'transit.vehicles.json', domain: 'transit.vehicles' },
+        { path: 'transit.vehicles.json', domain: 'transit.vehicles' },
+        { path: 'Transit_Vehicles.json', domain: 'transit.vehicles' },
+      ],
+    },
+    'transit.vehicles.json': { entries: [entry()] },
+  };
+  const requests = [];
+  const warnings = [];
+  const warn = console.warn;
+  console.warn = (message) => warnings.push(message);
+  try {
+    const directory = createSourceDirectory({
+      url: `${base}index.json`,
+      snapshot: null,
+      fetchImpl: async (url) => {
+        requests.push(url.slice(base.length));
+        return new Response(JSON.stringify(files[url.slice(base.length)]));
+      },
+    });
+    assert.equal(await directory.refresh(), true);
+    assert.equal(directory.entries().length, 1);
+  } finally {
+    console.warn = warn;
+  }
+  assert.deepEqual(requests, ['index.json', 'transit.vehicles.json']);
+  assert.match(warnings[0], /unusable file name: Transit_Vehicles\.json/);
+});
+
+test('a refresh refused by the size guard is logged', async () => {
+  const of = (n) =>
+    Array.from({ length: n }, (_, i) => entry({ id: `mdb-${i}` }));
+  let body = { generated_at: 'a', entries: of(60) };
+  const directory = createSourceDirectory({
+    snapshot: null,
+    fetchImpl: async () => new Response(JSON.stringify(body)),
+  });
+  assert.equal(await directory.refresh(), true);
+  body = { generated_at: 'b', entries: of(10) };
+  const warnings = [];
+  const warn = console.warn;
+  console.warn = (message) => warnings.push(message);
+  try {
+    assert.equal(await directory.refresh(), false);
+  } finally {
+    console.warn = warn;
+  }
+  assert.match(warnings[0], /refused by the size guard/);
 });
 
 test('a file: directory URL is read from disk (a local build)', async () => {

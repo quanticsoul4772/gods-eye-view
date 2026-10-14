@@ -214,9 +214,11 @@ export function createQueries({ state, parts, source }) {
       const health = aggregateTransitFeedHealth(statuses, now);
       const count = state._vehicles.size;
       if (state._enabled && active.length === 0) {
-        const listed = listedSourcesText(
-          source.listed?.count(state._center?.lat, state._center?.lon),
-        );
+        const listed = state._catalogReady
+          ? listedSourcesText(
+              source.listed?.count(state._center?.lat, state._center?.lon),
+            )
+          : '';
         const coverage = state._altitudeGateOpen
           ? `No feed here yet${listed || ` · ${parts.catalog.feeds().length} regions available`}`
           : `Fly below ${Math.round(ACTIVATION_ALTITUDE_M / 1000).toLocaleString()} km to a covered region`;
