@@ -146,7 +146,7 @@ export function createPlaceSearchService({
     } catch {
       /* the status below is authoritative */
     }
-    if (!response.ok) throw httpFailure(response, 'Place search');
+    if (!response.ok) throw httpFailure(response, 'Place search', payload);
     return {
       configured: payload?.configured !== false,
       places: Array.isArray(payload?.places) ? payload.places : [],
@@ -198,7 +198,19 @@ export function createRouteService({
   };
 }
 
-function httpFailure(response, label) {
+/**
+ * A provider's own explanation, when the server passed one on: its first
+ * sentence, e.g. "Places API (New) has not been used in project … or it is
+ * disabled." Without it the assistant could only say "the tool failed".
+ */
+function providerReason(payload) {
+  const text = typeof payload?.error === 'string' ? payload.error.trim() : '';
+  if (!text) return null;
+  const first = text.split(/(?<=\.)\s/)[0];
+  return first.length > 240 ? `${first.slice(0, 239)}…` : first;
+}
+
+function httpFailure(response, label, payload = null) {
   if (response.status === 429) {
     const seconds = Number(response.headers.get('retry-after'));
     return new ToolError('retry_later', `${label} is rate limited`, {
@@ -206,5 +218,11 @@ function httpFailure(response, label) {
         Number.isFinite(seconds) && seconds > 0 ? seconds : null,
     });
   }
+  const reason = providerReason(payload);
+  if (reason)
+    return new ToolError(
+      'unavailable',
+      `${label} is unavailable (HTTP ${response.status}): ${reason}`,
+    );
   return new Error(`${label} HTTP ${response.status}`);
 }

@@ -212,6 +212,35 @@ test('the place and route services read the app routes and translate failures', 
     (error) => error.code === 'retry_later' && error.retryAfterSeconds === 30,
   );
 
+  // A provider refusal keeps its reason, so the assistant can say why
+  // (live: the Places API was disabled in the key's Google project).
+  const disabled = createPlaceSearchService({
+    fetchImpl: async () =>
+      respond(
+        {
+          places: [],
+          error:
+            'Places API (New) has not been used in project 1 before or it is disabled. Enable it by visiting https://console.developers.google.com/ then retry.',
+        },
+        403,
+      ),
+  });
+  await assert.rejects(
+    disabled.nearby({ latitude: 1, longitude: 2, radiusM: 50 }),
+    (error) =>
+      error.name === 'ToolError' &&
+      error.code === 'unavailable' &&
+      error.message ===
+        'Place search is unavailable (HTTP 403): Places API (New) has not been used in project 1 before or it is disabled.',
+  );
+  const bare = createPlaceSearchService({
+    fetchImpl: async () => respond({ places: [] }, 502),
+  });
+  await assert.rejects(
+    bare.nearby({ latitude: 1, longitude: 2, radiusM: 50 }),
+    (error) => error.name !== 'ToolError' && /HTTP 502/.test(error.message),
+  );
+
   const routes = [];
   const routing = createRouteService({
     fetchImpl: async (url) => {

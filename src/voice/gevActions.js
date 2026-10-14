@@ -4008,6 +4008,23 @@ async function getSceneContext(
   };
 }
 
+/**
+ * Which basemap the view is drawn on. It used to say "Google Photorealistic 3D
+ * Tiles" whatever was active, with a `hasGoogle3DTiles` flag that only meant
+ * the tileset was loaded; asked to find a building without 3D coverage, the
+ * model read that flag as coverage at the spot.
+ */
+function basemapIdentity() {
+  const stack = window.__godsEyeView?.mapStackController?.getState?.();
+  return {
+    source: stack?.activeStack?.label || 'Cesium basemap',
+    mapStack: stack?.activeId ?? null,
+    google3DTilesetLoaded: Boolean(window.__godsEyeView?.tileset),
+    coverageNote:
+      'google3DTilesetLoaded says the tileset is loaded, not that this spot has 3D coverage; nothing here measures coverage at a point.',
+  };
+}
+
 async function getBasemapContext(
   viewer,
   viewTarget = null,
@@ -4036,8 +4053,7 @@ async function getBasemapContext(
       cachedViewportPlaces,
     );
     return {
-      source: 'Google Photorealistic 3D Tiles / Cesium basemap',
-      hasGoogle3DTiles: Boolean(window.__godsEyeView?.tileset),
+      ...basemapIdentity(),
       viewScale,
       viewportSamples: samples,
       viewportPlaces,
@@ -4098,8 +4114,7 @@ async function getBasemapContext(
     coarseBasemapPlace(viewScale, latitude, longitude, inferredCountry);
   const nearbyPlaces = resolvedNearbyPlaces || [];
   return {
-    source: 'Google Photorealistic 3D Tiles / Cesium basemap',
-    hasGoogle3DTiles: Boolean(window.__godsEyeView?.tileset),
+    ...basemapIdentity(),
     viewScale,
     viewportSamples: samples,
     viewportPlaces,
