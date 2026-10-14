@@ -28,6 +28,7 @@ const CREDENTIAL_PARAM =
   /key|token|secret|passw|pwd|signature|credential|appid|app_id|app_code|client_id|session|jwt|bearer|^(sig|auth|code|sid|pass|user|username|login|access|k|p)$/i;
 const CREDENTIAL_SEGMENT = /^(key|token|apikey|api_key|auth|secret)$/i;
 const TOKEN_VALUE = /^(eyJ|AKIA|sk-|ghp_|xox)/;
+const SAFE_HEADERS = new Set(['et-client-name', 'user-agent', 'accept']);
 const TEXT_MAX = 120;
 const FORMATS = new Set(['gtfs-rt.vehicle-positions', 'gbfs.station-status']);
 
@@ -106,6 +107,24 @@ const isWebLink = (value) => {
   }
 };
 
+/**
+ * Credentials never come from the directory, headers included: only client
+ * identification (Entur requires `ET-Client-Name`) and content negotiation,
+ * as short printable values that don't look like tokens.
+ */
+function areSafeHeaders(headers) {
+  if (headers === undefined) return true;
+  if (!headers || typeof headers !== 'object' || Array.isArray(headers))
+    return false;
+  return Object.entries(headers).every(
+    ([name, value]) =>
+      SAFE_HEADERS.has(name.toLowerCase()) &&
+      typeof value === 'string' &&
+      /^[\x20-\x7e]{1,100}$/.test(value) &&
+      !TOKEN_VALUE.test(value),
+  );
+}
+
 /** Whether the app may fetch and display an entry. */
 export function isUsableEntry(entry) {
   const headers = entry?.access?.headers;
@@ -115,8 +134,7 @@ export function isUsableEntry(entry) {
     entry.licence?.display === true &&
     FORMATS.has(entry.format) &&
     isSafeSourceUrl(entry.access?.url) &&
-    // Credentials never come from the directory, headers included.
-    (headers === undefined || Object.keys(headers || {}).length === 0) &&
+    areSafeHeaders(headers) &&
     Object.values(entry.access?.related || {}).every(isSafeSourceUrl) &&
     (entry.access?.redirectHosts || []).every((host) =>
       isSiblingHost(host, entry.access.url),
@@ -219,7 +237,7 @@ function readSnapshot() {
 
 /**
  * @param {{fetchImpl?: typeof fetch, url?: string, snapshot?: object|null,
- *   refreshMs?: number}} [options]
+ *   refreshMs?: number}} [options] `url` may be a `file:` URL.
  */
 export function createSourceDirectory({
   fetchImpl = fetch,
@@ -237,19 +255,31 @@ export function createSourceDirectory({
   let timer = null;
   let usable = current.entries.filter(isUsableEntry);
 
+  // A `file:` URL is a local build of the directory (fetch() can't read one).
+  async function load() {
+    if (url.startsWith('file:'))
+      return {
+        body: JSON.parse(await fs.promises.readFile(new URL(url), 'utf8')),
+        tag: null,
+      };
+    const response = await fetchImpl(url, {
+      headers: etag ? { 'If-None-Match': etag } : {},
+      signal: AbortSignal.timeout(60_000),
+    });
+    if (response.status === 304 || !response.ok) return null;
+    return { body: await response.json(), tag: response.headers.get('etag') };
+  }
+
   async function refresh() {
     try {
-      const response = await fetchImpl(url, {
-        headers: etag ? { 'If-None-Match': etag } : {},
-        signal: AbortSignal.timeout(60_000),
-      });
-      if (response.status === 304 || !response.ok) return false;
-      const next = mergeDirectory(await response.json(), live ? current : null);
+      const loaded = await load();
+      if (!loaded) return false;
+      const next = mergeDirectory(loaded.body, live ? current : null);
       if (!next) return false;
       current = cleanDirectory(next);
       live = true;
-      usable = next.entries.filter(isUsableEntry);
-      etag = response.headers.get('etag');
+      usable = current.entries.filter(isUsableEntry);
+      etag = loaded.tag;
       return true;
     } catch {
       return false;

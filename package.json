@@ -44,6 +44,7 @@
     "build:panel": "node scripts/build-panel.mjs",
     "preview": "vite preview",
     "test": "node scripts/run-unit-tests.mjs",
+    "sources:snapshot": "node scripts/sources-snapshot.mjs",
     "test:track": "node scripts/track-regression.mjs",
     "qa:ask-claude": "node scripts/qa-ask-claude.mjs",
     "qa:ask-live": "node scripts/qa-ask-live.mjs",

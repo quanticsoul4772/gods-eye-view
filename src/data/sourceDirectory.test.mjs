@@ -1,4 +1,8 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { deflateRawSync } from 'node:zlib';
 import test from 'node:test';
 import { PbfWriter } from 'pbf';
@@ -121,15 +125,25 @@ test('usable entries: verified, display allowed, known format, safe URLs', () =>
     ),
     false,
   );
+  const withHeaders = (headers) =>
+    isUsableEntry(entry({ access: { ...entry().access, headers } }));
   assert.equal(
-    isUsableEntry(
-      entry({
-        access: { ...entry().access, headers: { Authorization: 'x' } },
-      }),
-    ),
-    false,
-    'headers never carry credentials from the directory',
+    withHeaders({ 'ET-Client-Name': 'gods-eye-view-transit' }),
+    true,
+    'client identification is allowed',
   );
+  for (const headers of [
+    { Authorization: 'x' },
+    { 'x-api-key': 'x' },
+    { Accept: 'eyJhbGciOi' },
+    { Accept: 'a\nb' },
+    ['Accept'],
+  ])
+    assert.equal(
+      withHeaders(headers),
+      false,
+      `headers never carry credentials: ${JSON.stringify(headers)}`,
+    );
   assert.equal(
     isUsableEntry(
       entry({ access: { ...entry().access, redirectHosts: ['evil.example'] } }),
@@ -219,6 +233,27 @@ test('directory refresh: a stale snapshot never pins the app; live copies are si
     'an emptied directory is refused',
   );
   assert.equal(directory.generatedAt(), 'b');
+});
+
+test('a file: directory URL is read from disk (a local build)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gev-dir-'));
+  const file = path.join(dir, 'directory.json');
+  fs.writeFileSync(
+    file,
+    JSON.stringify({ generated_at: 'local', entries: [entry()] }),
+  );
+  try {
+    const directory = createSourceDirectory({
+      url: pathToFileURL(file).href,
+      snapshot: null,
+      fetchImpl: () => assert.fail('a file: URL is not fetched'),
+    });
+    assert.equal(await directory.refresh(), true);
+    assert.equal(directory.generatedAt(), 'local');
+    assert.equal(directory.usable().length, 1);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('names and providers reach the app as printable text of at most 120 characters', () => {

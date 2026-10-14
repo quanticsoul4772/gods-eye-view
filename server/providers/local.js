@@ -40,7 +40,11 @@ import { windProxy } from './wind.js';
 function localProviderPlugins({ realtime } = {}) {
   // The keyless source directory feeds the transit and GBFS proxies and the
   // referral route; directory feeds connect to public addresses only.
-  const directory = createSourceDirectory();
+  // GEV_SOURCE_DIRECTORY_URL points at another copy (an https or file: URL),
+  // e.g. a local build of the directory.
+  const directory = createSourceDirectory({
+    url: process.env.GEV_SOURCE_DIRECTORY_URL || undefined,
+  });
   return [
     sourceDirectoryProxy(directory),
     openSkyProxy(),
