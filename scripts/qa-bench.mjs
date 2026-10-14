@@ -33,6 +33,7 @@
  *   node scripts/qa-bench.mjs --save-baseline arc-win11
  *   node scripts/qa-bench.mjs --compare bench/baselines/arc-win11.json
  *   node scripts/qa-bench.mjs --only layers --layers cctv,radio   chosen layers
+ *   node scripts/qa-bench.mjs --only leaks            3 on/off cycles per layer; growth > 3 MiB fails
  *   node scripts/qa-bench.mjs --reps 3                3 windows per sample (median; default 2)
  *   node scripts/qa-bench.mjs --profile               also save .cpuprofile per window
  *   node scripts/qa-bench.mjs --uncapped              frames not tied to the display (noisier; see below)
@@ -125,6 +126,9 @@ const THRESHOLDS = {
   settledMs: 0.15,
   networkMiB: 0.1,
 };
+
+/** Heap growth between on/off cycle 1 and 3 that counts as a leak (MiB). */
+const LEAK_GROWTH_LIMIT_MIB = 3;
 
 const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
 const outDir = path.join('qa-shots', 'bench', stamp);
@@ -553,9 +557,25 @@ function compare(current, baseline) {
 // which made fps noisy between runs; vsync is the default.
 const UNCAPPED = argv.includes('--uncapped');
 const browser = await launchProbeBrowser({ gpu: true, uncapped: UNCAPPED });
-const frameClock = await blankPageRafRate(browser);
 const MIN_FRAME_CLOCK = UNCAPPED ? 50 : 55;
-if (frameClock < MIN_FRAME_CLOCK) {
+// A busy moment (a build just finished, a server starting) dips the clock for
+// a few seconds, so measure up to three times before refusing.
+let frameClock = await blankPageRafRate(browser);
+for (let i = 0; i < 2 && frameClock < MIN_FRAME_CLOCK; i += 1) {
+  await new Promise((resolve) => setTimeout(resolve, 5000));
+  frameClock = await blankPageRafRate(browser);
+}
+// Memory and startup do not depend on the frame clock; only frame-rate
+// scenarios need it.
+const FRAME_RATE_SCENARIOS = [
+  'idle',
+  'layers',
+  'detection',
+  'styles',
+  'combined',
+];
+const needsFrameClock = FRAME_RATE_SCENARIOS.some((name) => want(name));
+if (needsFrameClock && frameClock < MIN_FRAME_CLOCK) {
   await browser.close();
   console.error(
     `The frame clock runs at ${frameClock.toFixed(1)}/s on a blank page (need ≥ ${MIN_FRAME_CLOCK}). Wake the display (a sleeping display throttles frames), close GPU-heavy apps, and run again. Not measuring.`,
@@ -671,6 +691,44 @@ try {
     }
   }
 
+  if (want('leaks')) {
+    // Three on/off cycles per layer. Several layers keep a bounded cache when
+    // off (CCTV's catalog, Radio's stations), which is by design; growth from
+    // cycle 1 to cycle 3 is what a leak looks like, and it is gated absolutely
+    // (LEAK_GROWTH_LIMIT_MIB) whatever the baseline says.
+    results.scenarios.leaks = {};
+    for (const id of LAYERS) {
+      const { page, cdp } = await fresh();
+      const base = await heapAfterGcMiB(cdp);
+      const kept = [];
+      for (let i = 0; i < 3; i += 1) {
+        await page.evaluate(async (id) => {
+          const dm = window.__godsEyeView.dataManager;
+          await dm.setEnabled(id, true, { origin: 'user' });
+          const t0 = performance.now();
+          while (
+            performance.now() - t0 < 45_000 &&
+            !((dm.getAll().find((l) => l.id === id)?.stats?.count || 0) > 0)
+          )
+            await new Promise((r) => setTimeout(r, 200));
+          await new Promise((r) => setTimeout(r, 4000));
+          await dm.setEnabled(id, false, { origin: 'user' });
+        }, id);
+        await pause(4000);
+        kept.push(round((await heapAfterGcMiB(cdp)) - base));
+      }
+      await page.close();
+      results.scenarios.leaks[id] = {
+        keptAfter1MiB: kept[0],
+        keptAfter3MiB: kept[2],
+        growthMiB: round(kept[2] - kept[0]),
+      };
+      console.log(
+        `leaks ${id.padEnd(32)} kept ${kept.join(' / ')} MiB after cycles 1/2/3, growth ${results.scenarios.leaks[id].growthMiB}`,
+      );
+    }
+  }
+
   if (want('detection')) {
     const { page, cdp } = await fresh();
     const counts = await enableLayers(page, ['flights']);
@@ -754,6 +812,15 @@ fs.writeFileSync(
   JSON.stringify(results, null, 2),
 );
 let regressions = [];
+for (const [id, leak] of Object.entries(results.scenarios.leaks || {}))
+  if (leak.growthMiB > LEAK_GROWTH_LIMIT_MIB)
+    regressions.push({
+      key: `leaks.${id}.growthMiB`,
+      was: LEAK_GROWTH_LIMIT_MIB,
+      now: leak.growthMiB,
+      change: null,
+      regressed: true,
+    });
 const md = [
   `# Benchmark ${results.label}`,
   '',
@@ -765,7 +832,7 @@ const md = [
 if (COMPARE) {
   const baseline = JSON.parse(fs.readFileSync(COMPARE, 'utf8'));
   const rows = compare(results, baseline);
-  regressions = rows.filter((r) => r.regressed);
+  regressions = [...regressions, ...rows.filter((r) => r.regressed)];
   md.push(
     `## Compared with ${baseline.label}`,
     '',

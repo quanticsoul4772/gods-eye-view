@@ -7,14 +7,14 @@ the findings and ranked work list are a local report
 
 ## What users feel, and the metric for each
 
-| Experience            | Metric                                                                              | Where                                                 |
-| --------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| Opening the app       | app ready, tiles loaded, settled (ms); download MiB and requests; heap after start  | `qa-bench` startup                                    |
-| Panning and orbiting  | Cesium ticks/s while the camera moves (60 = smooth), frame-time p95, long tasks     | `qa-bench` motion windows                             |
-| A parked view         | renders/s at rest (0 when nothing moves; ~12 with aircraft, by design), script ms/s | `qa-bench` rest windows, `qa-perf`, `qa-paced-render` |
-| Turning a layer on    | ms until enabled and until first data; object count                                 | `qa-bench` layers                                     |
-| Memory over a session | heap while a layer is on, and heap still held after it is turned off                | `qa-bench` layers (`heapDeltaMiB`, `retainedMiB`)     |
-| Asking the assistant  | seconds, model round trips, input tokens per question                               | `qa-ask-live`                                         |
+| Experience            | Metric                                                                                        | Where                                                                  |
+| --------------------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Opening the app       | app ready, tiles loaded, settled (ms); download MiB and requests; heap after start            | `qa-bench` startup                                                     |
+| Panning and orbiting  | Cesium ticks/s while the camera moves (60 = smooth), frame-time p95, long tasks               | `qa-bench` motion windows                                              |
+| A parked view         | renders/s at rest (0 when nothing moves; ~12 with aircraft, by design), script ms/s           | `qa-bench` rest windows, `qa-perf`, `qa-paced-render`                  |
+| Turning a layer on    | ms until enabled and until first data; object count                                           | `qa-bench` layers                                                      |
+| Memory over a session | heap while a layer is on, heap still held after it is turned off, growth over repeated on/off | `qa-bench` layers (`heapDeltaMiB`, `retainedMiB`), leaks (`growthMiB`) |
+| Asking the assistant  | seconds, model round trips, input tokens per question                                         | `qa-ask-live`                                                          |
 
 `fps` in `qa-bench` is Cesium's render-loop tick rate. Headless `requestAnimationFrame`
 is not tied to a 60 Hz display (it read 84/s at idle), so it is kept only as
@@ -91,6 +91,24 @@ Two identical runs on the Arc baseline machine, same conditions:
 A single run can therefore judge memory, startup and the heavy scenes. A
 mid-weight fps change needs two runs that agree, and activation needs recorded
 fixtures before it can be judged at all.
+
+## Memory a layer keeps when it is off
+
+Two different things show up as heap kept after a layer is turned off:
+
+- **A leak grows with every on/off cycle.** Cesium kept a removed layer's
+  draw commands (and every entity behind them) in reused per-pass arrays;
+  `src/sceneCommandRelease.js` trims them. Datacenters kept 111 MiB before it,
+  8.7 after; cables 70 → 5.3; dams 26 → 4.9.
+- **A keep-warm cache stays flat.** CCTV (catalog and billboards, ~21–25 MiB),
+  Radio (stations, ~13), Space Missions (~13–14) and Flights (~18–19) hide
+  their data instead of discarding it, so turning them back on skips a
+  refetch. Measured flat across three cycles; kept by design (2026-10-13).
+
+`qa-bench --only leaks` runs three on/off cycles per layer and fails when
+growth from cycle 1 to 3 exceeds 3 MiB, whatever the baseline says. To see
+what a layer keeps, or what grows, use
+`node scripts/qa-heap-diff.mjs --layer <id> [--warm-cycles 1 --cycles 2]`.
 
 ## Judging a change
 

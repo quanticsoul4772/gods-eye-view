@@ -1,6 +1,6 @@
 {
   "label": "arc-win11-build",
-  "capturedAt": "2026-10-13T19:34:30.689Z",
+  "capturedAt": "2026-10-14T00:17:08.915Z",
   "machine": {
     "os": "Windows_NT 10.0.26200 x64",
     "cpu": "Intel(R) Core(TM) Ultra 9 185H",
@@ -15,6 +15,7 @@
     "windowMs": 5000,
     "reps": 2,
     "isolation": "fresh page per scenario",
+    "frameClock": "display vsync, blank page 60 rAF/s",
     "park": {
       "lat": 30.27,
       "lon": -97.74,
@@ -29,8 +30,7 @@
       "allocationStrategy": "ELASTIC",
       "fadePct": 7,
       "outsideOpacityPct": 1
-    },
-    "frameClock": "display vsync (display awake, 60 Hz); run before the uncapped-clock change"
+    }
   },
   "scenarios": {
     "startup": {
@@ -1164,24 +1164,84 @@
         "heapMiB": 427
       },
       "heapMiB": 335.7
+    },
+    "leaks": {
+      "flights": {
+        "keptAfter1MiB": 18.7,
+        "keptAfter3MiB": 19.5,
+        "growthMiB": 0.8
+      },
+      "military": {
+        "keptAfter1MiB": 3.8,
+        "keptAfter3MiB": 4.7,
+        "growthMiB": 0.9
+      },
+      "satellites": {
+        "keptAfter1MiB": 4.3,
+        "keptAfter3MiB": 5.2,
+        "growthMiB": 0.9
+      },
+      "earthquakes": {
+        "keptAfter1MiB": 2.9,
+        "keptAfter3MiB": 4,
+        "growthMiB": 1.1
+      },
+      "transit": {
+        "keptAfter1MiB": 2.3,
+        "keptAfter3MiB": 2.8,
+        "growthMiB": 0.5
+      },
+      "bikeshare": {
+        "keptAfter1MiB": 0.3,
+        "keptAfter3MiB": 0.6,
+        "growthMiB": 0.3
+      },
+      "radio": {
+        "keptAfter1MiB": 12.9,
+        "keptAfter3MiB": 13.3,
+        "growthMiB": 0.4
+      },
+      "cctv": {
+        "keptAfter1MiB": 20.4,
+        "keptAfter3MiB": 21.5,
+        "growthMiB": 1.1
+      },
+      "local-datacenters": {
+        "keptAfter1MiB": 6.5,
+        "keptAfter3MiB": 7.8,
+        "growthMiB": 1.3
+      },
+      "telegeography-submarine-cables": {
+        "keptAfter1MiB": 3.3,
+        "keptAfter3MiB": 4.7,
+        "growthMiB": 1.4
+      },
+      "local-dams": {
+        "keptAfter1MiB": 2.8,
+        "keptAfter3MiB": 3.6,
+        "growthMiB": 0.8
+      },
+      "weather-radar": {
+        "keptAfter1MiB": 1,
+        "keptAfter3MiB": 1.4,
+        "growthMiB": 0.4
+      },
+      "rocket-launches": {
+        "keptAfter1MiB": 13.6,
+        "keptAfter3MiB": 14.9,
+        "growthMiB": 1.3
+      }
     }
   },
   "bundle": {
     "jsMiB": 7.1,
     "cssKiB": 385,
     "largestJs": [
-      "index-B-3B4r4P.js 2.73 MiB",
+      "index-C0RUrx8k.js 2.73 MiB",
       "egm96-universal.esm-D6y_VLZc.js 2.64 MiB",
       "mapillary.module-CNpf_Czj.js 1.01 MiB",
       "hls-bsuTaLC4.js 0.57 MiB",
-      "index-Bn9rfUVo.js 0.08 MiB"
+      "index-CsX63bTA.js 0.08 MiB"
     ]
-  },
-  "history": [
-    {
-      "scenario": "layers",
-      "capturedAt": "2026-10-13T23:49:00.104Z",
-      "reason": "sceneCommandRelease: layers free their entities on disable (datacenters kept 110.9 -> 8.7 MiB)"
-    }
-  ]
+  }
 }

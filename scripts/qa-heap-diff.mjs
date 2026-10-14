@@ -7,7 +7,9 @@
  * object types whose count or retained size grew between the two, which is
  * what `qa-bench`'s `retainedMiB` reports as a single number.
  *
- *   node scripts/qa-heap-diff.mjs --layer local-datacenters [--top 30] [--render-after-off]
+ *   node scripts/qa-heap-diff.mjs --layer local-datacenters [--top 30]
+ *   node scripts/qa-heap-diff.mjs --layer cctv --warm-cycles 1 --cycles 2
+ *     growth per extra on/off cycle: a cache stays flat, a leak grows
  *
  * Against the dev server the constructor names are readable; the build's are
  * minified. Snapshots are written to qa-shots/heap/<stamp>/ (gitignored) and
@@ -23,6 +25,10 @@ const opt = (flag, fallback) =>
 const APP_URL = process.env.QA_BASE_URL || 'http://localhost:4173';
 const LAYER = opt('--layer', 'local-datacenters');
 const TOP = Number(opt('--top', '30'));
+/** On/off cycles before the first snapshot (0: compare against never-on). */
+const WARM_CYCLES = Number(opt('--warm-cycles', '0'));
+/** On/off cycles between the two snapshots. */
+const CYCLES = Number(opt('--cycles', '1'));
 const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
 const outDir = path.join('qa-shots', 'heap', `${stamp}-${LAYER}`);
 fs.mkdirSync(outDir, { recursive: true });
@@ -85,62 +91,31 @@ try {
     },
   );
   await pause(8000);
+  const cycle = () =>
+    page.evaluate(async (id) => {
+      const dm = window.__godsEyeView.dataManager;
+      await dm.setEnabled(id, true, { origin: 'user' });
+      const t0 = performance.now();
+      while (performance.now() - t0 < 60_000) {
+        if ((dm.getAll().find((l) => l.id === id)?.stats?.count || 0) > 0)
+          break;
+        await new Promise((r) => setTimeout(r, 200));
+      }
+      const count = dm.getAll().find((l) => l.id === id)?.stats?.count || 0;
+      await new Promise((r) => setTimeout(r, 5000));
+      await dm.setEnabled(id, false, { origin: 'user' });
+      await new Promise((r) => setTimeout(r, 5000));
+      return count;
+    }, LAYER);
+  for (let i = 0; i < WARM_CYCLES; i += 1) await cycle();
   const before = aggregate(
     await snapshot(cdp, path.join(outDir, 'before.heapsnapshot')),
   );
-  const on = await page.evaluate(async (id) => {
-    const dm = window.__godsEyeView.dataManager;
-    await dm.setEnabled(id, true, { origin: 'user' });
-    const t0 = performance.now();
-    while (performance.now() - t0 < 60_000) {
-      if ((dm.getAll().find((l) => l.id === id)?.stats?.count || 0) > 0) break;
-      await new Promise((r) => setTimeout(r, 200));
-    }
-    return dm.getAll().find((l) => l.id === id)?.stats?.count || 0;
-  }, LAYER);
-  await pause(5000);
-  await page.evaluate(async (id) => {
-    const scene = window.__godsEyeView.viewer.scene;
-    window.__benchFramesAfterOff = 0;
-    scene.postRender.addEventListener(() => {
-      window.__benchFramesAfterOff += 1;
-    });
-    await window.__godsEyeView.dataManager.setEnabled(id, false, {
-      origin: 'user',
-    });
-  }, LAYER);
-  await pause(5000);
-  const framesAfterOff = await page.evaluate(
-    () => window.__benchFramesAfterOff ?? null,
-  );
-  if (argv.includes('--render-after-off')) {
-    await page.evaluate(
-      () =>
-        new Promise((resolve) => {
-          const scene = window.__godsEyeView.viewer.scene;
-          const remove = scene.postRender.addEventListener(() => {
-            remove();
-            resolve();
-          });
-          scene.requestRender();
-        }),
-    );
-  }
-  if (argv.includes('--sample-after-off')) {
-    // One offscreen height sample re-renders Cesium's pick view without the
-    // removed layer (experiment for the stale _pickOffscreenView retention).
-    console.log(
-      'sampleHeight after off:',
-      await page.evaluate(() => {
-        const v = window.__godsEyeView.viewer;
-        return v.scene.sampleHeight(v.camera.positionCartographic);
-      }),
-    );
-  }
+  let on = 0;
+  for (let i = 0; i < CYCLES; i += 1) on = await cycle();
   const after = aggregate(
     await snapshot(cdp, path.join(outDir, 'after-off.heapsnapshot')),
   );
-  console.log(`frames rendered in the 5 s after off: ${framesAfterOff}`);
   const total = (agg) => [...agg.values()].reduce((a, e) => a + e.bytes, 0);
   console.log(
     `${LAYER}: ${on} objects while on. Heap before ${(total(before) / 2 ** 20).toFixed(1)} MiB, after off ${(total(after) / 2 ** 20).toFixed(1)} MiB`,
@@ -152,7 +127,7 @@ try {
       rows.push({ key, dCount: e.count - b.count, dBytes: e.bytes - b.bytes });
   }
   rows.sort((a, b) => b.dBytes - a.dBytes);
-  console.log('\nGrowth by type (self size), after-off minus before:');
+  console.log('\nGrowth by type (self size), second snapshot minus first:');
   for (const r of rows.slice(0, TOP))
     console.log(
       `${(r.dBytes / 2 ** 20).toFixed(2).padStart(8)} MiB  ${String(r.dCount).padStart(8)}  ${r.key}`,
