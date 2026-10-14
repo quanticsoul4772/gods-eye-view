@@ -128,6 +128,9 @@ export function createSourceDirectory({
   refreshMs = SOURCE_DIRECTORY_REFRESH_MS,
 } = {}) {
   let current = acceptDirectory(snapshot, null) ? snapshot : { entries: [] };
+  // The size guard compares live copies only: a bundled snapshot can be far
+  // older than the live directory, which grows, and must not pin the app to it.
+  let live = false;
   let etag = null;
   let timer = null;
   let usable = current.entries.filter(isUsableEntry);
@@ -140,8 +143,9 @@ export function createSourceDirectory({
       });
       if (response.status === 304 || !response.ok) return false;
       const next = await response.json();
-      if (!acceptDirectory(next, current)) return false;
+      if (!acceptDirectory(next, live ? current : null)) return false;
       current = next;
+      live = true;
       usable = next.entries.filter(isUsableEntry);
       etag = response.headers.get('etag');
       return true;

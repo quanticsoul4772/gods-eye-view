@@ -99,9 +99,13 @@ test('a refreshed directory that shrinks by > 20 % or doubles is refused', () =>
   assert.equal(acceptDirectory({ nope: true }, of(10)), false);
 });
 
-test('directory refresh keeps the snapshot until a valid newer file arrives', async () => {
+test('directory refresh: a stale snapshot never pins the app; live copies are size-guarded', async () => {
   const snapshot = { generated_at: 'a', entries: [entry()] };
-  let body = { generated_at: 'b', entries: [entry(), entry({ id: 'mdb-1' })] };
+  // Five times the snapshot: accepted, because the snapshot is not a live copy.
+  let body = {
+    generated_at: 'b',
+    entries: Array.from({ length: 5 }, (_, i) => entry({ id: `mdb-${i}` })),
+  };
   const directory = createSourceDirectory({
     snapshot,
     fetchImpl: async () =>
@@ -110,7 +114,16 @@ test('directory refresh keeps the snapshot until a valid newer file arrives', as
   assert.equal(directory.generatedAt(), 'a');
   assert.equal(await directory.refresh(), true);
   assert.equal(directory.generatedAt(), 'b');
-  assert.equal(directory.usable('transit.vehicles').length, 2);
+  assert.equal(directory.usable('transit.vehicles').length, 5);
+  body = {
+    generated_at: 'c',
+    entries: Array.from({ length: 11 }, (_, i) => entry({ id: `mdb-${i}` })),
+  };
+  assert.equal(
+    await directory.refresh(),
+    false,
+    'live copies: more than doubled is refused',
+  );
   body = { generated_at: 'c', entries: [] };
   assert.equal(
     await directory.refresh(),
