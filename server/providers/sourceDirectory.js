@@ -312,19 +312,17 @@ export function createSourceDirectory({
 }
 
 /**
- * Directory entries that cover a point (or all, without one), for referral:
- * what can be shown now, and what exists. Never returns feed URLs.
+ * Every directory entry that covers a point (or all, without one), for
+ * referral: what can be shown now, and what exists. Never returns feed URLs.
  * @param {object[]} entries
- * @param {{lat?: number, lon?: number, domain?: string, limit?: number}} query
+ * @param {{lat?: number, lon?: number, domain?: string, usable?: boolean}} query
  */
-export function referralEntries(
-  entries,
-  { lat, lon, domain, limit = 25 } = {},
-) {
+function referralRows(entries, { lat, lon, domain, usable } = {}) {
   const hasPoint = Number.isFinite(lat) && Number.isFinite(lon);
   const rows = [];
   for (const e of entries) {
     if (domain && e.domain !== domain) continue;
+    if (typeof usable === 'boolean' && isUsableEntry(e) !== usable) continue;
     const b = e.coverage?.bbox;
     if (
       hasPoint &&
@@ -347,12 +345,26 @@ export function referralEntries(
   // Usable first, then verified, then the rest.
   const rank = (r) => (r.usable ? 0 : r.status === 'verified' ? 1 : 2);
   rows.sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
-  return rows.slice(0, Math.max(1, Math.min(100, limit)));
+  return rows;
 }
 
 /**
+ * The first `limit` (1–100) referral rows.
+ * @param {object[]} entries
+ * @param {{lat?: number, lon?: number, domain?: string, usable?: boolean,
+ *   limit?: number}} query
+ */
+export function referralEntries(entries, { limit = 25, ...query } = {}) {
+  return referralRows(entries, query).slice(0, clampLimit(limit));
+}
+
+const clampLimit = (limit) =>
+  Math.max(1, Math.min(100, Number.isFinite(limit) ? limit : 25));
+
+/**
  * Vite plugin: loads the directory (snapshot, then daily refresh) and serves
- *   GET /api/sources/directory?lat=&lon=&domain=&limit=  → referral rows
+ *   GET /api/sources/directory?lat=&lon=&domain=&usable=&limit=
+ *     → the first `limit` referral rows, and `total` matching rows
  * @param {ReturnType<typeof createSourceDirectory>} directory
  */
 export function sourceDirectoryProxy(directory) {
@@ -367,14 +379,18 @@ export function sourceDirectoryProxy(directory) {
       const url = new URL(req.url || '/', 'http://localhost');
       const num = (k) =>
         url.searchParams.has(k) ? Number(url.searchParams.get(k)) : undefined;
+      const usable = url.searchParams.get('usable');
+      const rows = referralRows(directory.entries(), {
+        lat: num('lat'),
+        lon: num('lon'),
+        domain: url.searchParams.get('domain') || undefined,
+        usable:
+          usable === 'true' ? true : usable === 'false' ? false : undefined,
+      });
       const body = JSON.stringify({
         generatedAt: directory.generatedAt(),
-        sources: referralEntries(directory.entries(), {
-          lat: num('lat'),
-          lon: num('lon'),
-          domain: url.searchParams.get('domain') || undefined,
-          limit: num('limit'),
-        }),
+        total: rows.length,
+        sources: rows.slice(0, clampLimit(num('limit'))),
       });
       res.writeHead(200, {
         'Content-Type': 'application/json; charset=utf-8',

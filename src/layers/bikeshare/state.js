@@ -39,6 +39,10 @@ export function createState({ services }) {
 
   layerState._altitudeGateEnabled = false;
 
+  /** The look-at point of the last settled camera below the gate. */
+
+  layerState._center = null;
+
   /** Monotonic generation counter; incremented on each proximity check to cancel stale work. */
 
   layerState._proximityGeneration = 0;

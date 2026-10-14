@@ -39,6 +39,8 @@ export function createState({ services }) {
   state._cameraChangedAttached = false;
   state._cameraDebounceTimer = null;
   state._altitudeGateOpen = false;
+  /** The look-at point of the last settled camera below the gate. */
+  state._center = null;
   /** Camera sensitivity as we found it, so disable() can hand it back. */
   state._priorPercentageChanged = null;
   /** The value this layer actually wrote, for an identity-guarded restore. */

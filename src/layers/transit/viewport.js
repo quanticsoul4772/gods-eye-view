@@ -14,7 +14,7 @@ import { transitFeedsInRange } from '../../data/transitFeeds.js';
  * @param {object} context
  * @returns {object}
  */
-export function createViewport({ state, services, parts }) {
+export function createViewport({ state, services, parts, source }) {
   const { governorRequestRender } = services.render;
 
   function getCameraAltitude(viewer = state._viewer) {
@@ -80,6 +80,7 @@ export function createViewport({ state, services, parts }) {
     const altitude = getCameraAltitude();
     state._altitudeGateOpen = altitudeGateOpen(altitude);
     const center = state._altitudeGateOpen ? getCameraCenterLatLon() : null;
+    state._center = center;
     const desired = new Map();
     if (center) {
       const catalog = parts.catalog.feeds();
@@ -116,6 +117,9 @@ export function createViewport({ state, services, parts }) {
         void parts.ingestion.pollFeed(feed, state._generation);
       }
     }
+    // Nothing to poll here: ask what the source directory lists instead.
+    if (center && desired.size === 0)
+      void source.listed?.request(center.lat, center.lon);
     parts.ingestion.sweepAgedVehicles(Date.now());
     parts.rendering.syncRenderHold();
     governorRequestRender('transit-proximity');

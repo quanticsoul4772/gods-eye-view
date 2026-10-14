@@ -7,13 +7,14 @@ import {
   transitDetectionMetric,
 } from './policy.js';
 import { transitModeTier } from '../../data/transitPresetStyle.js';
+import { listedSourcesText } from '../../sources/sourceDirectory.js';
 
 /**
  * The layer row's answer to "what is on screen and is it honest?".
  * @param {object} context
  * @returns {object}
  */
-export function createQueries({ state, parts }) {
+export function createQueries({ state, parts, source }) {
   const empty = [];
   const defaults = {};
   let requestedMax = Infinity,
@@ -213,15 +214,20 @@ export function createQueries({ state, parts }) {
       const health = aggregateTransitFeedHealth(statuses, now);
       const count = state._vehicles.size;
       if (state._enabled && active.length === 0) {
+        const listed = listedSourcesText(
+          source.listed?.count(state._center?.lat, state._center?.lon),
+        );
+        const coverage = state._altitudeGateOpen
+          ? `No feed here yet${listed || ` · ${parts.catalog.feeds().length} regions available`}`
+          : `Fly below ${Math.round(ACTIVATION_ALTITUDE_M / 1000).toLocaleString()} km to a covered region`;
         return {
           count: 0,
           lastUpdate: state._lastUpdate,
           error: null,
           source: 'GTFS-RT',
           status: 'zoom-in',
-          coverage: state._altitudeGateOpen
-            ? `No feed here yet · ${parts.catalog.feeds().length} regions available`
-            : `Fly below ${Math.round(ACTIVATION_ALTITUDE_M / 1000).toLocaleString()} km to a covered region`,
+          statusMessage: coverage,
+          coverage,
         };
       }
       // Age is shown by the same rule the row state uses, so the text and the

@@ -1,4 +1,5 @@
 import { STATUS_POLL_MS } from './policy.js';
+import { listedSourcesText } from '../../sources/sourceDirectory.js';
 
 export function createControls({ state: layerState, services, parts, source }) {
   const methods = {
@@ -71,6 +72,19 @@ export function createControls({ state: layerState, services, parts, source }) {
             : 'scanning nearby systems...';
       }
       if (layerState._error) stats.error = layerState._error;
+      else if (
+        layerState._altitudeGateEnabled &&
+        layerState._activeCityIds.size === 0 &&
+        !layerState._loading
+      ) {
+        stats.status = 'empty';
+        stats.statusMessage = `No system here${listedSourcesText(
+          source.listed?.count(
+            layerState._center?.lat,
+            layerState._center?.lon,
+          ),
+        )}`;
+      }
       return stats;
     },
   };

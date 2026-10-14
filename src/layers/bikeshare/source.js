@@ -1,8 +1,18 @@
+import {
+  createListedSourceCounter,
+  createSourceDirectorySource,
+} from '../../sources/sourceDirectory.js';
+
 /** Read a GBFS station document through the existing bounded server proxy. */
 export function createBikeshareSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
 } = {}) {
   return {
+    /** Systems the source directory lists here that the app can't show. */
+    listed: createListedSourceCounter({
+      domain: 'bikeshare.stations',
+      directory: createSourceDirectorySource({ fetchImpl }),
+    }),
     /** Systems the server adds from the keyless source directory. */
     async getSystems({ signal } = {}) {
       signal?.throwIfAborted();

@@ -1,10 +1,19 @@
 import { fetchTransitHistory } from '../../sources/transitHistory.js';
+import {
+  createListedSourceCounter,
+  createSourceDirectorySource,
+} from '../../sources/sourceDirectory.js';
 
 /** Request transit snapshots through caller-owned transport. */
 export function createTransitSource({
   fetchImpl = (...args) => fetch(...args),
 } = {}) {
   return {
+    /** Feeds the source directory lists here that the app can't show. */
+    listed: createListedSourceCounter({
+      domain: 'transit.vehicles',
+      directory: createSourceDirectorySource({ fetchImpl }),
+    }),
     /** Read the public catalog of enabled feeds. */
     async getFeeds({ signal } = {}) {
       signal?.throwIfAborted();

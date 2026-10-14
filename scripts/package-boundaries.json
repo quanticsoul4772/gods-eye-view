@@ -1159,7 +1159,8 @@
       "src/layers/bikeshare/testing.js",
       "src/layers/bikeshare/viewport.js",
       "src/data/inputOwnership.js",
-      "src/data/cameraSensitivity.js"
+      "src/data/cameraSensitivity.js",
+      "src/sources/sourceDirectory.js"
     ],
     "external": ["cesium"]
   },
@@ -2223,7 +2224,8 @@
       "src/view/index.js",
       "src/app/embed.js",
       "src/sceneCommandRelease.js",
-      "src/layers/transit/catalog.js"
+      "src/layers/transit/catalog.js",
+      "src/sources/sourceDirectory.js"
     ],
     "external": [
       "hls.js",
@@ -2753,7 +2755,8 @@
       "src/data/infrastructureOverlayEntry.js",
       "src/sources/infrastructureData.js",
       "src/hudLayoutPolicy.js",
-      "src/layers/transit/catalog.js"
+      "src/layers/transit/catalog.js",
+      "src/sources/sourceDirectory.js"
     ],
     "external": [
       "hls.js",
@@ -3047,7 +3050,10 @@
   },
   "bikeshare-source": {
     "exports": ["./layers/bikeshare/source"],
-    "modules": ["src/layers/bikeshare/source.js"],
+    "modules": [
+      "src/layers/bikeshare/source.js",
+      "src/sources/sourceDirectory.js"
+    ],
     "external": []
   },
   "cctv-source": {
@@ -3260,7 +3266,8 @@
       "src/sources/overpassFeatures.js",
       "src/sources/featureSource.js",
       "src/sources/capability.js",
-      "src/layers/transit/catalog.js"
+      "src/layers/transit/catalog.js",
+      "src/sources/sourceDirectory.js"
     ],
     "external": ["cesium", "egm96-universal", "pbf"]
   },
@@ -3298,7 +3305,8 @@
       "scripts/qa-transit-browser.mjs",
       "src/layers/transit/source.js",
       "src/sources/transitHistory.js",
-      "src/layers/transit/catalog.js"
+      "src/layers/transit/catalog.js",
+      "src/sources/sourceDirectory.js"
     ],
     "external": ["cesium", "pbf"]
   },
@@ -3306,7 +3314,8 @@
     "exports": ["./layers/transit/source"],
     "modules": [
       "src/layers/transit/source.js",
-      "src/sources/transitHistory.js"
+      "src/sources/transitHistory.js",
+      "src/sources/sourceDirectory.js"
     ],
     "external": []
   },
