@@ -31,6 +31,7 @@ const CREDENTIAL_SEGMENT = /^(key|token|apikey|api_key|auth|secret)$/i;
 const TOKEN_VALUE = /^(eyJ|AKIA|sk-|ghp_|xox)/;
 const SAFE_HEADERS = new Set(['et-client-name', 'user-agent', 'accept']);
 const TEXT_MAX = 120;
+const ATTRIBUTION_MAX = 300;
 
 const decode = (value) => {
   try {
@@ -145,14 +146,15 @@ export function isUsableEntry(entry) {
 }
 
 /**
- * Names and providers are third-party text that reaches credits, layer status
- * and the assistant: printable characters only, at most 120 of them.
+ * Names, providers and attributions are third-party text that reaches credits,
+ * layer status and the assistant: printable characters only, at most 120 of
+ * them (300 for an attribution).
  */
-const cleanText = (value) =>
+const cleanText = (value, max = TEXT_MAX) =>
   String(value ?? '')
     .replace(/[\p{Cc}\p{Cf}\u2028\u2029]/gu, '')
     .trim()
-    .slice(0, TEXT_MAX);
+    .slice(0, max);
 
 function cleanDirectory(directory) {
   return {
@@ -161,6 +163,19 @@ function cleanDirectory(directory) {
       ...e,
       name: cleanText(e?.name),
       provider: cleanText(e?.provider),
+      ...(e?.licence && typeof e.licence === 'object'
+        ? {
+            licence: {
+              ...e.licence,
+              // Text only: anything else (e.g. a localized list) counts as
+              // missing, so credits fall back to the provider.
+              attribution:
+                typeof e.licence.attribution === 'string'
+                  ? cleanText(e.licence.attribution, ATTRIBUTION_MAX) || null
+                  : null,
+            },
+          }
+        : {}),
     })),
   };
 }

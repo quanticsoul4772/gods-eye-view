@@ -274,6 +274,27 @@ test('names and providers reach the app as printable text of at most 120 charact
   assert.equal(e.provider, 'DfT');
 });
 
+test('a non-text attribution (a localized list) counts as missing', () => {
+  const directory = createSourceDirectory({
+    snapshot: {
+      entries: [
+        entry({
+          id: 'gbfs-v3',
+          licence: {
+            ...entry().licence,
+            attribution: [{ language: 'en', text: 'Operator' }],
+          },
+        }),
+        entry(),
+      ],
+    },
+  });
+  const [listed, plain] = directory.entries();
+  assert.equal(listed.licence.attribution, null);
+  assert.equal(plain.licence.attribution, 'Department for Transport');
+  assert.equal(directoryTransitFeed(listed).attribution, listed.provider);
+});
+
 test('referral rows: covering entries, usable first, never a feed URL', () => {
   const rows = referralEntries(
     [
