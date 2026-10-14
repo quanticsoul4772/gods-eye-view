@@ -43,6 +43,7 @@
  *   node scripts/qa-detection-cost.mjs --variants A:off,A:on,A:filter=none
  *   node scripts/qa-detection-cost.mjs --scenario diag --basemaps esri-imagery,photoreal
  *   node scripts/qa-detection-cost.mjs --uncapped     frames not tied to the display (display asleep)
+ *   node scripts/qa-detection-cost.mjs --high-performance-gpu --expect-gpu RTX   a laptop's discrete GPU
  *
  * Variants: `off`, `on`, `filter=<css>` (detection on, with the overlay's
  * CSS filter replaced, e.g. `filter=none` or `filter=contrast(1.1)`), or
@@ -97,6 +98,8 @@ const DPR = Number(opt('--dpr', '1'));
  * display sleeps. Noisier than vsync; compare only within one run.
  */
 const UNCAPPED = argv.includes('--uncapped');
+/** A laptop's discrete GPU instead of the integrated one (check --expect-gpu). */
+const HIGH_PERFORMANCE_GPU = argv.includes('--high-performance-gpu');
 /** Detection's enable fade (DETECTION_ENABLE_FADE_MS, 220 ms) plus margin. */
 const AFTER_TOGGLE_MS = 1_000;
 
@@ -503,7 +506,11 @@ async function diagRun(browser, basemap) {
 const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
 const outDir = path.join('qa-shots', 'detection-cost', stamp);
 fs.mkdirSync(outDir, { recursive: true });
-const browser = await launchProbeBrowser({ gpu: true, uncapped: UNCAPPED });
+const browser = await launchProbeBrowser({
+  gpu: true,
+  uncapped: UNCAPPED,
+  extraArgs: HIGH_PERFORMANCE_GPU ? ['--force-high-performance-gpu'] : [],
+});
 const conditions = {
   date: new Date().toISOString(),
   scenario: SCENARIO,

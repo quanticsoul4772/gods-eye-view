@@ -126,6 +126,48 @@ growth from cycle 1 to 3 exceeds 3 MiB, whatever the baseline says. To see
 what a layer keeps, or what grows, use
 `node scripts/qa-heap-diff.mjs --layer <id> [--warm-cycles 1 --cycles 2]`.
 
+## Overlay cost (`qa-detection-cost`)
+
+Detection's cost on Google 3D is GPU contention: its JS takes 0.5–4 ms per
+frame, but compositing a full-screen overlay while the GPU is already the
+limit costs a few renders/s out of ~50. `qa-bench` (single windows over
+Austin, −25 % gate) cannot see that, so `npm run qa:detection-cost` measures it
+as paired, same-session comparisons where detection is dense (vessels over
+the Channel):
+
+- **Same session, A,B,B,A.** Variants (`off`, `on`, `filter=<css>`, `frozen`)
+  and targets (two servers, e.g. builds before and after a change on two
+  preview ports) alternate in one browser; round 2 runs the list reversed, so
+  linear drift cancels. The page not being measured has its render loop
+  stopped; the measured one is brought to the front (a background tab gets
+  no animation frames).
+- **Noise floor first.** `--variants A:on,A:on` is an A/A run; on the Arc it
+  gave ±1 renders/s. Pass it as `--noise-floor`; a claim needs twice that.
+- **Result = paired deltas.** Each target's on-minus-off cost per round, and
+  how that cost changed between targets. Windows more than 20 % from their
+  variant's median are listed as outliers and left out: about one window in
+  ten on the Arc lands in a second state (~33 instead of ~45–53 renders/s).
+- **Fixed content.** Only the target layer on, camera placed before every
+  window, 3D tiles loaded and still loaded a second later, detection's fade
+  done; observations and labels are recorded per window.
+- **Scenarios.** `still` (clock paused, every tick rendered: the mechanism),
+  `live` (the feed's own render demand: what a user sees), `orbit` (camera
+  moving: judge only "no regression"), `diag` (detection's own `paintMs` by
+  density, per basemap, e.g. `--basemaps esri-imagery,photoreal`).
+- **Frame clock.** Display vsync only. `--uncapped` exists for a sleeping
+  display but changes how Chrome composites the overlay (detection cost ~2
+  instead of ~9 renders/s), so it cannot judge overlay cost. A laptop panel
+  with dynamic refresh rate jumps to 63–77 rAF/s under activity; runs taken
+  then are noisy, so measure with the machine otherwise idle.
+- **Vessel feed start.** A freshly started preview server sometimes loads no
+  vessels within the harness's 90 s wait (it then stops with "loaded
+  nothing"); the same server worked minutes later. Start servers a few
+  minutes before measuring.
+
+Not a detection source: FIRMS fires (`firms/queries.js` exposes
+`getDetectableObjects`, but it is not registered), so FIRMS over Brazil
+measures detection with nothing to draw.
+
 ## Judging a change
 
 1. Know the noise (above). A threshold below twice the noise is noise; re-measure
@@ -146,7 +188,9 @@ what a layer keeps, or what grows, use
 ## What this does not cover yet
 
 - Other GPUs and viewports: one Intel Arc baseline on Windows 11.
-- Keyed sources (FIRMS, AISStream, TomTom), whose populations are the largest.
+- Keyed sources (FIRMS, AISStream, TomTom), whose populations are the largest,
+  in `qa-bench` baselines. `qa-detection-cost` covers detection over live
+  vessels only.
 - A deterministic aircraft fixture: detection and flights measure a live
   population, so their numbers move with traffic.
 - GPU time per frame (WebGL timer queries are not exposed here); frame time is

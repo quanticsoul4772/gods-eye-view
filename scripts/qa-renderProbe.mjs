@@ -31,9 +31,10 @@ export const UNCAPPED_FRAME_ARGS = ['--disable-gpu-vsync', '--disable-frame-rate
 
 /**
  * Launch headless Chrome; `gpu: true` asks for the real GPU, `uncapped: true`
- * decouples frames from the display (see UNCAPPED_FRAME_ARGS).
+ * decouples frames from the display (see UNCAPPED_FRAME_ARGS). `extraArgs`
+ * are appended (e.g. `--force-high-performance-gpu` for a laptop's discrete GPU).
  */
-export function launchProbeBrowser({ gpu = false, headless = 'new', uncapped = false } = {}) {
+export function launchProbeBrowser({ gpu = false, headless = 'new', uncapped = false, extraArgs = [] } = {}) {
   return puppeteer.launch({
     headless,
     protocolTimeout: 300_000,
@@ -41,6 +42,7 @@ export function launchProbeBrowser({ gpu = false, headless = 'new', uncapped = f
       ...HONEST_CLOCK_ARGS,
       ...(gpu ? realGpuArgs() : []),
       ...(uncapped ? UNCAPPED_FRAME_ARGS : []),
+      ...extraArgs,
     ],
   });
 }
