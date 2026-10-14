@@ -178,6 +178,63 @@ const GLOW_PASSES = Object.freeze([
 ]);
 
 /**
+ * Unchanged frames keep their pixels. Every rendered frame used to clear and
+ * redraw the full-screen surface, which the compositor then re-uploads — on a
+ * GPU-bound Google 3D scene ~5.6 renders/s of detection's ~7 (Intel Arc,
+ * `qa-detection-cost --variants A:off,A:on,A:frozen`). With vessels at rest
+ * the scene still renders ~45 times a second while detection's picture
+ * changes in fewer than 1 % of them. Each frame now builds a signature of
+ * what the surface would show (brackets at half-pixel precision, colour,
+ * alpha band, fade, presentation opacity, theme, mode, size) and draws only
+ * when it differs from the last one painted or the host has cleared the
+ * surface since (`frame.surfaceGeneration`). Solving, callouts and
+ * diagnostics run every frame as before. The scanline phase is left out: on
+ * an unchanged frame the rows hold still, as they already do on a parked view.
+ */
+let _paintedSurfaceSignature = -1;
+let _paintedSurfaceGeneration = -1;
+const _signatureColorIds = new Map();
+
+function _mixSignature(hash, value) {
+  return Math.imul(hash ^ value, 16777619) >>> 0;
+}
+
+function _signatureColorId(color) {
+  let id = _signatureColorIds.get(color);
+  if (id === undefined) {
+    id = _signatureColorIds.size + 1;
+    _signatureColorIds.set(color, id);
+  }
+  return id;
+}
+
+/**
+ * Whether the surface already shows this signature. When it does not, clear
+ * it (through the host) and remember what is about to be drawn.
+ */
+function _surfaceUnchanged(frame, signature) {
+  if (
+    !_debugBanner &&
+    signature === _paintedSurfaceSignature &&
+    frame.surfaceGeneration === _paintedSurfaceGeneration
+  )
+    return true;
+  _paintedSurfaceGeneration = frame.prepareSurface();
+  _paintedSurfaceSignature = signature;
+  return false;
+}
+
+/** Everything but the brackets that decides the surface's pixels. */
+function _frameSignature(hash, width, height, fadeAlpha, presentationOpacity) {
+  hash = _mixSignature(hash, _signatureColorId(_themeName));
+  hash = _mixSignature(hash, _mode);
+  hash = _mixSignature(hash, Math.round(width));
+  hash = _mixSignature(hash, Math.round(height));
+  hash = _mixSignature(hash, Math.round(fadeAlpha * 1000));
+  return _mixSignature(hash, Math.round(presentationOpacity * 1000));
+}
+
+/**
  * The clock the render-demand model runs on: monotonic, and the SAME source the
  * world-overlay host samples once per frame into `frame.timestamp`.
  *
@@ -761,7 +818,11 @@ function _shouldPaintDetectionLane(frame) {
 
 /** Paint detection into the host-owned blend-isolation target. */
 function _paintDetectionLane(frame) {
-  if (_mode === MODE_OFF || _suspended) return;
+  if (_mode === MODE_OFF || _suspended) {
+    frame.prepareSurface();
+    _paintedSurfaceSignature = -1;
+    return;
+  }
   _ctx = frame.ctx;
   _hostCanvas = frame.canvas;
   if (_hostSurface !== frame.surface) {
@@ -885,6 +946,35 @@ function _drawScanlines(width, height, nowMs) {
     _ctx.fillRect(0, y, width, 1);
   }
   _ctx.restore();
+}
+
+/**
+ * Stroke the batched brackets: the glow passes first, the core on top.
+ * @param {Map<string, Array>} bracketPaths - Tier colour → alpha-band entries.
+ * @param {number} bracketWidth - Core stroke width in CSS pixels.
+ * @param {number} opacity - Fade × presentation opacity for the whole batch.
+ */
+function _paintBrackets(bracketPaths, bracketWidth, opacity) {
+  _ctx.strokeStyle = _theme.glow;
+  for (const pass of GLOW_PASSES) {
+    _ctx.lineWidth = bracketWidth + pass.widen;
+    for (const bands of bracketPaths.values()) {
+      for (const entry of bands) {
+        if (!entry) continue;
+        _ctx.globalAlpha = opacity * entry.alpha * pass.alpha;
+        _ctx.stroke(entry.path);
+      }
+    }
+  }
+  _ctx.lineWidth = bracketWidth;
+  for (const bands of bracketPaths.values()) {
+    for (const entry of bands) {
+      if (!entry) continue;
+      _ctx.globalAlpha = opacity * entry.alpha;
+      _ctx.strokeStyle = entry.color;
+      _ctx.stroke(entry.path);
+    }
+  }
 }
 
 // Corner-bracket geometry (appendCornerBracket) and label composition
@@ -1275,9 +1365,11 @@ function _drawOverlay(frame) {
     // last data layer is switched off.
     _calloutCount = 0;
     _ctx.font = FONT;
-    _drawScanlines(width, height, now);
-    _drawSparseFocusRing(width, height);
-    _drawModeBanner(0, 0);
+    if (!_surfaceUnchanged(frame, _frameSignature(1, width, height, 1, 1))) {
+      _drawScanlines(width, height, now);
+      _drawSparseFocusRing(width, height);
+      _drawModeBanner(0, 0);
+    }
     _lastDiagnostics = {
       profile: MODE_LABELS[_mode],
       densityPct: _densityPct,
@@ -1371,6 +1463,7 @@ function _drawOverlay(frame) {
   };
 
   let visibleCount = 0;
+  let signature = 2166136261;
   const bracketOpacityCounts = { full: 0, partial: 0, hidden: 0 };
   const aircraftBracketSectors = { left: 0, front: 0, right: 0 };
   let protectedVisibleCount = 0;
@@ -1453,6 +1546,17 @@ function _drawOverlay(frame) {
         halfW,
         halfH,
       );
+      if (!transit) {
+        signature = _mixSignature(signature, Math.round(sx * 2));
+        signature = _mixSignature(signature, Math.round(sy * 2));
+        signature = _mixSignature(signature, Math.round(halfW * 2));
+        signature = _mixSignature(signature, Math.round(halfH * 2));
+        signature = _mixSignature(signature, _signatureColorId(color));
+        signature = _mixSignature(
+          signature,
+          Math.ceil(bracketAlpha * BRACKET_ALPHA_STEPS),
+        );
+      }
       visibleCount++;
       if (obj.type === 'AIR')
         aircraftBracketSectors[detectionHorizontalSector(sx, width)]++;
@@ -1583,29 +1687,18 @@ function _drawOverlay(frame) {
   const bracketWidth = _mode === MODE_DENSE ? 1 : 1.25;
   _transitBracketAlpha = fade * bracketPresentationOpacity;
 
+  const surfaceUnchanged = _surfaceUnchanged(
+    frame,
+    _frameSignature(signature, width, height, fade, bracketPresentationOpacity),
+  );
   // Brackets — batched by tier color and linear radial-opacity band. The glow
   // passes go first so the core stroke sits on top of them.
-  _ctx.strokeStyle = _theme.glow;
-  for (const pass of GLOW_PASSES) {
-    _ctx.lineWidth = bracketWidth + pass.widen;
-    for (const bands of bracketPaths.values()) {
-      for (const entry of bands) {
-        if (!entry) continue;
-        _ctx.globalAlpha =
-          fade * entry.alpha * bracketPresentationOpacity * pass.alpha;
-        _ctx.stroke(entry.path);
-      }
-    }
-  }
-  _ctx.lineWidth = bracketWidth;
-  for (const bands of bracketPaths.values()) {
-    for (const entry of bands) {
-      if (!entry) continue;
-      _ctx.globalAlpha = fade * entry.alpha * bracketPresentationOpacity;
-      _ctx.strokeStyle = entry.color;
-      _ctx.stroke(entry.path);
-    }
-  }
+  if (!surfaceUnchanged)
+    _paintBrackets(
+      bracketPaths,
+      bracketWidth,
+      fade * bracketPresentationOpacity,
+    );
 
   const renderEntries = _labelArbiter.renderEntries(candidateMap, now);
   const fadingCount = countFadingRenderEntries(renderEntries);
@@ -1677,9 +1770,11 @@ function _drawOverlay(frame) {
     _lastDiagnostics.protectedVisibleCount = protectedVisibleCount;
   }
 
-  _drawScanlines(width, height, now);
-  _drawSparseFocusRing(width, height);
-  _drawModeBanner(visibleCount, sampledCount);
+  if (!surfaceUnchanged) {
+    _drawScanlines(width, height, now);
+    _drawSparseFocusRing(width, height);
+    _drawModeBanner(visibleCount, sampledCount);
+  }
   // `_labelSolveDirty` surviving a paint means the solve was owed and did not
   // run — the frame that carried the request cannot be the last one.
   return {

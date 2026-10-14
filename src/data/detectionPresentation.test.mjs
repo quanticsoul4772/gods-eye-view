@@ -20,7 +20,7 @@ test('detection owns and releases the Cockpit lifecycle listener', async () => {
   assert.match(source, /removeEventListener\(\s*'gev:cockpit-mode-changed',\s*_cockpitModeListener,?\s*\)/);
   assert.match(
     source,
-    /fade \* entry\.alpha \* bracketPresentationOpacity/,
+    /_paintBrackets\([\s\S]{0,80}fade \* bracketPresentationOpacity,?\s*\)/,
     'Cockpit opacity must multiply bracket strokes only',
   );
   assert.doesNotMatch(

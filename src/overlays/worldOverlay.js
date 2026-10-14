@@ -192,6 +192,13 @@ let _occludersDirty = true;
 let _solveDirty = true;
 let _canvasNeedsClear = true;
 let _detectionSurfaceNeedsClear = true;
+/**
+ * Bumped whenever the detection surface loses its pixels (a clear, a resize, a
+ * new canvas). A painter that remembers the generation it last drew into can
+ * tell its previous frame is still on screen and skip redrawing it. Never
+ * reset, so a value from an earlier host cannot match a new one.
+ */
+let _detectionSurfaceGeneration = 0;
 let _occludersUpdatedAt = Number.NEGATIVE_INFINITY;
 let _canvasWidth = 0;
 let _canvasHeight = 0;
@@ -251,6 +258,14 @@ const _customPaintFrame = {
   uiRects: _uiOcclusionRects,
   uiRectCount: 0,
   layoutRevision: 0,
+  /** Detection target: the surface's generation as this painter is called. */
+  surfaceGeneration: 0,
+  /**
+   * Detection target: clear the surface for this frame (once) and return its
+   * new generation. A painter that does not call it leaves the previous
+   * frame's pixels on screen — no clear, no draw, no upload.
+   */
+  prepareSurface: null,
 };
 const _paintQueue = [];
 const _paintItemPool = [];
@@ -1255,6 +1270,7 @@ function ensureOverlayDom() {
   if (!_detectionSurface) {
     _detectionSurface = document.createElement('canvas');
     _detectionSurface.id = DETECTION_SURFACE_ID;
+    _detectionSurfaceGeneration++;
   }
   if (_detectionSurface.parentElement !== detectionParent) {
     detectionParent.appendChild(_detectionSurface);
@@ -1337,6 +1353,7 @@ function ensureCanvasSize() {
   _resizeDirty = false;
   if (!changed) return false;
   sizeCanvasSurface(_detectionSurface, _detectionCtx, width, height, dpr);
+  _detectionSurfaceGeneration++;
   sizeCanvasSurface(_canvas, _ctx, width, height, dpr);
   _canvasWidth = width;
   _canvasHeight = height;
@@ -1624,6 +1641,7 @@ function clearCanvas(clearMain = true, clearDetection = true) {
   if (clearDetection) {
     clearCanvasSurface(_detectionSurface, _detectionCtx);
     _detectionSurfaceNeedsClear = false;
+    _detectionSurfaceGeneration++;
   }
 }
 
@@ -2427,6 +2445,18 @@ function syncAccessibleActions() {
 
 let _detectionSurfacePrepared = false;
 
+function prepareDetectionSurface() {
+  if (!_detectionSurfacePrepared) {
+    clearCanvas(false, true);
+    _detectionSurfacePrepared = true;
+  }
+  return _detectionSurfaceGeneration;
+}
+
+function prepareSharedSurface() {
+  return 0;
+}
+
 function paintCustomLane(lane) {
   for (let i = 0; i < _customPaintLaneList.length; i++) {
     const record = _customPaintLaneList[i];
@@ -2439,10 +2469,14 @@ function paintCustomLane(lane) {
     _customPaintFrame.ctx = ctx;
     if (record.shouldPaint && record.shouldPaint(_customPaintFrame) === false)
       continue;
-    if (detectionTarget && !_detectionSurfacePrepared) {
-      clearCanvas(false, true);
-      _detectionSurfacePrepared = true;
-    }
+    // The detection surface is cleared lazily, by the painter's own
+    // `prepareSurface()`, so a painter whose picture is unchanged can keep it.
+    _customPaintFrame.surfaceGeneration = detectionTarget
+      ? _detectionSurfaceGeneration
+      : 0;
+    _customPaintFrame.prepareSurface = detectionTarget
+      ? prepareDetectionSurface
+      : prepareSharedSurface;
     ctx.save();
     try {
       // No UI clip. Detection paints edge to edge exactly as it shipped: it

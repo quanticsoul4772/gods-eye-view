@@ -501,6 +501,69 @@ test('detection lifecycle re-hosts unchanged painters behind the sole host liste
   }
 });
 
+test('an unchanged frame keeps the sensor surface; a change, a restyle or a host clear redraws it', () => {
+  const env = installEnvironment();
+  let objects = [
+    { position: new Cesium.Cartesian3(0, 0, 6_356_752), sourceId: 'a', id: 'KEEP0', metric: 'FL100', type: 'AIR' },
+    { position: new Cesium.Cartesian3(10_000, 0, 6_356_740), sourceId: 'b', id: 'KEEP1', metric: 'FL110', type: 'AIR' },
+  ];
+  const surfaceDraws = () => env.detectionCtx.calls.filter(([name]) => name === 'clearRect' || name === 'stroke').length;
+  const frame = () => {
+    env.detectionCtx.calls.length = 0;
+    env.ctx.calls.length = 0;
+    env.advance(16);
+    env.postRender.raise();
+  };
+  try {
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, [{ id: 'flights', getDetectableObjects: () => objects }], () => {});
+    setMode('DENSE');
+    for (let i = 0; i < 3; i++) {
+      env.advance(250);
+      env.postRender.raise();
+    }
+
+    frame();
+    assert.equal(surfaceDraws(), 0, 'nothing moved: no clear, no strokes, the pixels stay');
+    assert.ok(env.ctx.calls.some(([name, text]) => name === 'fillText' && text === 'KEEP0'),
+      'callouts still paint on the shared canvas');
+    assert.equal(getDetectionDiagnostics().observationCount, 2, 'detection still runs');
+
+    // A second contact on each position: one more bracket on screen.
+    objects = [...objects, ...objects.map((o) => ({ ...o, sourceId: `${o.sourceId}2`, id: `${o.id}B` }))];
+    frame();
+    assert.ok(env.detectionCtx.calls.some(([name]) => name === 'clearRect'), 'a new bracket clears');
+    assert.ok(env.detectionCtx.calls.some(([name]) => name === 'stroke'), 'and redraws');
+    frame();
+    assert.equal(surfaceDraws(), 0);
+
+    setDetectionStyle('retro');
+    frame();
+    assert.ok(surfaceDraws() > 0, 'a style change redraws');
+    frame();
+    assert.equal(surfaceDraws(), 0);
+
+    // Off and back on: the host cleared the surface, so the same picture is
+    // drawn again rather than assumed.
+    setMode('OFF');
+    frame();
+    setMode('DENSE');
+    env.advance(250);
+    env.postRender.raise();
+    frame();
+    frame();
+    assert.equal(surfaceDraws(), 0);
+    setMode('OFF');
+    frame();
+    setMode('DENSE');
+    frame();
+    assert.ok(surfaceDraws() > 0, 'a cleared surface is repainted');
+  } finally {
+    setDetectionStyle('normal');
+    env.cleanup();
+  }
+});
+
 test('callouts stop painting the moment the last detectable object goes away', () => {
   // The callout lane replays the previous solve on frames the sensor lane
   // skips under load, which is what keeps plates from strobing against

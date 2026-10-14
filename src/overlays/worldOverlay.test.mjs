@@ -1142,6 +1142,7 @@ test('custom detection lane receives the shared host frame and paints below ordi
   const lane = registerWorldOverlayPaintLane('detection', (frame) => {
     capturedFrame = frame;
     paintCount++;
+    frame.prepareSurface();
     frame.ctx.fillText('CUSTOM-DETECTION', 20, 20);
   }, { id: 'detection', active: true, target: 'detection' });
   setOverlayEntries('cards', [selectedEntry('HOST-CARD', {
@@ -1170,7 +1171,7 @@ test('custom detection lane receives the shared host frame and paints below ordi
     .map(([, , value]) => value);
   assert.deepEqual(paintOrder, ['CUSTOM-DETECTION', 'HOST-CARD']);
   assert.ok(env.detectionCtx.calls.some(([name]) => name === 'clearRect'),
-    'the host clear routine clears the detection target before paint');
+    'prepareSurface clears the detection target before paint');
 
   // Phase-6 keyhole parity probe: the host-supplied geometry evaluates to the
   // exact legacy helper result at the center, all four edges, and two corners.
@@ -1192,6 +1193,38 @@ test('custom detection lane receives the shared host frame and paints below ordi
   assert.equal(env.document.getElementById('world-overlay-canvas'), null);
   assert.equal(env.document.getElementById('world-overlay-detection-surface'), null);
   assert.equal(env.postRender.listeners.size, 0);
+  env.cleanup();
+});
+
+test('a detection painter that does not prepare the surface keeps its pixels', () => {
+  const env = installMockEnvironment({ width: 400, height: 300, dpr: 1 });
+  initWorldOverlay(env.viewer);
+  let draw = true;
+  const generations = [];
+  const lane = registerWorldOverlayPaintLane('detection', (frame) => {
+    generations.push(frame.surfaceGeneration);
+    if (!draw) return;
+    generations.push(frame.prepareSurface());
+    frame.ctx.fillText('SENSOR', 20, 20);
+  }, { id: 'detection', active: true, target: 'detection' });
+  const clears = () => env.detectionCtx.calls.filter(([name]) => name === 'clearRect').length;
+
+  env.postRender.raise();
+  const [, painted] = generations;
+  assert.ok(painted > 0);
+  draw = false;
+  const before = clears();
+  lane.requestPaint();
+  env.postRender.raise();
+  assert.equal(clears(), before, 'no prepareSurface, no clear');
+  assert.equal(generations.at(-1), painted, 'the surface still holds the painted generation');
+
+  draw = true;
+  lane.requestPaint();
+  env.postRender.raise();
+  assert.ok(clears() > before);
+  assert.ok(generations.at(-1) > painted, 'every clear is a new generation');
+  destroyWorldOverlay();
   env.cleanup();
 });
 
