@@ -15,6 +15,7 @@ import {
   TRANSIT_ENABLED_FEEDS,
 } from '../data/transitFeeds.js';
 import { readZipEntry } from '../data/zipEntry.js';
+import { TRANSIT_DOMAIN } from '../data/sourceDomains.js';
 import {
   directoryTransitFeed,
   parseBbox,
@@ -140,7 +141,7 @@ export function createTransitService({
     if (version === directoryVersion) return directoryFeeds;
     directoryVersion = version;
     directoryFeeds = new Map();
-    for (const entry of directory.usable('transit.vehicles')) {
+    for (const entry of directory.usable(TRANSIT_DOMAIN)) {
       if (getTransitFeed(entry.id) || staticUrls.has(entry.access.url))
         continue;
       const feed = directoryTransitFeed(entry);

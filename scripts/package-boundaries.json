@@ -155,7 +155,9 @@
       "src/sources/radioBrowser.js",
       "server/providers/radio/stations.js",
       "server/providers/radio/transport.js",
-      "server/providers/sourceDirectory.js"
+      "server/providers/sourceDirectory.js",
+      "src/data/sourceDomains.js",
+      "src/layers/bikeshare/registry.js"
     ],
     "external": []
   },
@@ -1160,7 +1162,8 @@
       "src/layers/bikeshare/viewport.js",
       "src/data/inputOwnership.js",
       "src/data/cameraSensitivity.js",
-      "src/sources/sourceDirectory.js"
+      "src/sources/sourceDirectory.js",
+      "src/data/sourceDomains.js"
     ],
     "external": ["cesium"]
   },
@@ -2225,7 +2228,8 @@
       "src/app/embed.js",
       "src/sceneCommandRelease.js",
       "src/layers/transit/catalog.js",
-      "src/sources/sourceDirectory.js"
+      "src/sources/sourceDirectory.js",
+      "src/data/sourceDomains.js"
     ],
     "external": [
       "hls.js",
@@ -2756,7 +2760,8 @@
       "src/sources/infrastructureData.js",
       "src/hudLayoutPolicy.js",
       "src/layers/transit/catalog.js",
-      "src/sources/sourceDirectory.js"
+      "src/sources/sourceDirectory.js",
+      "src/data/sourceDomains.js"
     ],
     "external": [
       "hls.js",
@@ -3052,7 +3057,8 @@
     "exports": ["./layers/bikeshare/source"],
     "modules": [
       "src/layers/bikeshare/source.js",
-      "src/sources/sourceDirectory.js"
+      "src/sources/sourceDirectory.js",
+      "src/data/sourceDomains.js"
     ],
     "external": []
   },
@@ -3193,7 +3199,8 @@
       "src/sources/rateLimit.js",
       "src/data/zipEntry.js",
       "src/data/geoCircle.js",
-      "src/data/transitDirectory.js"
+      "src/data/transitDirectory.js",
+      "src/data/sourceDomains.js"
     ],
     "external": ["pbf"]
   },
@@ -3267,7 +3274,8 @@
       "src/sources/featureSource.js",
       "src/sources/capability.js",
       "src/layers/transit/catalog.js",
-      "src/sources/sourceDirectory.js"
+      "src/sources/sourceDirectory.js",
+      "src/data/sourceDomains.js"
     ],
     "external": ["cesium", "egm96-universal", "pbf"]
   },
@@ -3306,7 +3314,8 @@
       "src/layers/transit/source.js",
       "src/sources/transitHistory.js",
       "src/layers/transit/catalog.js",
-      "src/sources/sourceDirectory.js"
+      "src/sources/sourceDirectory.js",
+      "src/data/sourceDomains.js"
     ],
     "external": ["cesium", "pbf"]
   },
@@ -3315,7 +3324,8 @@
     "modules": [
       "src/layers/transit/source.js",
       "src/sources/transitHistory.js",
-      "src/sources/sourceDirectory.js"
+      "src/sources/sourceDirectory.js",
+      "src/data/sourceDomains.js"
     ],
     "external": []
   },
@@ -3332,7 +3342,8 @@
       "src/sources/rateLimit.js",
       "src/data/zipEntry.js",
       "src/data/geoCircle.js",
-      "src/data/transitDirectory.js"
+      "src/data/transitDirectory.js",
+      "src/data/sourceDomains.js"
     ],
     "external": ["pbf"]
   },
@@ -3417,7 +3428,8 @@
       "src/tools/views.js",
       "src/tools/globePanel.js",
       "src/tools/queries/panelRequest.js",
-      "src/tools/queries/sources.js"
+      "src/tools/queries/sources.js",
+      "src/data/sourceDomains.js"
     ],
     "external": ["satellite.js"]
   },
@@ -3504,7 +3516,8 @@
       "src/layers/alpr/tileRecords.js",
       "src/sources/infrastructureData.js",
       "src/sources/eventPacks.js",
-      "src/sources/sourceDirectory.js"
+      "src/sources/sourceDirectory.js",
+      "src/data/sourceDomains.js"
     ],
     "external": ["@mapbox/vector-tile", "pbf"]
   },

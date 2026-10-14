@@ -1,6 +1,8 @@
 import { readResponseTextCapped } from './common/http.js';
 import { publicOnlyFetch } from './sourceDirectory.js';
 import { bboxToCircle } from '../../src/data/geoCircle.js';
+import { BIKESHARE_DOMAIN } from '../../src/data/sourceDomains.js';
+import { GBFS_CITY_REGISTRY } from '../../src/layers/bikeshare/registry.js';
 import {
   isAllowedGbfsHost,
   isAllowedGbfsPath,
@@ -128,7 +130,7 @@ export function gbfsProxy({ directory = null } = {}) {
   function refreshDirectory() {
     if (!directory || directory.generatedAt() === version) return;
     version = directory.generatedAt();
-    systems = directorySystems(directory.usable('bikeshare.stations'));
+    systems = directorySystems(directory.usable(BIKESHARE_DOMAIN));
     directoryUrls = new Set(
       systems.flatMap((s) => [s.stationStatusUrl, s.stationInformationUrl]),
     );
@@ -285,10 +287,13 @@ export function gbfsProxy({ directory = null } = {}) {
   };
 }
 
+const STATIC_STATUS_URLS = new Set(
+  GBFS_CITY_REGISTRY.map((city) => city.stationStatusUrl),
+);
+
 /**
- * Directory bike-share entries in the registry's shape (`src/layers/bikeshare/registry.js`).
- * Systems the static registry already serves are skipped by the browser layer
- * (by station URL), where that registry lives.
+ * Directory bike-share entries in the registry's shape (`src/layers/bikeshare/registry.js`),
+ * skipping systems that registry already serves (by station URL).
  * @param {object[]} entries usable directory entries (domain bikeshare.stations)
  */
 export function directorySystems(entries) {
@@ -297,6 +302,7 @@ export function directorySystems(entries) {
     const status = e.access?.url;
     const info = e.access?.related?.station_information;
     if (!status || !info || !Array.isArray(e.coverage?.bbox)) continue;
+    if (STATIC_STATUS_URLS.has(status)) continue;
     const { center, loadRadiusKm } = bboxToCircle(e.coverage.bbox);
     out.push({
       id: e.id,

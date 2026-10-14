@@ -15,6 +15,7 @@ import {
   referralEntries,
 } from '../../server/providers/sourceDirectory.js';
 import { directorySystems } from '../../server/providers/gbfs.js';
+import { GBFS_CITY_REGISTRY } from '../layers/bikeshare/registry.js';
 import {
   bboxToCircle,
   directoryTransitFeed,
@@ -474,6 +475,17 @@ test('gbfs directory systems map to the registry shape', () => {
       id: 'no-info',
       coverage: { bbox: [0, 0, 1, 1] },
       access: { url: 'https://x.example/station_status.json' },
+      licence: {},
+    },
+    {
+      id: 'gbfs-already-static',
+      coverage: { bbox: [0, 0, 1, 1] },
+      access: {
+        url: GBFS_CITY_REGISTRY[0].stationStatusUrl,
+        related: {
+          station_information: GBFS_CITY_REGISTRY[0].stationInformationUrl,
+        },
+      },
       licence: {},
     },
   ]);

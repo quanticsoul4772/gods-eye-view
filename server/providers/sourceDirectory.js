@@ -15,6 +15,7 @@ import {
   fetchPinnedRadioResponse,
   resolveRadioProxyAddresses,
 } from './radio/transport.js';
+import { formatOfDomain } from '../../src/data/sourceDomains.js';
 
 export const SOURCE_DIRECTORY_URL =
   'https://quanticsoul4772.github.io/gev-open-sources/directory.json';
@@ -30,7 +31,6 @@ const CREDENTIAL_SEGMENT = /^(key|token|apikey|api_key|auth|secret)$/i;
 const TOKEN_VALUE = /^(eyJ|AKIA|sk-|ghp_|xox)/;
 const SAFE_HEADERS = new Set(['et-client-name', 'user-agent', 'accept']);
 const TEXT_MAX = 120;
-const FORMATS = new Set(['gtfs-rt.vehicle-positions', 'gbfs.station-status']);
 
 const decode = (value) => {
   try {
@@ -132,7 +132,7 @@ export function isUsableEntry(entry) {
     ID_PATTERN.test(entry?.id || '') &&
     entry.health?.status === 'verified' &&
     entry.licence?.display === true &&
-    FORMATS.has(entry.format) &&
+    entry.format === formatOfDomain(entry.domain) &&
     isSafeSourceUrl(entry.access?.url) &&
     areSafeHeaders(headers) &&
     Object.values(entry.access?.related || {}).every(isSafeSourceUrl) &&

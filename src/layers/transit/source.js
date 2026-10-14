@@ -3,6 +3,7 @@ import {
   createListedSourceCounter,
   createSourceDirectorySource,
 } from '../../sources/sourceDirectory.js';
+import { TRANSIT_DOMAIN } from '../../data/sourceDomains.js';
 
 /** Request transit snapshots through caller-owned transport. */
 export function createTransitSource({
@@ -11,7 +12,7 @@ export function createTransitSource({
   return {
     /** Feeds the source directory lists here that the app can't show. */
     listed: createListedSourceCounter({
-      domain: 'transit.vehicles',
+      domain: TRANSIT_DOMAIN,
       directory: createSourceDirectorySource({ fetchImpl }),
     }),
     /** Read the public catalog of enabled feeds. */

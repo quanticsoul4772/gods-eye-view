@@ -3,15 +3,11 @@
 import { defineTool } from '../catalog.js';
 import { AREA_SCHEMA, areaCenter, resolveArea } from '../area.js';
 import { LIMIT_SCHEMA, capRows } from '../results.js';
-
-const DOMAIN_OF = Object.freeze({
-  transit: 'transit.vehicles',
-  bikeshare: 'bikeshare.stations',
-});
-const TOPIC_NOUN = Object.freeze({
-  'transit.vehicles': 'transit',
-  'bikeshare.stations': 'bike-share',
-});
+import {
+  SOURCE_TOPICS,
+  domainOfTopic,
+  nounOfDomain,
+} from '../../data/sourceDomains.js';
 
 /** One-line answer naming what can be shown now and what only exists. */
 export function referralSummary(label, rows) {
@@ -22,7 +18,7 @@ export function referralSummary(label, rows) {
   const names = (list) =>
     list
       .slice(0, 4)
-      .map((r) => `${r.name} (${TOPIC_NOUN[r.domain] || r.domain})`)
+      .map((r) => `${r.name} (${nounOfDomain(r.domain)})`)
       .join(', ');
   const parts = [];
   if (usable.length)
@@ -50,7 +46,7 @@ export const findDataSources = defineTool({
       area: AREA_SCHEMA,
       topic: {
         type: 'string',
-        enum: ['transit', 'bikeshare', 'any'],
+        enum: [...SOURCE_TOPICS],
         description: 'Which kind of source to look for (default any).',
       },
       limit: LIMIT_SCHEMA,
@@ -65,7 +61,7 @@ export const findDataSources = defineTool({
     const { sources, generatedAt } = await services.sources.find({
       lat: center.lat,
       lon: center.lon,
-      domain: DOMAIN_OF[args.topic] || undefined,
+      domain: domainOfTopic(args.topic),
       limit: Math.min(args.limit ?? 10, 50),
       signal,
     });
