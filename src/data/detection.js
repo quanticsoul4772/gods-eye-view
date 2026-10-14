@@ -159,8 +159,23 @@ let _debugBanner = false;
  *  Shared with the render-demand policy, which owes the scene a frame for exactly
  *  as long as this window is open (`detectionRenderDemand.js`). */
 const FADE_MS = DETECTION_ENABLE_FADE_MS;
-/** @constant {number} GLOW_PX - Soft glow radius, applied once via a CSS drop-shadow (not per-primitive). */
+/** @constant {number} GLOW_PX - Soft glow radius around bracket strokes. */
 const GLOW_PX = DETECTION_STYLE.glowPx;
+/**
+ * The glow is painted, not filtered: two wider, faint strokes of the theme's
+ * glow colour under each bracket batch, approximating the CSS
+ * `drop-shadow(0 0 GLOW_PX glow)` the surface used to carry. That filter blurred
+ * the whole full-screen surface on every frame and was the costliest part of
+ * detection on a busy GPU (Google 3D on an Intel Arc: the drop-shadow alone cost
+ * more renders/s than the rest of the filter chain;
+ * `scripts/qa-detection-cost.mjs`). Alphas multiply the glow colour's own;
+ * widths and alphas were matched to the old shadow's measured falloff (mean
+ * brightness 1-4 px from the strokes, each style, over black).
+ */
+const GLOW_PASSES = Object.freeze([
+  Object.freeze({ widen: 3 * GLOW_PX, alpha: 0.09 }),
+  Object.freeze({ widen: 2 * GLOW_PX, alpha: 0.1 }),
+]);
 
 /**
  * The clock the render-demand model runs on: monotonic, and the SAME source the
@@ -631,8 +646,9 @@ export function setDetectionStyle(styleName) {
 function _applySurfaceTheme() {
   if (!_hostSurface) return;
   _hostSurface.style.mixBlendMode = _theme.blend;
-  // This exact CSS chain is one compositor pass over the finished layer.
-  _hostSurface.style.filter = `${_theme.filter} drop-shadow(0 0 ${GLOW_PX}px ${_theme.glow})`;
+  // Colour treatment only: one cheap compositor pass over the finished layer.
+  // The glow is painted under the brackets (GLOW_PASSES).
+  _hostSurface.style.filter = _theme.filter;
 }
 
 function _syncSurfaceVisibility() {
@@ -1329,7 +1345,7 @@ function _drawOverlay(frame) {
   const vp15 = viewProjection[15];
 
   // Brackets stay broad inside the keyhole, fade outside it, and batch by tier
-  // color plus a 32-step alpha band. Text candidates are projected once and
+  // color plus a BRACKET_ALPHA_STEPS alpha band. Text candidates are projected once and
   // handed to the shared stable arbiter.
   _ctx.font = FONT;
   if (!_charWidth) _charWidth = _ctx.measureText('0000000000').width / 10 || 6;
@@ -1567,7 +1583,20 @@ function _drawOverlay(frame) {
   const bracketWidth = _mode === MODE_DENSE ? 1 : 1.25;
   _transitBracketAlpha = fade * bracketPresentationOpacity;
 
-  // Brackets — batched by tier color and linear radial-opacity band.
+  // Brackets — batched by tier color and linear radial-opacity band. The glow
+  // passes go first so the core stroke sits on top of them.
+  _ctx.strokeStyle = _theme.glow;
+  for (const pass of GLOW_PASSES) {
+    _ctx.lineWidth = bracketWidth + pass.widen;
+    for (const bands of bracketPaths.values()) {
+      for (const entry of bands) {
+        if (!entry) continue;
+        _ctx.globalAlpha =
+          fade * entry.alpha * bracketPresentationOpacity * pass.alpha;
+        _ctx.stroke(entry.path);
+      }
+    }
+  }
   _ctx.lineWidth = bracketWidth;
   for (const bands of bracketPaths.values()) {
     for (const entry of bands) {

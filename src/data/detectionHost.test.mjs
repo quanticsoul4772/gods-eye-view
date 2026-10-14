@@ -98,7 +98,7 @@ function mockContext(target, trace) {
     // set at some point during the frame. globalAlpha rides along for the same
     // reason: the backdrop feather is an alpha, not a colour.
     fill(path) { record('fill', path, this.fillStyle, this.globalAlpha); },
-    stroke(path) { record('stroke', path, this.strokeStyle, this.lineWidth); },
+    stroke(path) { record('stroke', path, this.strokeStyle, this.lineWidth, this.globalAlpha); },
     fillRect(...args) { record('fillRect', ...args); },
     fillText(...args) { record('fillText', ...args); },
     drawImage(...args) { record('drawImage', ...args); },
@@ -368,10 +368,9 @@ test('detection lifecycle re-hosts unchanged painters behind the sole host liste
     assert.equal(surface.parentElement, env.viewer.container);
     assert.deepEqual(root.children, [mainCanvas]);
     assert.equal(surface.style.mixBlendMode, 'screen');
-    assert.equal(
-      surface.style.filter,
-      'contrast(1.05) saturate(1.05) drop-shadow(0 0 3px rgba(0, 244, 255, 0.4))',
-    );
+    // Colour treatment only; the glow is painted (a full-surface drop-shadow
+    // was detection's costliest GPU pass).
+    assert.equal(surface.style.filter, 'contrast(1.05) saturate(1.05)');
     assert.equal(surface.style.display, 'none');
 
     setMode('DENSE');
@@ -393,6 +392,19 @@ test('detection lifecycle re-hosts unchanged painters behind the sole host liste
     assert.ok(env.detectionCtx.calls.some(([name, text]) => name === 'fillText'
       && String(text).startsWith('DENSE  VIS:')));
     assert.ok(env.detectionCtx.calls.some(([name, path]) => name === 'stroke' && path instanceof MockPath2D));
+    // Each bracket batch is stroked as two wide faint glow passes in the
+    // theme's glow colour, then the core stroke on top.
+    const bracketStrokes = env.detectionCtx.calls.filter(([name, path]) => name === 'stroke' && path instanceof MockPath2D);
+    const glowColour = DETECTION_THEME_MAP._default.glow;
+    const firstCore = bracketStrokes.findIndex(([, , style]) => style !== glowColour);
+    assert.ok(firstCore >= 2, 'glow passes precede the core stroke');
+    const outer = bracketStrokes[0];
+    const inner = bracketStrokes[firstCore - 1];
+    assert.equal(outer[2], glowColour);
+    assert.equal(outer[3], 1 + 9, 'outer glow is the bracket widened by 3 × glowPx');
+    assert.equal(inner[3], 1 + 6, 'inner glow is the bracket widened by 2 × glowPx');
+    assert.ok(outer[4] < bracketStrokes[firstCore][4], 'glow is fainter than the core');
+    assert.equal(bracketStrokes[firstCore][3], 1);
     assert.ok(env.detectionCtx.calls.some(([name]) => name === 'fillRect'), 'scanlines and banner still paint');
     assert.equal(env.detectionCtx.globalCompositeOperation, 'source-over');
     assert.equal(env.detectionCtx.filter, 'none');
@@ -448,9 +460,9 @@ test('detection lifecycle re-hosts unchanged painters behind the sole host liste
     // These are the exact engine calls made by military style presets after
     // their production UI gate chooses CRT/NVG/FLIR defaults.
     const expectedThemes = {
-      retro: 'contrast(1.08) saturate(1.04) drop-shadow(0 0 3px rgba(255, 176, 56, 0.45))',
-      surveillance: 'contrast(1.12) saturate(1.12) drop-shadow(0 0 3px rgba(120, 255, 120, 0.42))',
-      thermal: 'contrast(1.1) saturate(1.08) drop-shadow(0 0 3px rgba(255, 224, 170, 0.42))',
+      retro: 'contrast(1.08) saturate(1.04)',
+      surveillance: 'contrast(1.12) saturate(1.12)',
+      thermal: 'contrast(1.1) saturate(1.08)',
     };
     for (const style of ['retro', 'surveillance', 'thermal']) {
       setMode('OFF');
@@ -468,10 +480,7 @@ test('detection lifecycle re-hosts unchanged painters behind the sole host liste
     setMode('OFF');
     setDetectionStyle('normal');
     assert.equal(surface.style.mixBlendMode, 'screen');
-    assert.equal(
-      surface.style.filter,
-      'contrast(1.05) saturate(1.05) drop-shadow(0 0 3px rgba(0, 244, 255, 0.4))',
-    );
+    assert.equal(surface.style.filter, 'contrast(1.05) saturate(1.05)');
     env.postRender.raise();
     assert.equal(getMode(), 'OFF');
     assert.equal(surface.style.display, 'none');
@@ -690,7 +699,8 @@ test('detection cannot resurrect a private canvas, listener, matrix, resize, cle
   assert.doesNotMatch(source, /CALLOUT_OCCLUSION_SELECTORS/);
   assert.doesNotMatch(source, /_ctx\.(?:filter|globalCompositeOperation)\s*=/);
   assert.match(source, /_hostSurface\.style\.mixBlendMode = _theme\.blend;/);
-  assert.match(source, /_hostSurface\.style\.filter = `\$\{_theme\.filter\} drop-shadow\(0 0 \$\{GLOW_PX\}px \$\{_theme\.glow\}\)`;/);
+  assert.match(source, /_hostSurface\.style\.filter = _theme\.filter;/);
+  assert.doesNotMatch(source, /drop-shadow\(0 0 \$\{GLOW_PX\}/);
   assert.match(source, /const LABEL_SOLVE_INTERVAL_MS = 125;/);
   assert.match(source, /const _labelArbiter = new LabelArbiter\(\);/);
   assert.match(source, /const clipW = vp3 \* px \+ vp7 \* py \+ vp11 \* pz \+ vp15;/);
