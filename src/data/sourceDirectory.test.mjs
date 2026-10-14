@@ -754,3 +754,45 @@ test('find_data_sources answers from the directory; mobility tools fall back to 
     'No keyless live source in the source directory covers Nowhere.',
   );
 });
+
+test('camera lists are referral only: never usable, named by find_data_sources', async () => {
+  const camera = entry({
+    id: 'cameras-digitraffic-weathercam',
+    domain: 'cameras.stills',
+    format: 'cameras.list',
+    name: 'Digitraffic weather cameras',
+    coverage: { bbox: [59.7, 19.1, 70.1, 31.6], countries: ['FI'] },
+    access: {
+      url: 'https://tie.digitraffic.fi/api/weathercam/v1/stations',
+      headers: {},
+    },
+  });
+  assert.equal(
+    isUsableEntry(camera),
+    false,
+    'shown by the CCTV packs, not here',
+  );
+  const [row] = referralEntries([camera], { lat: 60.2, lon: 24.9 });
+  assert.equal(row.usable, false);
+  const queries = [];
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: {
+      sources: {
+        find: async (query) => {
+          queries.push(query);
+          return { generatedAt: 'g', sources: [row] };
+        },
+      },
+    },
+  });
+  const answer = await catalog.call('find_data_sources', {
+    area: { lat: 60.2, lon: 24.9, radius_km: 10 },
+    topic: 'cameras',
+  });
+  assert.equal(queries[0].domain, 'cameras.stills');
+  assert.match(
+    answer.summary,
+    /1 listed but not shown .*Digitraffic weather cameras \(traffic camera\)/,
+  );
+});

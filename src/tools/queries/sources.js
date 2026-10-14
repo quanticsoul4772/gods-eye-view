@@ -37,7 +37,7 @@ export const findDataSources = defineTool({
   title: 'Find keyless data sources',
   description:
     'Keyless live data sources (public transit vehicle positions, bike-share ' +
-    'stations) that cover a place, from the self-maintaining source ' +
+    'stations, traffic camera lists) that cover a place, from the self-maintaining source ' +
     "directory: which ones God's Eye View can show now and which exist but " +
     'are not shown. Use when another tool or layer has no data for a place.',
   inputSchema: {
