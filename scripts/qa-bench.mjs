@@ -36,6 +36,7 @@
  *   node scripts/qa-bench.mjs --only leaks            3 on/off cycles per layer; growth > 3 MiB fails
  *   node scripts/qa-bench.mjs --reps 3                3 windows per sample (median; default 2)
  *   node scripts/qa-bench.mjs --profile               also save .cpuprofile per window
+ *   node scripts/qa-bench.mjs --basemap esri-imagery  measure on a given map stack (startup keeps the default)
  *   node scripts/qa-bench.mjs --uncapped              frames not tied to the display (noisier; see below)
  *   node scripts/qa-bench.mjs --allow-software        permit SwiftShader (numbers are relative only)
  *
@@ -60,6 +61,12 @@ const opt = (flag, fallback = null) =>
 const ONLY = (opt('--only', '') || '').split(',').filter(Boolean);
 const PROFILE = argv.includes('--profile');
 const ALLOW_SOFTWARE = argv.includes('--allow-software');
+/**
+ * Map stack to measure on (e.g. esri-imagery, photoreal). With a Google Maps
+ * key the app opens on Google's photorealistic 3D tiles, a much heavier scene
+ * than the keyless Esri imagery; compare only runs on the same basemap.
+ */
+const BASEMAP = opt('--basemap');
 const SAVE_BASELINE = opt('--save-baseline');
 const COMPARE = opt('--compare');
 const STARTUP_SAMPLES = Number(opt('--startup-samples', '3'));
@@ -84,6 +91,10 @@ const ALL_LAYERS = [
   'local-dams',
   'weather-radar',
   'rocket-launches',
+  // Keyed: AISStream, NASA FIRMS, TomTom. Without a key they record count 0.
+  'ais-live-vessels',
+  'local-firms',
+  'traffic',
 ];
 const LAYERS = LAYER_FILTER.length ? LAYER_FILTER : ALL_LAYERS;
 const STYLES = [
@@ -637,6 +648,12 @@ try {
       { timeout: 180_000 },
     );
     await pause(4000);
+    if (BASEMAP)
+      await app.page.evaluate(
+        (stack) =>
+          window.__godsEyeView.voiceCommands.runner('set_map_stack', { stack }),
+        BASEMAP,
+      );
     await park(app.page);
     await waitTiles(app.page, 30_000);
     return app;
@@ -649,6 +666,10 @@ try {
     );
     const renderer = await webglRenderer(page);
     results.machine.gpu = renderer;
+    results.conditions.basemap = await page.evaluate(
+      () =>
+        window.__godsEyeView.mapStackController?.getState?.()?.activeId ?? null,
+    );
     results.conditions.detectionDefault = await page.evaluate(
       () =>
         window.__godsEyeView.styleManager.getControlState?.()?.detection ??
@@ -663,7 +684,9 @@ try {
         `Software renderer (${renderer}); pass --allow-software for relative numbers only`,
       );
     }
-    console.log(`GPU: ${renderer}  server: ${results.conditions.server}`);
+    console.log(
+      `GPU: ${renderer}  server: ${results.conditions.server}  basemap: ${results.conditions.basemap}`,
+    );
   }
 
   if (want('idle')) {

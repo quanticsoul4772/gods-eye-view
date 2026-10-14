@@ -30,7 +30,9 @@
       "allocationStrategy": "ELASTIC",
       "fadePct": 7,
       "outsideOpacityPct": 1
-    }
+    },
+    "basemap": "esri-imagery",
+    "keys": "none (keyless install)"
   },
   "scenarios": {
     "startup": {

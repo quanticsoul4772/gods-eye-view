@@ -76,6 +76,22 @@ parked scene that is working correctly draws nothing.
 - **Same machine, same conditions.** 1440×900 at DPR 1, focused headless
   page, park over Austin at 60 km.
 
+## Basemap and keys
+
+With a Google Maps key the app opens on Google's photorealistic 3D tiles
+(map stack `photoreal`) instead of keyless Esri imagery, and everything costs
+more: startup 58 vs 18 MiB downloaded, heap 119 vs 27 MiB, idle script 76 vs
+17 ms/s, normal-style motion 24 vs 60 fps. Keep one baseline per basemap
+(`arc-win11-build` is Esri, keyless; `arc-win11-build-google3d` is photoreal
+with keys) and pass `--basemap <stack>` to measure on a chosen one. The Google
+key is baked into the build at build time (`build/vite.js`), so rebuild after
+adding it.
+
+On photoreal, per-layer `heapDeltaMiB` / `retainedMiB` include 30–45 MiB of 3D
+tile cache filled during the camera moves (Bikeshare, with no data, read
+31 MiB); judge layer memory on the Esri baseline, and leaks by `growthMiB` on
+either.
+
 ## Run-to-run noise (measured)
 
 Two identical runs on the Arc baseline machine, same conditions:
