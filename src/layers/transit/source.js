@@ -24,15 +24,18 @@ export function createTransitSource({
       signal?.throwIfAborted();
       return fetchTransitHistory(feedId, vehicleId, signal, fetchImpl);
     },
-    requestSnapshot(feedId, { signal } = {}) {
+    requestSnapshot(feedId, { signal, bbox = null } = {}) {
       signal?.throwIfAborted();
       if (typeof feedId !== 'string' || !feedId || feedId.length > 160)
         throw new TypeError('A transit feed identifier is required');
       return Promise.resolve(
-        fetchImpl(`/api/transit/vehicles/${encodeURIComponent(feedId)}`, {
-          signal,
-          headers: { Accept: 'application/json' },
-        }),
+        fetchImpl(
+          `/api/transit/vehicles/${encodeURIComponent(feedId)}${bbox ? `?bbox=${encodeURIComponent(bbox)}` : ''}`,
+          {
+            signal,
+            headers: { Accept: 'application/json' },
+          },
+        ),
       ).then((response) => {
         signal?.throwIfAborted();
         return {

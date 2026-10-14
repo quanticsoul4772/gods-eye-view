@@ -1,4 +1,3 @@
-import { getRegisteredTransitFeed } from '../../data/transitFeeds.js';
 import * as Cesium from 'cesium';
 import {
   readFix,
@@ -248,7 +247,7 @@ export function createTrails({ state, services, parts, source }) {
     entry.pathRevision = -1;
     prepareEntry(entry);
     update();
-    const feed = getRegisteredTransitFeed(entry.feedId);
+    const feed = parts.catalog.get(entry.feedId);
     if (feed?.historyRetention) {
       const controller = new AbortController();
       historyRequest = controller;

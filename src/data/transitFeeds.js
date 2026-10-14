@@ -339,14 +339,22 @@ export function haversineKm(aLat, aLon, bLat, bLon) {
  * @param {number} lon
  * @param {number} [slackKm=0] Extra radius (hysteresis) so a feed at the edge
  *   of coverage does not flap on small camera moves.
+ * @param {object[]} [feeds] Feeds to consider: the enabled static registry by
+ *   default; the layer passes its catalog (static + source-directory feeds).
  * @returns {object[]}
  */
-export function transitFeedsInRange(lat, lon, slackKm = 0) {
+export function transitFeedsInRange(
+  lat,
+  lon,
+  slackKm = 0,
+  feeds = TRANSIT_ENABLED_FEEDS,
+) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return [];
-  return TRANSIT_ENABLED_FEEDS.map((feed) => ({
-    feed,
-    km: haversineKm(lat, lon, feed.center.lat, feed.center.lon),
-  }))
+  return feeds
+    .map((feed) => ({
+      feed,
+      km: haversineKm(lat, lon, feed.center.lat, feed.center.lon),
+    }))
     .filter(({ feed, km }) => km <= feed.loadRadiusKm + Math.max(0, slackKm))
     .sort((a, b) => a.km - b.km)
     .map(({ feed }) => feed);

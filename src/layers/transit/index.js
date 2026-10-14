@@ -1,4 +1,5 @@
 import { createTransitSource } from './source.js';
+import { createCatalog } from './catalog.js';
 import { createTrails } from './trails.js';
 import { createState } from './state.js';
 import { createHeight } from './height.js';
@@ -44,6 +45,7 @@ export function createTransitLayer({
   const state = createState({ services });
   const parts = {};
   const context = { state, services, parts, source };
+  parts.catalog = createCatalog(context);
   parts.trails = createTrails(context);
   parts.height = createHeight(context);
   parts.selection = createSelection(context);

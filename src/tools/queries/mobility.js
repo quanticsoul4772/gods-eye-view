@@ -43,6 +43,39 @@ function covering(area, entries, centerOf, radiusOf) {
   };
 }
 
+/**
+ * When nothing in the app covers an area, ask the source directory what does,
+ * so the answer can name sources instead of stopping at "none".
+ */
+async function referral(tools, area, topic) {
+  if (!tools?.has('find_data_sources')) return null;
+  try {
+    return await tools.call('find_data_sources', { area, topic, limit: 5 });
+  } catch {
+    return null;
+  }
+}
+
+/** `minLat,minLon,maxLat,maxLon` for an area (box, or circle's bounding box). */
+function areaBboxParam(area) {
+  const r = (v) => Math.round(v * 1e4) / 1e4;
+  if ([area.south, area.west, area.north, area.east].every(Number.isFinite))
+    return [area.south, area.west, area.north, area.east].map(r).join(',');
+  const center = areaCenter(area);
+  const km = areaRadiusKm(area);
+  const dLat = km / 111.32;
+  const dLon =
+    km / (111.32 * Math.max(0.05, Math.cos((center.lat * Math.PI) / 180)));
+  return [
+    Math.max(-90, center.lat - dLat),
+    Math.max(-180, center.lon - dLon),
+    Math.min(90, center.lat + dLat),
+    Math.min(180, center.lon + dLon),
+  ]
+    .map(r)
+    .join(',');
+}
+
 /** A note naming systems left out of an answer, or an empty list. */
 const skippedNote = (skipped, nameOf) =>
   skipped.length
@@ -64,20 +97,30 @@ export const getBikeShare = defineTool({
     additionalProperties: false,
   },
   requires: ['bikeshare'],
-  async run(args, { services, signal }) {
+  async run(args, { services, signal, tools }) {
     const area = await resolveArea(args.area, { services, signal });
     const { bikeshare } = services;
     const { selected: systems, skipped } = covering(
       area,
-      bikeshare.systems,
+      bikeshare.getSystems
+        ? await bikeshare.getSystems({ signal })
+        : bikeshare.systems,
       (system) => ({ lat: system.centerLat, lon: system.centerLon }),
       (system) => system.loadRadiusKm,
     );
-    if (!systems.length)
+    if (!systems.length) {
+      const other = await referral(tools, args.area, 'bikeshare');
       return {
-        summary: `No supported bike-share system covers ${area.label}.`,
-        data: { ...capRows([], args.limit), systems: [] },
+        summary:
+          `No supported bike-share system covers ${area.label}.` +
+          (other ? ` ${other.summary}` : ''),
+        data: {
+          ...capRows([], args.limit),
+          systems: [],
+          ...(other ? { other_sources: other.data.rows } : {}),
+        },
       };
+    }
     const center = areaCenter(area);
     const results = await Promise.allSettled(
       systems.map(async (system) => {
@@ -168,7 +211,7 @@ export const getTransitVehicles = defineTool({
     additionalProperties: false,
   },
   requires: ['transit'],
-  async run(args, { services, signal }) {
+  async run(args, { services, signal, tools }) {
     const area = await resolveArea(args.area, { services, signal });
     const { selected: feeds, skipped } = covering(
       area,
@@ -176,17 +219,27 @@ export const getTransitVehicles = defineTool({
       (feed) => feed.center,
       (feed) => feed.loadRadiusKm ?? 0,
     );
-    if (!feeds.length)
+    if (!feeds.length) {
+      const other = await referral(tools, args.area, 'transit');
       return {
-        summary: `No supported transit feed covers ${area.label}.`,
-        data: { ...capRows([], args.limit), feeds: [] },
+        summary:
+          `No supported transit feed covers ${area.label}.` +
+          (other ? ` ${other.summary}` : ''),
+        data: {
+          ...capRows([], args.limit),
+          feeds: [],
+          ...(other ? { other_sources: other.data.rows } : {}),
+        },
       };
+    }
     const center = areaCenter(area);
     const now = services.clock?.now() ?? Date.now();
     const results = await Promise.allSettled(
       feeds.map(async (feed) => {
         const response = await services.transit.requestSnapshot(feed.id, {
           signal,
+          // National feeds answer for an area, not the whole country.
+          bbox: feed.national ? areaBboxParam(area) : null,
         });
         if (!response.ok) throw new Error(`Transit HTTP ${response.status}`);
         const snapshot = await response.json();

@@ -149,7 +149,13 @@
       "server/providers/gbfs.js",
       "server/providers/common/http.js",
       "src/data/gbfsSource.js",
-      "src/sources/httpBody.js"
+      "src/sources/httpBody.js",
+      "src/data/geoCircle.js",
+      "src/data/radioCountry.js",
+      "src/sources/radioBrowser.js",
+      "server/providers/radio/stations.js",
+      "server/providers/radio/transport.js",
+      "server/providers/sourceDirectory.js"
     ],
     "external": []
   },
@@ -2216,7 +2222,8 @@
       "src/voice/actionSchemas.js",
       "src/view/index.js",
       "src/app/embed.js",
-      "src/sceneCommandRelease.js"
+      "src/sceneCommandRelease.js",
+      "src/layers/transit/catalog.js"
     ],
     "external": [
       "hls.js",
@@ -2745,7 +2752,8 @@
       "src/layers/installations/namedMarkers.js",
       "src/data/infrastructureOverlayEntry.js",
       "src/sources/infrastructureData.js",
-      "src/hudLayoutPolicy.js"
+      "src/hudLayoutPolicy.js",
+      "src/layers/transit/catalog.js"
     ],
     "external": [
       "hls.js",
@@ -3176,7 +3184,10 @@
       "src/sources/transitHistory.js",
       "src/sources/transitService.js",
       "src/sources/transitHistoryStore.js",
-      "src/sources/rateLimit.js"
+      "src/sources/rateLimit.js",
+      "src/data/zipEntry.js",
+      "src/data/geoCircle.js",
+      "src/data/transitDirectory.js"
     ],
     "external": ["pbf"]
   },
@@ -3248,7 +3259,8 @@
       "src/sources/overpassFeaturesRecords.js",
       "src/sources/overpassFeatures.js",
       "src/sources/featureSource.js",
-      "src/sources/capability.js"
+      "src/sources/capability.js",
+      "src/layers/transit/catalog.js"
     ],
     "external": ["cesium", "egm96-universal", "pbf"]
   },
@@ -3285,7 +3297,8 @@
       "scripts/qa-transit-controls.mjs",
       "scripts/qa-transit-browser.mjs",
       "src/layers/transit/source.js",
-      "src/sources/transitHistory.js"
+      "src/sources/transitHistory.js",
+      "src/layers/transit/catalog.js"
     ],
     "external": ["cesium", "pbf"]
   },
@@ -3307,7 +3320,10 @@
       "src/sources/transitHistory.js",
       "src/sources/transitService.js",
       "src/sources/transitHistoryStore.js",
-      "src/sources/rateLimit.js"
+      "src/sources/rateLimit.js",
+      "src/data/zipEntry.js",
+      "src/data/geoCircle.js",
+      "src/data/transitDirectory.js"
     ],
     "external": ["pbf"]
   },
@@ -3391,7 +3407,8 @@
       "src/view/index.js",
       "src/tools/views.js",
       "src/tools/globePanel.js",
-      "src/tools/queries/panelRequest.js"
+      "src/tools/queries/panelRequest.js",
+      "src/tools/queries/sources.js"
     ],
     "external": ["satellite.js"]
   },
@@ -3477,7 +3494,8 @@
       "src/layers/alpr/records.js",
       "src/layers/alpr/tileRecords.js",
       "src/sources/infrastructureData.js",
-      "src/sources/eventPacks.js"
+      "src/sources/eventPacks.js",
+      "src/sources/sourceDirectory.js"
     ],
     "external": ["@mapbox/vector-tile", "pbf"]
   },

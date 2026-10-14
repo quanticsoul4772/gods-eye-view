@@ -71,9 +71,11 @@ export const TRANSIT_BACKOFF_LADDER_MS = Object.freeze([
  * registered feed. Anything else — a different route, an unknown id, path
  * tricks, a query string — resolves to null and the caller 404s.
  * @param {string} url Request URL relative to the mount point.
+ * @param {(id: string) => object|null} [lookup] Feed lookup: the static
+ *   registry by default; the server adds verified source-directory feeds.
  * @returns {{ route: 'feeds' } | { route: 'vehicles', feed: object } | null}
  */
-export function resolveTransitRoute(url) {
+export function resolveTransitRoute(url, lookup = getTransitFeed) {
   const pathname = String(url || '').split('?')[0];
   if (pathname === '/feeds' || pathname === '/feeds/')
     return { route: 'feeds' };
@@ -86,7 +88,7 @@ export function resolveTransitRoute(url) {
   } catch {
     return null;
   }
-  const feed = getTransitFeed(id);
+  const feed = lookup(id);
   if (!feed) return null;
   if (match[1] === 'vehicles')
     return vehicleId === null ? { route: 'vehicles', feed } : null;
@@ -151,7 +153,12 @@ export function isAcceptableTransitUpstreamUrl(url) {
  * @param {string|null} location Raw `Location` header value.
  * @returns {{ ok: true, url: string } | { ok: false, reason: string }}
  */
-export function transitRedirectDecision(originUrl, currentUrl, location) {
+export function transitRedirectDecision(
+  originUrl,
+  currentUrl,
+  location,
+  allowedHosts = [],
+) {
   if (!location)
     return { ok: false, reason: 'redirect without a Location header' };
   let origin;
@@ -164,7 +171,9 @@ export function transitRedirectDecision(originUrl, currentUrl, location) {
   }
   if (next.protocol !== 'https:')
     return { ok: false, reason: 'redirect left https' };
-  if (next.origin !== origin)
+  // A directory feed may name the hosts its publisher redirects to (BODS:
+  // data.bus-data.dft.gov.uk → download.bus-data.dft.gov.uk); https only.
+  if (next.origin !== origin && !allowedHosts.includes(next.hostname))
     return { ok: false, reason: `redirect left ${origin}` };
   return { ok: true, url: next.toString() };
 }

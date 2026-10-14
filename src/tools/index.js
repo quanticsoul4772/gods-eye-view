@@ -39,6 +39,7 @@ import {
   getTrafficFlow,
   getTransitVehicles,
 } from './queries/mobility.js';
+import { findDataSources } from './queries/sources.js';
 import { placesNearby, planRoute, searchPlaces } from './queries/places.js';
 import { panelRequest } from './queries/panelRequest.js';
 import { showInGodsEyeView } from './queries/share.js';
@@ -105,6 +106,7 @@ export const coreTools = Object.freeze([
   planRoute,
   getBikeShare,
   getTransitVehicles,
+  findDataSources,
   getTrafficFlow,
   getWeather,
   getWeatherMap,

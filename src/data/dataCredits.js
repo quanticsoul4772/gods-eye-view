@@ -406,11 +406,37 @@ export function transitFeedCredit(feed) {
       .replaceAll('<', '&lt;')
       .replaceAll('>', '&gt;')
       .replaceAll('"', '&quot;');
+  // Source-directory feeds come from harvested catalogs: link only http(s).
+  const href = /^https?:\/\//i.test(String(feed.licenseUrl || ''))
+    ? feed.licenseUrl
+    : null;
+  const licence = escape(feed.license || 'licence');
   return {
     key: `transit-${feed.id}`,
     html:
       `Transit (${escape(feed.attribution)}): ` +
-      `<a href="${escape(feed.licenseUrl)}" target="_blank" rel="noopener">${escape(feed.license)}</a>`,
+      (href
+        ? `<a href="${escape(href)}" target="_blank" rel="noopener">${licence}</a>`
+        : licence),
+  };
+}
+
+/**
+ * Per-system bike-share credit for systems from the keyless source directory,
+ * registered the first time that system's stations load.
+ * @param {{ id: string, attribution?: string, provider?: string, license?: string|null, licenseUrl?: string|null }} system
+ * @returns {{ key: string, html: string }}
+ */
+export function gbfsSystemCredit(system) {
+  const credit = transitFeedCredit({
+    id: system.id,
+    attribution: system.attribution || system.provider,
+    license: system.license,
+    licenseUrl: system.licenseUrl,
+  });
+  return {
+    key: system.id.startsWith('gbfs-') ? system.id : `gbfs-${system.id}`,
+    html: credit.html.replace(/^Transit /, 'Bikeshare '),
   };
 }
 

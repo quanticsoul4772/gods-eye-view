@@ -97,6 +97,27 @@ export function createLifecycle({
       }
 
       void parts.viewport.runProximityCheck();
+      // Directory systems join once the server's list arrives.
+      if (typeof source?.getSystems === 'function')
+        void source
+          .getSystems()
+          .then((systems) => {
+            let added = 0;
+            const loadedUrls = new Set(
+              [...layerState._cities.values()].map((c) => c.stationStatusUrl),
+            );
+            for (const system of systems)
+              if (
+                !layerState._cities.has(system.id) &&
+                !loadedUrls.has(system.stationStatusUrl)
+              ) {
+                layerState._cities.set(system.id, Object.freeze({ ...system }));
+                added += 1;
+              }
+            if (added && layerState._enabled)
+              void parts.viewport.runProximityCheck();
+          })
+          .catch(() => {});
       restoreSpriteOrder(viewer);
     },
 

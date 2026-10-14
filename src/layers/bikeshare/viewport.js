@@ -1,5 +1,4 @@
 import * as Cesium from 'cesium';
-import { GBFS_CITY_REGISTRY } from './registry.js';
 import {
   ACTIVATION_EXIT_ALTITUDE_M,
   ACTIVATION_ENTER_ALTITUDE_M,
@@ -90,7 +89,7 @@ export function createViewport({ state: layerState, services, parts, source }) {
     const active = new Set();
     if (!center) return active;
 
-    for (const city of GBFS_CITY_REGISTRY) {
+    for (const city of layerState._cities.values()) {
       const distance = parts.model.haversineKm(
         center.lat,
         center.lon,

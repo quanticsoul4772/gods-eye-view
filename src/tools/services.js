@@ -25,6 +25,7 @@ import { rankLatest, wvsSnapshotUrl } from '../layers/recentImagery/model.js';
 import { createSatelliteSource } from '../layers/satellites/source.js';
 import { createTrafficSource } from '../layers/traffic/source.js';
 import { createTransitSource } from '../layers/transit/source.js';
+import { createSourceDirectorySource } from '../sources/sourceDirectory.js';
 import { createWeatherSource } from '../layers/weather/source.js';
 import { createWindSource } from '../layers/wind/source.js';
 import { createApplicationRequestServices } from '../services/requests.js';
@@ -64,8 +65,22 @@ export function createToolServices({ fetchImpl, appUrl, panelKey }) {
     routing: createRouteService({ fetchImpl }),
     bikeshare: {
       systems: GBFS_CITY_REGISTRY,
+      // Static systems plus the server's source-directory systems.
+      async getSystems({ signal } = {}) {
+        const extra = await createBikeshareSource({ fetchImpl })
+          .getSystems({ signal })
+          .catch(() => []);
+        const known = new Set(
+          GBFS_CITY_REGISTRY.map((s) => s.stationStatusUrl),
+        );
+        return [
+          ...GBFS_CITY_REGISTRY,
+          ...extra.filter((s) => !known.has(s.stationStatusUrl)),
+        ];
+      },
       getStations: createBikeshareSource({ fetchImpl }).getStations,
     },
+    sources: createSourceDirectorySource({ fetchImpl }),
     transit: createTransitSource({ fetchImpl }),
     traffic: createTrafficSource({ fetchImpl, tileFetchImpl: fetchImpl }),
     weather: requests.weather,

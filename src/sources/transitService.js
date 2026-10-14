@@ -9,7 +9,18 @@ import { createTransitHistory } from './transitHistoryStore.js';
 
 import { coalesceProxyRequest, readResponseBytesCapped } from './httpBody.js';
 import { makeRateLimiter } from './rateLimit.js';
-import { publicTransitCatalog } from '../data/transitFeeds.js';
+import {
+  getTransitFeed,
+  publicTransitCatalog,
+  TRANSIT_ENABLED_FEEDS,
+} from '../data/transitFeeds.js';
+import { readZipEntry } from '../data/zipEntry.js';
+import {
+  directoryTransitFeed,
+  parseBbox,
+  publicDirectoryFeed,
+  snapshotInBbox,
+} from '../data/transitDirectory.js';
 import {
   TRANSIT_ADMISSION_MAX_GLOBAL,
   TRANSIT_ADMISSION_MAX_PER_FEED,
@@ -68,6 +79,7 @@ export async function fetchTransitFeed(
       feed.url,
       current,
       response.headers.get('location'),
+      feed.redirectHosts || [],
     );
     try {
       await response.body?.cancel();
@@ -104,10 +116,40 @@ export async function fetchTransitFeed(
  * re-asked once per poll for a whole session: consecutive failures push the
  * next permitted attempt out to five minutes, and one success resets it.
  *
- * @param {{fetchImpl?: typeof fetch}} [options]
+ * Feeds from the keyless source directory (`directory.usable('transit.vehicles')`)
+ * join the static registry: same id rules, static ids and URLs win, fetched
+ * with `directoryFetch` (public addresses only). A national feed answers
+ * `/vehicles/<id>?bbox=minLat,minLon,maxLat,maxLon` with the vehicles in view.
+ *
+ * @param {{fetchImpl?: typeof fetch, directory?: object|null,
+ *   directoryFetch?: typeof fetch}} [options]
  * @returns {{handle: (request: Request) => Promise<Response>, close: () => void}}
  */
-export function createTransitService({ fetchImpl = fetch } = {}) {
+export function createTransitService({
+  fetchImpl = fetch,
+  directory = null,
+  directoryFetch = fetchImpl,
+} = {}) {
+  const staticUrls = new Set(TRANSIT_ENABLED_FEEDS.map((feed) => feed.url));
+  let directoryVersion = null;
+  let directoryFeeds = new Map();
+  /** Directory transit feeds in registry shape, rebuilt when the directory changes. */
+  function currentDirectoryFeeds() {
+    if (!directory) return directoryFeeds;
+    const version = directory.generatedAt();
+    if (version === directoryVersion) return directoryFeeds;
+    directoryVersion = version;
+    directoryFeeds = new Map();
+    for (const entry of directory.usable('transit.vehicles')) {
+      if (getTransitFeed(entry.id) || staticUrls.has(entry.access.url))
+        continue;
+      const feed = directoryTransitFeed(entry);
+      if (feed) directoryFeeds.set(feed.id, feed);
+    }
+    return directoryFeeds;
+  }
+  const lookupFeed = (id) =>
+    getTransitFeed(id) || currentDirectoryFeeds().get(id) || null;
   /** @type {Map<string, {at:number, body:string, host:string}>} feedId → snapshot */
   const cache = new Map();
   const history = createTransitHistory();
@@ -152,7 +194,7 @@ export function createTransitService({ fetchImpl = fetch } = {}) {
       const { response, finalUrl } = await fetchTransitFeed(
         feed,
         controller.signal,
-        fetchImpl,
+        feed.directory ? directoryFetch : fetchImpl,
         previous
           ? { etag: previous.etag, lastModified: previous.lastModified }
           : null,
@@ -184,10 +226,11 @@ export function createTransitService({ fetchImpl = fetch } = {}) {
         error.upstreamStatus = response.status;
         throw error;
       }
-      const bytes = await readResponseBytesCapped(
+      const raw = await readResponseBytesCapped(
         response,
         TRANSIT_PROXY_MAX_BODY_BYTES,
       );
+      const bytes = feed.unzip ? await readZipEntry(raw, feed.unzip) : raw;
       const snapshot = buildTransitSnapshot(feed, bytes, now);
       if (closed) throw new Error('Transit provider closed');
       history.ingest(feed, snapshot.vehicles, Date.now());
@@ -195,6 +238,8 @@ export function createTransitService({ fetchImpl = fetch } = {}) {
         at: snapshot.fetchedAt,
         contactedAt: snapshot.fetchedAt,
         body: JSON.stringify(snapshot),
+        // A national feed is answered per view from the parsed snapshot.
+        snapshot: feed.national ? snapshot : null,
         host: new URL(finalUrl).hostname,
         etag: response.headers.get('etag'),
         lastModified: response.headers.get('last-modified'),
@@ -232,7 +277,7 @@ export function createTransitService({ fetchImpl = fetch } = {}) {
         transitResponseHeaders('NONE'),
       );
     }
-    const route = resolveTransitRoute(req.url);
+    const route = resolveTransitRoute(req.url, lookupFeed);
     if (!route) {
       return reply(404, JSON.stringify({ error: 'Unknown transit feed' }), {
         'Content-Type': 'application/json',
@@ -240,13 +285,32 @@ export function createTransitService({ fetchImpl = fetch } = {}) {
       });
     }
     if (route.route === 'feeds') {
-      return reply(200, JSON.stringify({ feeds: publicTransitCatalog() }), {
+      const feeds = [
+        ...publicTransitCatalog(),
+        ...[...currentDirectoryFeeds().values()].map(publicDirectoryFeed),
+      ];
+      return reply(200, JSON.stringify({ feeds }), {
         'Content-Type': 'application/json; charset=utf-8',
         'Cache-Control': 'public, max-age=3600',
       });
     }
     const { feed } = route;
     const now = Date.now();
+    // A national feed is too large to ship whole: it answers for a view.
+    const bbox = feed.national ? parseBbox(url.searchParams.get('bbox')) : null;
+    if (feed.national && route.route === 'vehicles' && !bbox)
+      return reply(
+        400,
+        JSON.stringify({ error: 'bbox required for this feed' }),
+        {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store',
+        },
+      );
+    const bodyOf = (entry) =>
+      bbox && entry.snapshot
+        ? JSON.stringify(snapshotInBbox(entry.snapshot, bbox))
+        : entry.body;
     if (route.route === 'trail') {
       if (!admitHistory(feed.id)) {
         return reply(
@@ -270,7 +334,7 @@ export function createTransitService({ fetchImpl = fetch } = {}) {
     if (state === 'fresh') {
       return reply(
         200,
-        cached.body,
+        bodyOf(cached),
         transitResponseHeaders('HIT', cached.host, cached.contactedAt),
       );
     }
@@ -284,7 +348,7 @@ export function createTransitService({ fetchImpl = fetch } = {}) {
         // would keep a dead feed on the globe.
         return reply(
           200,
-          cached.body,
+          bodyOf(cached),
           transitResponseHeaders(
             'STALE-ERROR',
             cached.host,
@@ -327,7 +391,7 @@ export function createTransitService({ fetchImpl = fetch } = {}) {
       const fresh = await request.promise;
       return reply(
         200,
-        fresh.body,
+        bodyOf(fresh),
         transitResponseHeaders(
           request.shared ? 'INFLIGHT' : 'MISS',
           fresh.host,
@@ -359,7 +423,7 @@ export function createTransitService({ fetchImpl = fetch } = {}) {
         // answering on time.
         return reply(
           200,
-          cached.body,
+          bodyOf(cached),
           transitResponseHeaders(
             'STALE-ERROR',
             cached.host,

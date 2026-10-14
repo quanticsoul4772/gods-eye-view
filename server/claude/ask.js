@@ -130,7 +130,13 @@ async function runQuery(catalog, block, signal) {
       content: {
         type: 'tool_result',
         tool_use_id: block.id,
-        content: error instanceof ToolError ? error.message : 'The tool failed',
+        // The code tells the model what kind of failure this is (e.g.
+        // `unavailable` → look for another source), as MCP's structuredContent does.
+        content: JSON.stringify(
+          error instanceof ToolError
+            ? { error: error.code, message: error.message }
+            : { error: 'unavailable', message: 'The tool failed' },
+        ),
         is_error: true,
       },
     };

@@ -195,6 +195,12 @@ export function createLifecycle({ state, services, parts }) {
         );
       }
       parts.viewport.runProximityCheck();
+      // Directory feeds join once the served catalog arrives.
+      const generation = state._generation;
+      void parts.catalog.load().then((changed) => {
+        if (changed && state._enabled && generation === state._generation)
+          parts.viewport.runProximityCheck();
+      });
       restoreSpriteOrder(viewer);
     },
 

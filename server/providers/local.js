@@ -16,6 +16,11 @@ import { radioBrowserProxy } from './radio.js';
 import { gbfsProxy } from './gbfs.js';
 import { localReceiversProxy } from './local-receivers.js';
 import { transitProxy } from './transit.js';
+import {
+  createSourceDirectory,
+  publicOnlyFetch,
+  sourceDirectoryProxy,
+} from './sourceDirectory.js';
 import { adsbLolProxy } from './aircraft/adsb-lol.js';
 import { aisLiveProxy } from './vessels/ais-live.js';
 import { trackBackfillProxies } from './aircraft/tracks.js';
@@ -33,7 +38,11 @@ import { windProxy } from './wind.js';
  * `realtime` configures the voice session token endpoint.
  */
 function localProviderPlugins({ realtime } = {}) {
+  // The keyless source directory feeds the transit and GBFS proxies and the
+  // referral route; directory feeds connect to public addresses only.
+  const directory = createSourceDirectory();
   return [
+    sourceDirectoryProxy(directory),
     openSkyProxy(),
     celestrakProxy(),
     tomtomProxy(),
@@ -49,9 +58,9 @@ function localProviderPlugins({ realtime } = {}) {
     weatherEffectsProxy(),
     cctvProxy({ sourceRoot: defaultSourceRoot }),
     radioBrowserProxy(),
-    gbfsProxy(),
+    gbfsProxy({ directory }),
     localReceiversProxy(),
-    transitProxy(),
+    transitProxy({ directory, directoryFetch: publicOnlyFetch }),
     adsbLolProxy(),
     aisLiveProxy(),
     trackBackfillProxies(),

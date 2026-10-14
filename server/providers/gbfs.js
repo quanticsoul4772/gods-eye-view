@@ -1,4 +1,6 @@
 import { readResponseTextCapped } from './common/http.js';
+import { publicOnlyFetch } from './sourceDirectory.js';
+import { bboxToCircle } from '../../src/data/geoCircle.js';
 import {
   isAllowedGbfsHost,
   isAllowedGbfsPath,
@@ -111,12 +113,41 @@ export async function fetchGbfsUpstream(
  * restricts to station_information/station_status paths, enforces HTTPS,
  * and caps response body at 5 MB.
  *
+ * Systems from the keyless source directory are accepted too, but only by
+ * EXACT station URL of a verified, display-cleared entry, and fetched through
+ * `publicOnlyFetch` (public addresses only). GET /api/gbfs/systems lists
+ * them in the bike-share registry's shape.
+ *
+ * @param {{directory?: object|null}} [options]
  * @returns {import('vite').Plugin}
  */
-export function gbfsProxy() {
+export function gbfsProxy({ directory = null } = {}) {
+  let version;
+  let systems = [];
+  let directoryUrls = new Set();
+  function refreshDirectory() {
+    if (!directory || directory.generatedAt() === version) return;
+    version = directory.generatedAt();
+    systems = directorySystems(directory.usable('bikeshare.stations'));
+    directoryUrls = new Set(
+      systems.flatMap((s) => [s.stationStatusUrl, s.stationInformationUrl]),
+    );
+  }
   const installMiddleware = (server) => {
     server.middlewares.use('/api/gbfs', async (req, res) => {
       try {
+        refreshDirectory();
+        if (
+          req.method === 'GET' &&
+          (req.url || '').split('?')[0] === '/systems'
+        ) {
+          res.writeHead(200, {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Cache-Control': 'public, max-age=3600',
+          });
+          res.end(JSON.stringify({ systems }));
+          return;
+        }
         if (req.method !== 'GET') {
           res.writeHead(405, {
             'Content-Type': 'application/json',
@@ -172,7 +203,8 @@ export function gbfsProxy() {
           return;
         }
 
-        if (!isAllowedGbfsHost(upstreamUrl.hostname)) {
+        const fromDirectory = directoryUrls.has(upstreamUrl.toString());
+        if (!fromDirectory && !isAllowedGbfsHost(upstreamUrl.hostname)) {
           res.writeHead(403, {
             'Content-Type': 'application/json',
             'Cache-Control': 'no-store',
@@ -181,7 +213,7 @@ export function gbfsProxy() {
           return;
         }
 
-        if (!isAllowedGbfsPath(upstreamUrl.pathname)) {
+        if (!fromDirectory && !isAllowedGbfsPath(upstreamUrl.pathname)) {
           res.writeHead(400, {
             'Content-Type': 'application/json',
             'Cache-Control': 'no-store',
@@ -195,7 +227,12 @@ export function gbfsProxy() {
           return;
         }
 
-        const upstream = await fetchGbfsUpstream(upstreamUrl.toString());
+        const upstream = await fetchGbfsUpstream(upstreamUrl.toString(), {
+          fetchImpl:
+            fromDirectory && !isAllowedGbfsHost(upstreamUrl.hostname)
+              ? publicOnlyFetch
+              : fetch,
+        });
         res.writeHead(upstream.status, {
           'Content-Type': upstream.contentType,
           'Cache-Control': gbfsCacheControl(upstreamUrl.pathname),
@@ -246,4 +283,35 @@ export function gbfsProxy() {
     configureServer: installMiddleware,
     configurePreviewServer: installMiddleware,
   };
+}
+
+/**
+ * Directory bike-share entries in the registry's shape (`src/layers/bikeshare/registry.js`).
+ * Systems the static registry already serves are skipped by the browser layer
+ * (by station URL), where that registry lives.
+ * @param {object[]} entries usable directory entries (domain bikeshare.stations)
+ */
+export function directorySystems(entries) {
+  const out = [];
+  for (const e of entries) {
+    const status = e.access?.url;
+    const info = e.access?.related?.station_information;
+    if (!status || !info || !Array.isArray(e.coverage?.bbox)) continue;
+    const { center, loadRadiusKm } = bboxToCircle(e.coverage.bbox);
+    out.push({
+      id: e.id,
+      city: e.name,
+      centerLat: center.lat,
+      centerLon: center.lon,
+      loadRadiusKm: Math.max(10, loadRadiusKm),
+      stationInformationUrl: info,
+      stationStatusUrl: status,
+      provider: e.provider,
+      attribution: e.licence?.attribution || e.provider,
+      license: e.licence?.id || null,
+      licenseUrl: e.licence?.url || null,
+      directory: true,
+    });
+  }
+  return out;
 }

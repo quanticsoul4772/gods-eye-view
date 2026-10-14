@@ -3,6 +3,18 @@ export function createBikeshareSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
 } = {}) {
   return {
+    /** Systems the server adds from the keyless source directory. */
+    async getSystems({ signal } = {}) {
+      signal?.throwIfAborted();
+      const response = await fetchImpl('/api/gbfs/systems', {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        signal,
+      });
+      if (!response.ok) throw new Error('GBFS systems HTTP ' + response.status);
+      const payload = await response.json();
+      return Array.isArray(payload?.systems) ? payload.systems : [];
+    },
     async getStations(upstreamUrl, { signal } = {}) {
       const url = new URL(upstreamUrl);
       if (url.protocol !== 'https:' || url.username || url.password || url.hash)

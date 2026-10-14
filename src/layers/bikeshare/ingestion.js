@@ -1,5 +1,3 @@
-import { CITY_BY_ID } from './registry.js';
-
 export function createIngestion({
   state: layerState,
   services,
@@ -87,7 +85,7 @@ export function createIngestion({
     const inFlight = layerState._inFlightInfo.get(cityId);
     if (inFlight) return inFlight.promise;
 
-    const city = CITY_BY_ID.get(cityId);
+    const city = layerState._cities.get(cityId);
     if (!city) throw new Error(`Unknown GBFS city "${cityId}"`);
     const controller = new AbortController();
 
@@ -102,6 +100,12 @@ export function createIngestion({
           throw new Error(`No station information for ${city.city}`);
         }
         layerState._stationInfoCache.set(cityId, stationMap);
+        // Source-directory systems carry their own licence and attribution.
+        if (city.directory && layerState._viewer)
+          services.credits?.registerDynamicCredit(
+            layerState._viewer,
+            services.credits.gbfsSystemCredit(city),
+          );
         return stationMap;
       } finally {
         endLoading();
@@ -131,7 +135,7 @@ export function createIngestion({
     const inFlight = layerState._inFlightStatus.get(cityId);
     if (inFlight) return inFlight.promise;
 
-    const city = CITY_BY_ID.get(cityId);
+    const city = layerState._cities.get(cityId);
     if (!city) throw new Error(`Unknown GBFS city "${cityId}"`);
     const controller = new AbortController();
 

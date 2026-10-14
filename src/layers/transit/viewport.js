@@ -82,7 +82,13 @@ export function createViewport({ state, services, parts }) {
     const center = state._altitudeGateOpen ? getCameraCenterLatLon() : null;
     const desired = new Map();
     if (center) {
-      for (const feed of transitFeedsInRange(center.lat, center.lon)) {
+      const catalog = parts.catalog.feeds();
+      for (const feed of transitFeedsInRange(
+        center.lat,
+        center.lon,
+        0,
+        catalog,
+      )) {
         desired.set(feed.id, feed);
       }
       // Hysteresis: a feed already active stays active a little past its edge.
@@ -90,6 +96,7 @@ export function createViewport({ state, services, parts }) {
         center.lat,
         center.lon,
         RANGE_SLACK_KM,
+        catalog,
       )) {
         if (state._activeFeeds.has(feed.id)) desired.set(feed.id, feed);
       }

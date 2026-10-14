@@ -226,7 +226,12 @@ test('a failing query tool is reported to Claude as an error result', async () =
   assert.equal(outcome.answer, 'Ship data is unavailable.');
   const result = client.requests[1].messages[2].content[0];
   assert.equal(result.is_error, true);
-  assert.equal(result.content, 'The AIS feed needs a key');
+  // The code travels with the message, so the model can tell an outage from
+  // a missing source (as MCP's structuredContent does).
+  assert.deepEqual(JSON.parse(result.content), {
+    error: 'unavailable',
+    message: 'The AIS feed needs a key',
+  });
 });
 
 test('refusals and empty answers are errors, not answers', async () => {

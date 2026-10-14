@@ -6,10 +6,6 @@ import {
   transitDetectionId,
   transitDetectionMetric,
 } from './policy.js';
-import {
-  TRANSIT_ENABLED_FEEDS,
-  getRegisteredTransitFeed,
-} from '../../data/transitFeeds.js';
 import { transitModeTier } from '../../data/transitPresetStyle.js';
 
 /**
@@ -134,7 +130,7 @@ export function createQueries({ state, parts }) {
       if (!entry.labelClass || entry.labelMode !== entry.mode) {
         const feed =
           state._activeFeeds.get(entry.feedId) ||
-          getRegisteredTransitFeed(entry.feedId);
+          parts.catalog.get(entry.feedId);
         entry.labelClass = transitDetectionClass(entry.mode, feed);
         entry.labelMode = entry.mode;
       }
@@ -224,7 +220,7 @@ export function createQueries({ state, parts }) {
           source: 'GTFS-RT',
           status: 'zoom-in',
           coverage: state._altitudeGateOpen
-            ? `No feed here yet · ${TRANSIT_ENABLED_FEEDS.length} regions available`
+            ? `No feed here yet · ${parts.catalog.feeds().length} regions available`
             : `Fly below ${Math.round(ACTIVATION_ALTITUDE_M / 1000).toLocaleString()} km to a covered region`,
         };
       }

@@ -18,6 +18,7 @@ import {
   transitModeFor,
   transitModeResolved,
 } from '../../data/transitFeeds.js';
+import { viewBboxParam } from './catalog.js';
 import {
   attachFloorToPlace,
   initializePlayback,
@@ -438,6 +439,8 @@ export function createIngestion({ state, services, parts, source }) {
       try {
         const response = await source.requestSnapshot(feed.id, {
           signal: controller.signal,
+          // A national feed answers for the view, not the whole country.
+          bbox: feed.national ? viewBboxParam(state._viewBounds) : null,
         });
         if (!response.ok) {
           // The proxy says when it will next try the operator; carrying that

@@ -6,7 +6,6 @@ import {
   buildTransitSelectionCopy,
   createTransitSelectedOverlayEntry,
 } from './policy.js';
-import { getRegisteredTransitFeed } from '../../data/transitFeeds.js';
 import { isPointerFree } from '../../data/inputOwnership.js';
 
 /**
@@ -50,8 +49,7 @@ export function createSelection({ state, services, parts }) {
       return;
     state._selectedCardAt = now;
     const feed =
-      state._activeFeeds.get(entry.feedId) ||
-      getRegisteredTransitFeed(entry.feedId);
+      state._activeFeeds.get(entry.feedId) || parts.catalog.get(entry.feedId);
     if (!feed) return;
     const copy = buildTransitSelectionCopy(
       feed,
