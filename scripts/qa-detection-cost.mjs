@@ -44,8 +44,10 @@
  *   node scripts/qa-detection-cost.mjs --scenario diag --basemaps esri-imagery,photoreal
  *   node scripts/qa-detection-cost.mjs --uncapped     frames not tied to the display (display asleep)
  *
- * Variants: `off`, `on`, or `filter=<css>` (detection on, with the overlay's
- * CSS filter replaced, e.g. `filter=none` or `filter=contrast(1.1)`).
+ * Variants: `off`, `on`, `filter=<css>` (detection on, with the overlay's
+ * CSS filter replaced, e.g. `filter=none` or `filter=contrast(1.1)`), or
+ * `frozen` (detection on, its surface never redrawn: the most that skipping
+ * unchanged repaints could save).
  *
  * Output: qa-shots/detection-cost/<stamp>/results.json (gitignored).
  */
@@ -212,11 +214,30 @@ async function applyVariant(page, variant) {
       surface.style.filter = variant.startsWith('filter=')
         ? variant.slice('filter='.length)
         : surface.dataset.qaShippedFilter;
+      // Undo a previous `frozen` window.
+      const ctx = surface.getContext?.('2d');
+      if (ctx?.qaDrawing) {
+        Object.assign(ctx, ctx.qaDrawing);
+        delete ctx.qaDrawing;
+      }
     },
     variant,
     DENSITY,
   );
   await pause(AFTER_TOGGLE_MS);
+  if (variant === 'frozen')
+    // The ceiling for skipping unchanged repaints: detection keeps running,
+    // but its surface is never drawn again (no clear, no strokes, no upload),
+    // so the last frame stays on screen and is only composited.
+    await page.evaluate(() => {
+      const surface = [...document.querySelectorAll('canvas')].find(
+        (el) => el.style.mixBlendMode === 'screen',
+      );
+      const ctx = surface.getContext('2d');
+      const names = ['clearRect', 'fillRect', 'strokeRect', 'stroke', 'fill', 'fillText', 'strokeText', 'drawImage', 'putImageData'];
+      ctx.qaDrawing = Object.fromEntries(names.map((n) => [n, ctx[n]]));
+      for (const n of names) ctx[n] = () => {};
+    });
 }
 
 /** 3D tiles (or the globe) loaded, and still loaded a second later. */
@@ -498,6 +519,9 @@ const conditions = {
   acPower: onAcPower(),
   rafBefore: round(await blankPageRafRate(browser)),
 };
+// The first reading after launch is often low while Chrome warms up.
+if (conditions.rafBefore < (UNCAPPED ? 50 : 55))
+  conditions.rafBefore = round(await blankPageRafRate(browser));
 // A sleeping display throttles headless Chrome's frame clock to ~10 Hz, which
 // would measure the display, not the app (docs/PERF-TESTING.md).
 if (conditions.rafBefore < (UNCAPPED ? 50 : 55)) {
