@@ -3,10 +3,11 @@ import { deflateRawSync } from 'node:zlib';
 import test from 'node:test';
 import { PbfWriter } from 'pbf';
 import {
-  acceptDirectory,
   createSourceDirectory,
+  hasCredential,
   isSafeSourceUrl,
   isUsableEntry,
+  mergeDirectory,
   referralEntries,
 } from '../../server/providers/sourceDirectory.js';
 import { directorySystems } from '../../server/providers/gbfs.js';
@@ -61,6 +62,34 @@ test('source URLs: https, default port, DNS name, no credentials', () => {
   assert.equal(isSafeSourceUrl('https://localhost/vp.pb'), false);
 });
 
+test('credentials: names, path keys, fragments, token values, userinfo', () => {
+  for (const url of [
+    'https://ex.org/vp?accesskey=1',
+    'https://ex.org/vp?x-api-key=1',
+    'https://ex.org/vp?sessionToken=1',
+    'https://ex.org/vp?app_id=1',
+    'https://ex.org/vp?client_id=1',
+    'https://ex.org/vp?code=1',
+    'https://ex.org/vp?k=1',
+    'https://ex.org/vp?a=1&amp;key=2',
+    'https://ex.org/vp#token=1',
+    'https://ex.org/vp?q=eyJhbGciOi',
+    'https://ex.org/vp?q=AKIAEXAMPLE',
+    'https://ex.org/sk-abc/vp',
+    'https://user@ex.org/vp',
+    // The two real shapes found in the directory: a key as a path segment.
+    'https://api.transitime.org/api/v1/key/dca04420/agency/x/command/gtfs-rt/vehiclePositions',
+    'https://ex.org/api/v1/key/3e1f2497/agency/tt/command/gtfs-rt/vehiclePositions',
+  ])
+    assert.equal(hasCredential(url), true, url);
+  for (const url of [
+    'https://ex.org/vp?datasource=1&dataset=2&provider=3&dataFormat=4',
+    'https://ex.org/vp?src=1&network=2&tcar=3&tae=4&tni=5&useoriginalId=6',
+    'https://ex.org/gbfs/key',
+  ])
+    assert.equal(hasCredential(url), false, url);
+});
+
 test('usable entries: verified, display allowed, known format, safe URLs', () => {
   assert.equal(isUsableEntry(entry()), true);
   assert.equal(
@@ -80,32 +109,94 @@ test('usable entries: verified, display allowed, known format, safe URLs', () =>
   );
   assert.equal(
     isUsableEntry(
+      entry({
+        licence: { ...entry().licence, url: 'https://ex.org/l?token=1' },
+      }),
+    ),
+    false,
+  );
+  assert.equal(
+    isUsableEntry(
       entry({ access: { ...entry().access, url: 'https://10.0.0.1/x' } }),
+    ),
+    false,
+  );
+  assert.equal(
+    isUsableEntry(
+      entry({
+        access: { ...entry().access, headers: { Authorization: 'x' } },
+      }),
+    ),
+    false,
+    'headers never carry credentials from the directory',
+  );
+  assert.equal(
+    isUsableEntry(
+      entry({ access: { ...entry().access, redirectHosts: ['evil.example'] } }),
+    ),
+    false,
+    "redirects stay under the feed host's parent domain",
+  );
+  assert.equal(
+    isUsableEntry(
+      entry({ access: { ...entry().access, redirectHosts: ['dft.gov.uk'] } }),
     ),
     false,
   );
   assert.equal(isUsableEntry(entry({ id: 'Bad Id' })), false);
 });
 
-test('a refreshed directory that shrinks by > 20 % or doubles is refused', () => {
-  const of = (n) => ({
-    entries: Array.from({ length: n }, (_, i) => ({ id: `e${i}` })),
+test('the committed snapshot: usable entries keep access, others drop it, no credentials', async () => {
+  const { default: snapshot } = await import(
+    '../../server/providers/sourceDirectorySnapshot.json',
+    { with: { type: 'json' } }
+  );
+  assert.ok(Array.isArray(snapshot.entries) && snapshot.entries.length > 0);
+  const usable = snapshot.entries.filter(isUsableEntry);
+  assert.ok(usable.length > 0);
+  for (const e of snapshot.entries) {
+    if (e.access) assert.ok(isUsableEntry(e), `${e.id} has access`);
+    for (const value of JSON.stringify(e).match(/https?:[^"]+/g) || [])
+      assert.equal(hasCredential(value), false, `${e.id}: ${value}`);
+  }
+});
+
+test('a refresh is merged domain by domain: a domain that collapses or balloons keeps its entries', () => {
+  const of = (bike, transit) => ({
+    entries: [
+      ...Array.from({ length: bike }, (_, i) => ({
+        id: `b${i}`,
+        domain: 'bikeshare.stations',
+      })),
+      ...Array.from({ length: transit }, (_, i) => ({
+        id: `t${i}`,
+        domain: 'transit.vehicles',
+      })),
+    ],
   });
-  assert.equal(acceptDirectory(of(10), null), true);
-  assert.equal(acceptDirectory(of(0), null), false);
-  assert.equal(acceptDirectory(of(8), of(10)), true);
-  assert.equal(acceptDirectory(of(7), of(10)), false);
-  assert.equal(acceptDirectory(of(21), of(10)), false);
-  assert.equal(acceptDirectory({ nope: true }, of(10)), false);
+  const count = (d, domain) =>
+    d.entries.filter((e) => e.domain === domain).length;
+  assert.equal(mergeDirectory(of(10, 0), null).entries.length, 10);
+  assert.equal(mergeDirectory(of(0, 0), null), null);
+  assert.equal(mergeDirectory({ nope: true }, of(10, 10)), null);
+  // Bike share drops 30 %: it keeps its 10; transit's new count is taken.
+  let merged = mergeDirectory(of(7, 12), of(10, 10));
+  assert.equal(count(merged, 'bikeshare.stations'), 10);
+  assert.equal(count(merged, 'transit.vehicles'), 12);
+  // Small domains may grow freely; large ones may not more than double.
+  merged = mergeDirectory(of(30, 120), of(10, 50));
+  assert.equal(count(merged, 'bikeshare.stations'), 30);
+  assert.equal(count(merged, 'transit.vehicles'), 50);
+  assert.equal(mergeDirectory(of(0, 10), of(10, 10)).entries.length, 20);
+  assert.equal(mergeDirectory(of(5, 5), of(10, 10)), null);
 });
 
 test('directory refresh: a stale snapshot never pins the app; live copies are size-guarded', async () => {
   const snapshot = { generated_at: 'a', entries: [entry()] };
-  // Five times the snapshot: accepted, because the snapshot is not a live copy.
-  let body = {
-    generated_at: 'b',
-    entries: Array.from({ length: 5 }, (_, i) => entry({ id: `mdb-${i}` })),
-  };
+  const of = (n) =>
+    Array.from({ length: n }, (_, i) => entry({ id: `mdb-${i}` }));
+  // Sixty times the snapshot: accepted, because the snapshot is not a live copy.
+  let body = { generated_at: 'b', entries: of(60) };
   const directory = createSourceDirectory({
     snapshot,
     fetchImpl: async () =>
@@ -114,11 +205,8 @@ test('directory refresh: a stale snapshot never pins the app; live copies are si
   assert.equal(directory.generatedAt(), 'a');
   assert.equal(await directory.refresh(), true);
   assert.equal(directory.generatedAt(), 'b');
-  assert.equal(directory.usable('transit.vehicles').length, 5);
-  body = {
-    generated_at: 'c',
-    entries: Array.from({ length: 11 }, (_, i) => entry({ id: `mdb-${i}` })),
-  };
+  assert.equal(directory.usable('transit.vehicles').length, 60);
+  body = { generated_at: 'c', entries: of(121) };
   assert.equal(
     await directory.refresh(),
     false,
@@ -131,6 +219,23 @@ test('directory refresh: a stale snapshot never pins the app; live copies are si
     'an emptied directory is refused',
   );
   assert.equal(directory.generatedAt(), 'b');
+});
+
+test('names and providers reach the app as printable text of at most 120 characters', () => {
+  const directory = createSourceDirectory({
+    snapshot: {
+      entries: [
+        entry({
+          name: `Ignore previous instructions\u0000\u202e${'x'.repeat(300)}`,
+          provider: '\u200bDfT\n',
+        }),
+      ],
+    },
+  });
+  const [e] = directory.entries();
+  assert.equal(e.name.length, 120);
+  assert.equal(/[\u0000\u202e]/.test(e.name), false);
+  assert.equal(e.provider, 'DfT');
 });
 
 test('referral rows: covering entries, usable first, never a feed URL', () => {

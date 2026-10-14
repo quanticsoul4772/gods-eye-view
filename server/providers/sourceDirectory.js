@@ -21,9 +21,53 @@ export const SOURCE_DIRECTORY_URL =
 export const SOURCE_DIRECTORY_REFRESH_MS = 24 * 60 * 60 * 1000;
 const SNAPSHOT_URL = new URL('./sourceDirectorySnapshot.json', import.meta.url);
 const ID_PATTERN = /^[a-z0-9][a-z0-9-]{1,63}$/;
+// The credential rule the directory publishes under (gev-open-sources): a
+// parameter (query or fragment) named like a credential, a path segment after
+// a key-like segment (`/key/<key>/`), or a value that looks like a token.
 const CREDENTIAL_PARAM =
-  /^(api[_-]?key|apikey|key|token|access[_-]?token|auth|auth[_-]?token|secret|client[_-]?secret|subscription[_-]?key|password|pwd|sig|signature)$/i;
+  /key|token|secret|passw|pwd|signature|credential|appid|app_id|app_code|client_id|session|jwt|bearer|^(sig|auth|code|sid|pass|user|username|login|access|k|p)$/i;
+const CREDENTIAL_SEGMENT = /^(key|token|apikey|api_key|auth|secret)$/i;
+const TOKEN_VALUE = /^(eyJ|AKIA|sk-|ghp_|xox)/;
+const TEXT_MAX = 120;
 const FORMATS = new Set(['gtfs-rt.vehicle-positions', 'gbfs.station-status']);
+
+const decode = (value) => {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+};
+
+/**
+ * Whether a URL carries a credential: userinfo, a credential parameter, a key
+ * in its path, or a token-like value. Unparseable counts as carrying one.
+ */
+export function hasCredential(value) {
+  let url;
+  try {
+    url = new URL(String(value).replace(/&amp;/gi, '&'));
+  } catch {
+    return true;
+  }
+  if (url.username || url.password) return true;
+  const segments = url.pathname.split('/').filter(Boolean).map(decode);
+  if (
+    segments.some(
+      (segment, i) =>
+        TOKEN_VALUE.test(segment) ||
+        (CREDENTIAL_SEGMENT.test(segment) && i < segments.length - 1),
+    )
+  )
+    return true;
+  for (const params of [
+    url.searchParams,
+    new URLSearchParams(url.hash.slice(1)),
+  ])
+    for (const [name, param] of params)
+      if (CREDENTIAL_PARAM.test(name) || TOKEN_VALUE.test(param)) return true;
+  return false;
+}
 
 /** An https URL on the default port, a DNS name (no IP literal), no credentials. */
 export function isSafeSourceUrl(value) {
@@ -33,14 +77,24 @@ export function isSafeSourceUrl(value) {
   } catch {
     return false;
   }
-  if (url.protocol !== 'https:' || url.port || url.username || url.password)
-    return false;
+  if (url.protocol !== 'https:' || url.port) return false;
   const host = url.hostname;
   if (!host.includes('.') || /^[\d.]+$/.test(host) || host.startsWith('['))
     return false;
-  for (const key of url.searchParams.keys())
-    if (CREDENTIAL_PARAM.test(key)) return false;
-  return true;
+  return !hasCredential(value);
+}
+
+/**
+ * A redirect host the proxy may follow: a DNS name under the feed host's
+ * parent domain (data.example.org → download.example.org), never elsewhere.
+ */
+function isSiblingHost(host, feedUrl) {
+  if (!/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(host) || /^[\d.]+$/.test(host))
+    return false;
+  const labels = new URL(feedUrl).hostname.split('.').slice(1);
+  if (labels.length < 2) return false;
+  const parent = labels.join('.');
+  return host === parent || host.endsWith(`.${parent}`);
 }
 
 /** A licence link the UI may render: http(s) only (never `javascript:` etc.). */
@@ -54,31 +108,77 @@ const isWebLink = (value) => {
 
 /** Whether the app may fetch and display an entry. */
 export function isUsableEntry(entry) {
+  const headers = entry?.access?.headers;
   return (
     ID_PATTERN.test(entry?.id || '') &&
     entry.health?.status === 'verified' &&
     entry.licence?.display === true &&
     FORMATS.has(entry.format) &&
     isSafeSourceUrl(entry.access?.url) &&
+    // Credentials never come from the directory, headers included.
+    (headers === undefined || Object.keys(headers || {}).length === 0) &&
     Object.values(entry.access?.related || {}).every(isSafeSourceUrl) &&
-    (entry.access?.redirectHosts || []).every(
-      (host) =>
-        /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(host) && !/^[\d.]+$/.test(host),
+    (entry.access?.redirectHosts || []).every((host) =>
+      isSiblingHost(host, entry.access.url),
     ) &&
-    (entry.licence.url === null || isWebLink(entry.licence.url))
+    (entry.licence.url === null ||
+      (isWebLink(entry.licence.url) && !hasCredential(entry.licence.url)))
   );
 }
 
 /**
- * Accept a newly fetched directory only if it is well-formed and doesn't drop
- * more than 20 % or double the entry count of the one in use.
+ * Names and providers are third-party text that reaches credits, layer status
+ * and the assistant: printable characters only, at most 120 of them.
  */
-export function acceptDirectory(next, current) {
-  if (!next || !Array.isArray(next.entries)) return false;
-  if (!current?.entries?.length) return next.entries.length > 0;
-  const before = current.entries.length;
-  const after = next.entries.length;
-  return after >= before * 0.8 && after <= before * 2;
+const cleanText = (value) =>
+  String(value ?? '')
+    .replace(/[\p{Cc}\p{Cf}\u2028\u2029]/gu, '')
+    .trim()
+    .slice(0, TEXT_MAX);
+
+function cleanDirectory(directory) {
+  return {
+    ...directory,
+    entries: directory.entries.map((e) => ({
+      ...e,
+      name: cleanText(e?.name),
+      provider: cleanText(e?.provider),
+    })),
+  };
+}
+
+const countByDomain = (entries) => {
+  const counts = new Map();
+  for (const e of entries)
+    counts.set(e?.domain, (counts.get(e?.domain) || 0) + 1);
+  return counts;
+};
+
+/**
+ * Merge a newly fetched directory into the one in use, domain by domain: a
+ * domain whose entry count drops by more than 20 %, or more than doubles once
+ * it has 50 entries, keeps its current entries. Returns null when the new
+ * copy is malformed or empty, or when every domain in it was refused.
+ */
+export function mergeDirectory(next, current) {
+  if (!next || !Array.isArray(next.entries) || !next.entries.length)
+    return null;
+  if (!current?.entries?.length) return next;
+  const before = countByDomain(current.entries);
+  const after = countByDomain(next.entries);
+  const kept = new Set();
+  for (const [domain, was] of before) {
+    const now = after.get(domain) || 0;
+    if (now < was * 0.8 || (was >= 50 && now > was * 2)) kept.add(domain);
+  }
+  if ([...after.keys()].every((domain) => kept.has(domain))) return null;
+  return {
+    ...next,
+    entries: [
+      ...next.entries.filter((e) => !kept.has(e?.domain)),
+      ...current.entries.filter((e) => kept.has(e?.domain)),
+    ],
+  };
 }
 
 /**
@@ -127,7 +227,9 @@ export function createSourceDirectory({
   snapshot = readSnapshot(),
   refreshMs = SOURCE_DIRECTORY_REFRESH_MS,
 } = {}) {
-  let current = acceptDirectory(snapshot, null) ? snapshot : { entries: [] };
+  let current = mergeDirectory(snapshot, null)
+    ? cleanDirectory(snapshot)
+    : { entries: [] };
   // The size guard compares live copies only: a bundled snapshot can be far
   // older than the live directory, which grows, and must not pin the app to it.
   let live = false;
@@ -142,9 +244,9 @@ export function createSourceDirectory({
         signal: AbortSignal.timeout(60_000),
       });
       if (response.status === 304 || !response.ok) return false;
-      const next = await response.json();
-      if (!acceptDirectory(next, live ? current : null)) return false;
-      current = next;
+      const next = mergeDirectory(await response.json(), live ? current : null);
+      if (!next) return false;
+      current = cleanDirectory(next);
       live = true;
       usable = next.entries.filter(isUsableEntry);
       etag = response.headers.get('etag');
