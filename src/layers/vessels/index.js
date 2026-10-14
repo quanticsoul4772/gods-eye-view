@@ -31,8 +31,12 @@ export function createVesselLayer({ source, services, options = {} } = {}) {
     tracking: parts.tracking,
     selection: parts.selection,
     cards: parts.cards,
-    // The render hold follows whether there are ships to draw.
-    onReconciled: () => parts.lifecycle.syncRenderDemand(),
+    // The render hold follows whether there are ships to draw; new positions
+    // draw now rather than at the next paced step.
+    onReconciled: () => {
+      parts.lifecycle.syncRenderDemand();
+      parts.rendering.requestFrame('snapshot');
+    },
   });
 
   parts.ingestion = createIngestion({

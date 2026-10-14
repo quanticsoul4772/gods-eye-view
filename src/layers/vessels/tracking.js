@@ -73,6 +73,7 @@ export function createTracking({
       );
       if (visual.billboard) visual.billboard.position = visual.position;
     }
+    components.rendering.requestFrame('refloor');
   }
 
   /**
@@ -157,6 +158,7 @@ export function createTracking({
       );
     }
     if (state.trail) state.trail.setPositions(state.trailPositions);
+    components.rendering.requestFrame('trail');
   }
 
   /**
@@ -176,6 +178,7 @@ export function createTracking({
     if (state.trailPositions.length > TRAIL_MAX_POINTS)
       state.trailPositions.shift();
     state.trail.setPositions(state.trailPositions);
+    components.rendering.requestFrame('trail');
   }
 
   /**

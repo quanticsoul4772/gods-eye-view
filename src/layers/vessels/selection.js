@@ -189,6 +189,8 @@ export function createSelection({
     } else {
       components.tracking.startSelectedVesselTrail(record);
     }
+    // The highlighted icon and trail show on the click, not at the next step.
+    components.rendering.requestFrame('selection');
   }
 
   /**
@@ -237,6 +239,7 @@ export function createSelection({
     if (record && state.feed.enabled)
       components.rendering.updateVisibility(true);
     if (!preserveTrail) components.tracking.clearSelectedVesselTrail();
+    if (record) components.rendering.requestFrame('selection');
     try {
       clearSelectedEntityContextForLayer('ais-live-vessels', { evicted });
     } catch (error) {

@@ -202,6 +202,22 @@ export function createRendering({
     );
   }
 
+  /**
+   * The layer's render step: its passes are its only per-frame work, so the
+   * scene needs a frame only when one is due — 80 ms while a focus fade runs
+   * (a tracked target, or the fade back after it), 800 ms otherwise.
+   */
+  function renderStepMs() {
+    return focusPassIsNeeded(getFocusTarget(), state.activeFocusCount)
+      ? FOCUS_UPDATE_MS
+      : VISIBILITY_UPDATE_MS;
+  }
+
+  /** One frame for a discrete change (snapshot, selection, trail, refloor). */
+  function requestFrame(reason) {
+    services.render.governorRequestRender?.(`ais-vessels-${reason}`);
+  }
+
   function updateVisibility(force = false) {
     if (!state.feed.enabled) return;
     const now = focusNowMs(performance.now());
@@ -214,6 +230,16 @@ export function createRendering({
     if (!regularPass && !focusPass) return;
     if (regularPass) state.lastVisibilityUpdate = now;
     if (focusPass) state.lastFocusUpdate = now;
+    // The governor times paced frames from the frame's start; this pass reads
+    // its own clock later in the frame. Reporting the step keeps the next
+    // frame from landing a few ms short of the gate and being skipped.
+    services.render.markPacedStep?.('ais-vessels');
+    runPasses(regularPass, focusPass, now, focusTarget, force);
+    // A focus fade starting or settling changes the step.
+    components.lifecycle?.syncRenderDemand();
+  }
+
+  function runPasses(regularPass, focusPass, now, focusTarget, force) {
     if (!state.records.all.length) {
       // No records — flush any lingering card entries (vanished-feed case).
       if (regularPass) updateClusteredLabels([]);
@@ -505,6 +531,8 @@ export function createRendering({
     vesselCourseDeg,
     shipIcon,
     installRuntime,
+    renderStepMs,
+    requestFrame,
     updateVisibility,
     applyVesselFocusDeemphasis,
     makeOccluder,
