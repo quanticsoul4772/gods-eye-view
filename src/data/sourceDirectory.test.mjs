@@ -91,6 +91,16 @@ test('credentials: names, path keys, fragments, token values, userinfo', () => {
     'https://ex.org/feed;x=AIzaSyExample',
     'https://ex.org/vp?id=AIzaSyExample',
     'https://ex.org/vp?x=Bearer%20abc',
+    // Matched to the directory's rule: authorization, clientid, pw, keys/access-key
+    // segments, bare 32+ hex segments, token formats anywhere, #!/ fragments.
+    'https://ex.org/vp?Authorization=x',
+    'https://ex.org/vp?clientid=x',
+    'https://ex.org/vp?pw=x',
+    'https://ex.org/keys/abc/vp',
+    'https://ex.org/access-key/abc/vp',
+    'https://ex.org/gtfs/realtime/0123456789abcdef0123456789abcdef',
+    'https://ex.org/vp/AKIAABCDEFGHIJKLMNOP.json',
+    'https://ex.org/vp#!/token=1',
   ])
     assert.equal(hasCredential(url), true, url);
   for (const url of [
@@ -99,6 +109,7 @@ test('credentials: names, path keys, fragments, token values, userinfo', () => {
     'https://ex.org/gbfs/key',
     'https://ex.org/feed;v=2/vp',
     'https://ex.org/transitous-sk-zsr/vp',
+    'https://ex.org/vp/123e4567-e89b-12d3-a456-426614174000',
   ])
     assert.equal(hasCredential(url), false, url);
 });

@@ -27,10 +27,19 @@ const ID_PATTERN = /^[a-z0-9][a-z0-9-]{1,63}$/;
 // segment (`/key/<key>/`, `/api-key/<key>/`), or a value that looks like a
 // token (JWT, AWS, Google, OpenAI, GitHub, Slack, a Bearer header).
 const CREDENTIAL_PARAM =
-  /key|token|secret|passw|pwd|signature|credential|appid|app_id|app_code|client_id|session|jwt|bearer|^(sig|auth|code|sid|pass|user|username|login|access|k|p)$/i;
+  /key|token|secret|passw|pwd|signature|credential|session|jwt|bearer|authoriz|^(sig|auth|code|appid|app_id|app_code|client_id|clientid|sid|pass|pw|user|username|login|access|k|p)$/i;
 const CREDENTIAL_SEGMENT =
-  /^(key|token|secret|auth|api[-_]?key|access[-_]?token|auth[-_]?token)$/i;
+  /^(key|keys|token|secret|auth|api[-_]?key|access[-_]?key|access[-_]?token|auth[-_]?token)$/i;
 const TOKEN_VALUE = /^(eyJ|AKIA|AIza|sk-|ghp_|xox|[Bb]earer\s)/;
+/** A path segment that is only a long hex run: an embedded key. */
+const HEX_KEY = /^[0-9a-f]{32,}$/i;
+/**
+ * A known token format anywhere in the URL; each prefix must start a token
+ * (not after a letter, digit, `_` or `-`), so a slug like
+ * `transitous-sk-zsr-…` is not an `sk-` key.
+ */
+const SECRET_VALUE =
+  /(?<![\w-])(?:eyJ[\w-]{10,}\.[\w-]{10,}|AKIA[0-9A-Z]{16}|AIza[\w-]{30,}|sk-[\w-]{20,}|ghp_[A-Za-z0-9]{30,}|xox[abposr]-[\w-]{10,}|[Bb]earer\s+[\w.~+/=-]{8,})/;
 const SAFE_HEADERS = new Set(['et-client-name', 'user-agent', 'accept']);
 const TEXT_MAX = 120;
 const ATTRIBUTION_MAX = 300;
@@ -48,38 +57,45 @@ const decode = (value) => {
  * in its path, or a token-like value. Unparseable counts as carrying one.
  */
 export function hasCredential(value) {
+  const raw = String(value ?? '').replace(/&amp;/gi, '&');
+  if (SECRET_VALUE.test(raw)) return true;
   let url;
   try {
-    url = new URL(String(value).replace(/&amp;/gi, '&'));
+    url = new URL(raw);
   } catch {
     return true;
   }
   if (url.username || url.password) return true;
-  const raw = url.pathname.split('/').filter(Boolean);
-  const segments = raw.map((segment) => decode(segment.split(';')[0]));
+  // Parameters: query, fragment, and path parameters (`name;a=b;c=d`).
+  const params = [
+    ...url.searchParams,
+    ...new URLSearchParams(url.hash.replace(/^#!?\/?/, '')),
+  ];
+  const segments = [];
+  for (const part of url.pathname.split('/').map(decode)) {
+    const [name, ...pairs] = part.split(';');
+    segments.push(name);
+    for (const pair of pairs) {
+      const at = pair.indexOf('=');
+      params.push(
+        at < 0 ? [pair, ''] : [pair.slice(0, at), pair.slice(at + 1)],
+      );
+    }
+  }
   if (
-    segments.some(
-      (segment, i) =>
-        TOKEN_VALUE.test(segment) ||
-        (CREDENTIAL_SEGMENT.test(segment) && i < segments.length - 1),
+    params.some(
+      ([name, param]) => CREDENTIAL_PARAM.test(name) || TOKEN_VALUE.test(param),
     )
   )
     return true;
-  // Path parameters: `/feed;apikey=…`.
-  const pathParams = raw.flatMap((segment) =>
-    segment
-      .split(';')
-      .slice(1)
-      .map((pair) => pair.split('=').map(decode)),
+  // A bare run of 32+ hex characters as a path segment is how many APIs
+  // embed a key (/gtfs/realtime/<32 hex>); UUIDs, with dashes, don't match.
+  return segments.some(
+    (segment, i) =>
+      TOKEN_VALUE.test(segment) ||
+      HEX_KEY.test(segment) ||
+      (CREDENTIAL_SEGMENT.test(segment) && Boolean(segments[i + 1])),
   );
-  for (const params of [
-    url.searchParams,
-    new URLSearchParams(url.hash.slice(1)),
-    pathParams,
-  ])
-    for (const [name, param = ''] of params)
-      if (CREDENTIAL_PARAM.test(name) || TOKEN_VALUE.test(param)) return true;
-  return false;
 }
 
 /** An https URL on the default port, a DNS name (no IP literal), no credentials. */
