@@ -11,6 +11,7 @@ import {
   hasCredential,
   isSafeSourceUrl,
   isUsableEntry,
+  isPlausibleCoverage,
   mergeDirectory,
   referralEntries,
 } from '../../server/providers/sourceDirectory.js';
@@ -805,5 +806,33 @@ test('camera lists are referral only: never usable, named by find_data_sources',
   assert.match(
     answer.summary,
     /1 listed but not shown .*Digitraffic weather cameras \(traffic camera\)/,
+  );
+});
+
+test('a coverage box must be a plausible service area, or the feed is listed but not shown', () => {
+  // Cayenne's real entry: the east edge's sign is flipped (105° of longitude).
+  const cayenne = [4.822652, -52.365129, 4.9354710874831, 52.296379];
+  assert.equal(isPlausibleCoverage(cayenne), false);
+  assert.equal(
+    isUsableEntry(entry({ coverage: { bbox: cayenne, countries: ['FR'] } })),
+    false,
+  );
+  assert.equal(
+    isPlausibleCoverage([-56, -76, 18, -9]),
+    false,
+    'a stray far-away point',
+  );
+  assert.equal(isPlausibleCoverage([10, 0, 5, 1]), false, 'south above north');
+  assert.equal(isPlausibleCoverage([1, 2, 3]), false);
+  assert.equal(isPlausibleCoverage(undefined), true, 'no box: unchanged');
+  assert.equal(
+    isPlausibleCoverage([49.86, -6.42, 55.82, 1.77]),
+    true,
+    'BODS England',
+  );
+  assert.equal(
+    isPlausibleCoverage([26.2, 127.6, 45, 145.6]),
+    true,
+    'Japan-wide',
   );
 });

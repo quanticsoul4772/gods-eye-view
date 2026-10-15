@@ -187,6 +187,33 @@ function areSafeHeaders(headers) {
   );
 }
 
+/** Largest plausible service area (degrees); beyond it a coverage box is bad data. */
+const MAX_COVERAGE_LAT_DEG = 20;
+const MAX_COVERAGE_LON_DEG = 30;
+
+/**
+ * A coverage box the app can activate a feed by: absent, or
+ * [south, west, north, east] in range and no larger than a country. A box
+ * with a flipped sign or a stray far-away point (Cayenne's spanning 105° of
+ * longitude) would switch the feed on half a world away.
+ */
+export function isPlausibleCoverage(bbox) {
+  if (bbox === undefined || bbox === null) return true;
+  if (!Array.isArray(bbox) || bbox.length !== 4 || !bbox.every(Number.isFinite))
+    return false;
+  const [south, west, north, east] = bbox;
+  return (
+    south >= -90 &&
+    north <= 90 &&
+    west >= -180 &&
+    east <= 180 &&
+    south <= north &&
+    west <= east &&
+    north - south <= MAX_COVERAGE_LAT_DEG &&
+    east - west <= MAX_COVERAGE_LON_DEG
+  );
+}
+
 /** Whether the app may fetch and display an entry. */
 export function isUsableEntry(entry) {
   const headers = entry?.access?.headers;
@@ -195,6 +222,7 @@ export function isUsableEntry(entry) {
     entry.health?.status === 'verified' &&
     entry.licence?.display === true &&
     entry.format === formatOfDomain(entry.domain) &&
+    isPlausibleCoverage(entry.coverage?.bbox) &&
     isSafeSourceUrl(entry.access?.url) &&
     areSafeHeaders(headers) &&
     Object.values(entry.access?.related || {}).every(isSafeSourceUrl) &&
