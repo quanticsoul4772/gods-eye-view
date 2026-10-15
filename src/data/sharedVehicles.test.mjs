@@ -163,3 +163,15 @@ test('form factors, times and ttl', () => {
   assert.equal(vehicleFeedTtlS({ ttl: 30 }, 120), 120);
   assert.equal(vehicleFeedTtlS({}), 60);
 });
+
+test('the shared-vehicle domain is shown and has its find_data_sources topic', async () => {
+  const { SOURCE_TOPICS, domainOfTopic, formatOfDomain, nounOfDomain } =
+    await import('./sourceDomains.js');
+  assert.ok(SOURCE_TOPICS.includes('sharedmobility'));
+  assert.equal(domainOfTopic('sharedmobility'), 'sharedmobility.vehicles');
+  assert.equal(
+    formatOfDomain('sharedmobility.vehicles'),
+    'gbfs.vehicle-status',
+  );
+  assert.equal(nounOfDomain('sharedmobility.vehicles'), 'shared vehicle');
+});

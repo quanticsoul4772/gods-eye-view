@@ -24,6 +24,13 @@ export const SOURCE_DOMAINS = Object.freeze([
     noun: 'bike-share',
     shown: true,
   }),
+  Object.freeze({
+    domain: SHAREDMOBILITY_DOMAIN,
+    format: 'gbfs.vehicle-status',
+    topic: 'sharedmobility',
+    noun: 'shared vehicle',
+    shown: true,
+  }),
   // Referral only: the camera lists the directory carries duplicate the
   // built-in CCTV packs, so the app names them but never draws them.
   Object.freeze({
