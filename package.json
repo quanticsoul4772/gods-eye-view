@@ -51,6 +51,7 @@
     "qa:ask-claude": "node scripts/qa-ask-claude.mjs",
     "qa:ask-live": "node scripts/qa-ask-live.mjs",
     "qa:bench": "node scripts/qa-bench.mjs",
+    "qa:centre-detail": "node scripts/qa-centre-detail.mjs",
     "qa:detection-cost": "node scripts/qa-detection-cost.mjs",
     "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs",
     "qa:panel-resize": "node scripts/qa-panel-resize.mjs",

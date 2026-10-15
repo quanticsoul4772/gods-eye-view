@@ -8,6 +8,10 @@ import { registerDataCredits } from '../data/dataCredits.js';
 import { configureCreditKeyboardAccess } from '../creditKeyboard.js';
 import { MapStackController } from '../mapStackController.js';
 import { loadPhotorealisticTileset } from '../mapStartup.js';
+import {
+  emptyTileRefinementEnabled,
+  installEmptyTileRefinementFix,
+} from '../maps/tileRefinement.js';
 import { initLogoGaze } from '../logoGaze.js';
 import {
   uninstallRenderGovernor,
@@ -78,6 +82,11 @@ export async function createApplicationScene({
   signal.throwIfAborted();
   if (tileset) {
     viewer.scene.primitives.add(tileset);
+    const refineFix = emptyTileRefinementEnabled();
+    if (refineFix && !installEmptyTileRefinementFix(Cesium, tileset))
+      console.warn(
+        '[Init] Cesium3DTilesetTraversal.canTraverse is missing; the empty-tile refinement fix is off.',
+      );
     // NOTE: Cesium World Terrain intentionally disabled — conflicts with Google 3D Tiles at high zoom.
     // Google Photorealistic 3D Tiles provide their own terrain/elevation.
     viewer.scene.globe.show = false;
