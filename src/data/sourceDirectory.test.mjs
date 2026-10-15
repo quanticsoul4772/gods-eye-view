@@ -102,6 +102,12 @@ test('credentials: names, path keys, fragments, token values, userinfo', () => {
     'https://ex.org/gtfs/realtime/0123456789abcdef0123456789abcdef',
     'https://ex.org/vp/feed.AKIAABCDEFGHIJKLMNOP',
     'https://ex.org/vp#!/k=1',
+    // Re-tightened beyond the exact names: anywhere in a parameter name.
+    'https://ex.org/vp?myappid=x',
+    'https://ex.org/vp?client_id_type=x',
+    'https://ex.org/vp?openweather_appid=x',
+    // A key segment followed by an empty one still hides a key.
+    'https://ex.org/key//abc',
   ])
     assert.equal(hasCredential(url), true, url);
   for (const url of [
@@ -886,4 +892,23 @@ test('a token anywhere in a header value is refused, as the directory refuses it
     ),
     false,
   );
+});
+
+test('a box crossing the 180° line is a small area, matched on both sides of it', async () => {
+  const { bboxToCircle, lonInBox } = await import('./geoCircle.js');
+  const fiji = [-19.2, 177.0, -16.0, -178.5]; // west 177°E → east 178.5°W
+  assert.equal(isPlausibleCoverage(fiji, 'bikeshare.stations'), true);
+  const { center, loadRadiusKm } = bboxToCircle(fiji);
+  assert.ok(Math.abs(Math.abs(center.lon) - 179.25) < 0.01);
+  assert.ok(loadRadiusKm < 400);
+  assert.equal(lonInBox(178.4, 177.0, -178.5), true);
+  assert.equal(lonInBox(-179.9, 177.0, -178.5), true);
+  assert.equal(lonInBox(0, 177.0, -178.5), false);
+  const suva = entry({
+    id: 'gbfs-suva',
+    coverage: { bbox: fiji, countries: ['FJ'] },
+  });
+  assert.equal(referralEntries([suva], { lat: -18.1, lon: 178.4 }).length, 1);
+  assert.equal(referralEntries([suva], { lat: -18.1, lon: -179.9 }).length, 1);
+  assert.equal(referralEntries([suva], { lat: -18.1, lon: 3 }).length, 0);
 });

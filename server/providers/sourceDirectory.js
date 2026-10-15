@@ -16,6 +16,11 @@ import {
   resolveRadioProxyAddresses,
 } from './radio/transport.js';
 import { formatOfDomain } from '../../src/data/sourceDomains.js';
+import {
+  bboxLonSpan,
+  lonInBox,
+  lonRangesOverlap,
+} from '../../src/data/geoCircle.js';
 
 export const SOURCE_DIRECTORY_URL =
   'https://quanticsoul4772.github.io/gev-open-sources/v1/index.json';
@@ -27,7 +32,7 @@ const ID_PATTERN = /^[a-z0-9][a-z0-9-]{1,63}$/;
 // segment (`/key/<key>/`, `/api-key/<key>/`), or a value that looks like a
 // token (JWT, AWS, Google, OpenAI, GitHub, Slack, a Bearer header).
 const CREDENTIAL_PARAM =
-  /key|token|secret|passw|pwd|signature|credential|session|jwt|bearer|authoriz|^(sig|auth|code|appid|app_id|app_code|client_id|clientid|sid|pass|pw|user|username|login|access|k|p)$/i;
+  /key|token|secret|passw|pwd|signature|credential|session|jwt|bearer|authoriz|appid|app_id|app_code|client_id|clientid|^(sig|auth|code|sid|pass|pw|user|username|login|access|k|p)$/i;
 const CREDENTIAL_SEGMENT =
   /^(key|keys|token|secret|auth|api[-_]?key|access[-_]?key|access[-_]?token|auth[-_]?token)$/i;
 const TOKEN_VALUE = /^(eyJ|AKIA|AIza|sk-|ghp_|xox|[Bb]earer\s)/;
@@ -94,7 +99,7 @@ export function hasCredential(value) {
     (segment, i) =>
       TOKEN_VALUE.test(segment) ||
       HEX_KEY.test(segment) ||
-      (CREDENTIAL_SEGMENT.test(segment) && Boolean(segments[i + 1])),
+      (CREDENTIAL_SEGMENT.test(segment) && segments.slice(i + 1).some(Boolean)),
   );
 }
 
@@ -219,9 +224,8 @@ export function isPlausibleCoverage(bbox, domain) {
     west >= -180 &&
     east <= 180 &&
     south <= north &&
-    west <= east &&
     north - south <= maxLat &&
-    east - west <= maxLon
+    bboxLonSpan(west, east) <= maxLon
   );
 }
 
@@ -538,15 +542,14 @@ function referralRows(entries, { lat, lon, area, domain, usable } = {}) {
         Array.isArray(b) &&
         b[0] <= area.north &&
         b[2] >= area.south &&
-        b[1] <= area.east &&
-        b[3] >= area.west
+        lonRangesOverlap(b[1], b[3], area.west, area.east)
       )
     )
       continue;
     if (
       !area &&
       hasPoint &&
-      !(b && lat >= b[0] && lat <= b[2] && lon >= b[1] && lon <= b[3])
+      !(b && lat >= b[0] && lat <= b[2] && lonInBox(lon, b[1], b[3]))
     )
       continue;
     const licenceUrl = isWebLink(e.licence?.url) ? String(e.licence.url) : '';

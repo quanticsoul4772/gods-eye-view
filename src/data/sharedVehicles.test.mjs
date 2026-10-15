@@ -198,3 +198,22 @@ test('vehicles leave in position order, never the feed order', () => {
     ],
   );
 });
+
+test('a system whose area crosses the 180° line keeps vehicles on both sides', () => {
+  const { vehicles } = parseVehicleFeed(
+    {
+      data: {
+        bikes: [
+          { lat: -18.1, lon: 178.4 },
+          { lat: -18.1, lon: -179.9 },
+          { lat: -18.1, lon: 10 },
+        ],
+      },
+    },
+    { bbox: [-19.2, 177.0, -16.0, -178.5] },
+  );
+  assert.deepEqual(
+    vehicles.map((v) => v.lon).sort((a, b) => a - b),
+    [-179.9, 178.4],
+  );
+});

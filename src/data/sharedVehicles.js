@@ -9,6 +9,7 @@
  * positions are trimmed to about 11 m and times to the minute.
  */
 import { normalizeGbfsBool } from '../sources/gbfsStations.js';
+import { lonInBox } from './geoCircle.js';
 
 /** GBFS form factors (v3); anything else is `other`. */
 export const FORM_FACTORS = Object.freeze([
@@ -132,7 +133,7 @@ export function parseVehicleFeed(
     if (lat === 0 && lon === 0) continue;
     if (
       box &&
-      !(lat >= box[0] && lat <= box[2] && lon >= box[1] && lon <= box[3])
+      !(lat >= box[0] && lat <= box[2] && lonInBox(lon, box[1], box[3]))
     )
       continue;
     const type =
