@@ -726,6 +726,7 @@ export function flyToPresetLocation(viewer, locationId, options = {}) {
     city.viewBounds
   ) {
     return flyToViewportBounds(viewer, city.viewBounds, {
+      heading: options.heading,
       duration: options.duration,
       onStart: options.onStart,
       onComplete: options.onComplete,
@@ -876,7 +877,9 @@ export async function searchAndFlyTo(viewer, query, options = {}) {
       flyToLandmark(viewer, swath.centerLat, swath.centerLng, {
         range: swath.rangeM,
         pitch: swath.pitchDeg,
-        heading: swath.headingDeg,
+        heading: Number.isFinite(options.heading)
+          ? options.heading
+          : swath.headingDeg,
         buildingHeight: 0,
         ground: options.ground || null,
         duration,
@@ -910,6 +913,7 @@ export async function searchAndFlyTo(viewer, query, options = {}) {
       ? placeFramingViewport(viewport, lat, lng, types)
       : viewport;
     const flight = flyToViewportBounds(viewer, framedViewport, {
+      heading: options.heading,
       duration,
       navigationMode,
       beforeFly: mayFly,
@@ -958,7 +962,7 @@ export async function searchAndFlyTo(viewer, query, options = {}) {
   const flight = flyToLandmark(viewer, flyLat, flyLon, {
     range,
     pitch: buildingPitch(buildingBounds),
-    heading: 30,
+    heading: Number.isFinite(options.heading) ? options.heading : 30,
     buildingHeight: 30,
     buildingBounds: isUnavailableCapability(buildingBounds)
       ? null
@@ -1281,6 +1285,7 @@ function flyToViewportBounds(viewer, viewport, options = {}) {
     onComplete = null,
     onCancel = null,
     navigationMode = 'overview',
+    heading = null,
   } = options;
   const southwest = viewport?.southwest;
   const northeast = viewport?.northeast;
@@ -1325,6 +1330,16 @@ function flyToViewportBounds(viewer, viewport, options = {}) {
   }
   viewer.camera.flyTo({
     destination: rectangle,
+    // A requested facing turns the straight-down overview; otherwise north up.
+    ...(Number.isFinite(heading)
+      ? {
+          orientation: {
+            heading: Cesium.Math.toRadians(heading),
+            pitch: -Cesium.Math.PI_OVER_TWO,
+            roll: 0,
+          },
+        }
+      : {}),
     duration,
     endTransform: Cesium.Matrix4.IDENTITY,
     complete: () => {

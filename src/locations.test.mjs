@@ -660,3 +660,40 @@ test('a precise search without an outline frames against the resolved ground, no
   const eye = target.height + flight.offset.range * Math.sin(-flight.offset.pitch);
   assert.ok(eye > 171 + 100, `eye ${eye} must clear the 171 m surface`);
 });
+
+test('a search flight faces a requested heading; without one it keeps its default', async () => {
+  const precise = {
+    query: 'Ferry Building',
+    result: {
+      formatted_address: 'Ferry Building, San Francisco, CA',
+      types: ['point_of_interest', 'establishment'],
+      geometry: { location: { lat: 37.7955, lng: -122.3937 } },
+    },
+  };
+  const offline = {
+    features: {
+      getFocusFootprints: async () => ({
+        unavailable: true,
+        retryable: false,
+        code: 'OVERPASS_NOT_CONFIGURED',
+      }),
+    },
+    recoverNearView: async () => null,
+  };
+  const degrees = (radians) => Math.round(Cesium.Math.toDegrees(radians));
+  let viewer = stubViewer();
+  await runSearch(viewer, { ...offline, heading: 270 }, precise);
+  assert.equal(degrees(viewer.flights[0].offset.heading), 270, 'looking west');
+  viewer = stubViewer();
+  await runSearch(viewer, offline, precise);
+  assert.equal(degrees(viewer.flights[0].offset.heading), 30);
+
+  // A city frames its box straight down: the heading turns it, else north up.
+  viewer = stubViewer();
+  await runSearch(viewer, { recoverNearView: async () => null, heading: 90 });
+  assert.equal(degrees(viewer.flights[0].orientation.heading), 90);
+  assert.equal(viewer.flights[0].orientation.pitch, -Cesium.Math.PI_OVER_TWO);
+  viewer = stubViewer();
+  await runSearch(viewer, { recoverNearView: async () => null });
+  assert.equal(viewer.flights[0].orientation, undefined);
+});

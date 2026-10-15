@@ -27,6 +27,9 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
   const layout = tools.find((tool) => tool.name === 'set_hud').parameters
     .properties.layout;
   layout.enum = layout.enum.filter((name) => name !== 'professional');
+  // So is fly_to_location's facing direction.
+  delete tools.find((tool) => tool.name === 'fly_to_location').parameters
+    .properties.headingDeg;
   const digest = createHash('sha256')
     .update(JSON.stringify(stable(tools)))
     .digest('hex');
@@ -142,6 +145,8 @@ test('all legacy action arguments are byte-identical after removing the delibera
   // Cyber adds one HUD layout.
   const hud = property('set_hud').layout;
   hud.enum = hud.enum.filter((layout) => layout !== 'cyber');
+  // fly_to_location gains the direction the camera faces on arrival.
+  delete property('fly_to_location').headingDeg;
   // Derived by applying the same removals to the 4b56d0e9 actionSchemas.
   assert.equal(
     createHash('sha256').update(JSON.stringify(legacy)).digest('hex'),

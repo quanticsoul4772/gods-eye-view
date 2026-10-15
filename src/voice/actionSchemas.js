@@ -53,6 +53,11 @@ const schemas = [
           minimum: 100,
           maximum: 20000000,
         },
+        headingDeg: {
+          type: 'number',
+          minimum: 0,
+          maximum: 360,
+        },
         waitForArrival: {
           type: 'boolean',
         },

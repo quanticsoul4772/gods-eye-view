@@ -3155,6 +3155,14 @@ async function flyToRequestedLocation(
   const rangeM = Number.isFinite(requestedRangeM)
     ? clampNumber(requestedRangeM, 100, 20000000, 900)
     : null;
+  const requestedHeading = Number(args.headingDeg);
+  // The direction the camera faces on arrival; absent keeps each place's own
+  // framing (a preset's curated heading, a search's default).
+  const headingDeg = Number.isFinite(requestedHeading)
+    ? ((requestedHeading % 360) + 360) % 360
+    : null;
+  const headingOption = headingDeg === null ? {} : { heading: headingDeg };
+  const headingResult = headingDeg === null ? {} : { headingDeg };
   const locationId = normalizeLocationId(args.locationId || args.query);
   const immediate = (navigate) =>
     typeof runImmediate === 'function' ? runImmediate(navigate) : navigate();
@@ -3197,6 +3205,7 @@ async function flyToRequestedLocation(
         duration: 2.2,
         onStart: immediateOnStart,
         ...arrivalHooks,
+        ...headingOption,
       }),
     );
     if (result === false)
@@ -3205,6 +3214,7 @@ async function flyToRequestedLocation(
       ok: Boolean(result),
       action: 'fly_to_location',
       locationId,
+      ...headingResult,
       label: CITY_POIS[locationId]?.name || locationId,
       rangeM: result?.range ? Math.round(result.range) : rangeM || null,
       navigationMode: rangeM
@@ -3223,7 +3233,7 @@ async function flyToRequestedLocation(
       flyToLandmark(viewer, latitude, longitude, {
         range: rangeM || 250,
         pitch: -35,
-        heading: 0,
+        heading: headingDeg ?? 0,
         buildingHeight: 0,
         duration: 2.2,
         onStart: immediateOnStart,
@@ -3239,6 +3249,7 @@ async function flyToRequestedLocation(
       longitude,
       label: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
       rangeM: Math.round(rangeM || 250),
+      ...headingResult,
       navigationMode: rangeM ? 'explicit-range' : 'close-coordinate',
     };
     return afterArrival(response, response.label);
@@ -3257,6 +3268,7 @@ async function flyToRequestedLocation(
           onStart: immediateOnStart,
           ...arrivalHooks,
           ...(rangeM ? { range: rangeM } : {}),
+          ...headingOption,
         }),
       );
       const poi = CITY_POIS[poiMatch.cityId]?.pois?.[poiMatch.index];
@@ -3266,6 +3278,7 @@ async function flyToRequestedLocation(
         action: 'fly_to_location',
         query,
         label: poi?.name || query,
+        ...headingResult,
         navigationMode: rangeM ? 'preset-poi-range' : 'preset-poi',
         rangeM: result?.range ? Math.round(result.range) : rangeM || null,
       };
@@ -3285,6 +3298,7 @@ async function flyToRequestedLocation(
       // 'overview' frames the geocode viewport even for precise-place results —
       // previously dropped here, so "overview of Zilker Park" flew to a rooftop.
       viewMode: args.viewMode || null,
+      ...headingOption,
       duration: 2.2,
       ...arrivalHooks,
       beforeFly: managedDeferred ? () => reassertDeferred(generation) : null,
@@ -3296,6 +3310,7 @@ async function flyToRequestedLocation(
       action: 'fly_to_location',
       query,
       label: destination?.label || query,
+      ...headingResult,
       navigationMode: destination?.navigationMode || null,
       rangeM: destination?.rangeM || rangeM || null,
     };

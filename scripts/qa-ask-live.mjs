@@ -173,6 +173,8 @@ async function appState() {
         lat: (c.latitude * 180) / Math.PI,
         lon: (c.longitude * 180) / Math.PI,
         heightM: Math.round(c.height),
+        headingDeg:
+          Math.round((gev.viewer.camera.heading * 180) / Math.PI) % 360,
       },
       layersOn: gev.dataManager
         .getAll()
@@ -284,6 +286,16 @@ function runChecks(checks = {}, calls, state, rounds) {
     failures.push(
       `HUD layout ${state.hudLayout}, expected ${checks.hudLayout}`,
     );
+  if (checks.facing) {
+    const { headingDeg, toleranceDeg } = checks.facing;
+    const off = Math.abs(
+      ((state.camera.headingDeg - headingDeg + 540) % 360) - 180,
+    );
+    if (off > toleranceDeg)
+      failures.push(
+        `camera faces ${state.camera.headingDeg}°, expected ${headingDeg}° ± ${toleranceDeg}`,
+      );
+  }
   if (checks.centreSharp) {
     const sharp = state.centreSharp;
     if (sharp?.error) failures.push(`centre sharpness: ${sharp.error}`);

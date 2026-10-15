@@ -666,6 +666,8 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   assert.deepEqual(hudLayout.enum, ['professional', 'tactical', 'operator', 'minimal', 'cyber']);
   // Cyber and Professional deliberately add layouts; first-run missions still change no tools.
   hudLayout.enum = hudLayout.enum.filter((layout) => !['cyber', 'professional'].includes(layout));
+  // fly_to_location's facing direction is a deliberate addition too.
+  delete legacyTools.find((tool) => tool.name === 'fly_to_location').parameters.properties.headingDeg;
   const block = JSON.stringify(legacyTools);
   // Re-derived for the voice layer manifest (generated layer enums, alias and
   // field hints), point-and-ask's pointer/referent arguments and the prompt

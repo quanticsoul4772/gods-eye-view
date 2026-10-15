@@ -4073,3 +4073,55 @@ test('a layer change that switches others off says which', async () => {
   assert.equal(result.ok, true, result.error);
   assert.deepEqual(result.alsoTurnedOff, ['Live Flights']);
 });
+
+test('fly_to_location faces the requested compass heading on every flight path', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const { viewer, styleManager } = createVoiceNavigationHarness();
+  const headings = [];
+  viewer.camera.flyToBoundingSphere = (_sphere, options) => {
+    headings.push(Math.round(Cesium.Math.toDegrees(options.offset.heading)));
+  };
+  // A city without a range frames its overview box, straight down.
+  viewer.camera.flyTo = (options) => {
+    headings.push(
+      options.orientation
+        ? Math.round(Cesium.Math.toDegrees(options.orientation.heading))
+        : 'north-up',
+    );
+  };
+  let searchOptions = null;
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager,
+    dataManager: { layers: new Map(), getAll: () => [] },
+    searchNavigation: async (_viewer, _query, options) => {
+      searchOptions = options;
+      return { label: 'Ferry Building', navigationMode: 'precise-place', rangeM: 1000 };
+    },
+  });
+  // "From the south" faces north: the preset's own curated heading gives way.
+  const capitol = await runner('fly_to_location', {
+    query: 'Texas State Capitol',
+    headingDeg: 0,
+  });
+  assert.equal(capitol.headingDeg, 0);
+  await runner('fly_to_location', { locationId: 'austin', headingDeg: 90 });
+  await runner('fly_to_location', {
+    latitude: 30.27,
+    longitude: -97.74,
+    headingDeg: -90,
+  });
+  assert.deepEqual(headings, [0, 90, 270], 'negative headings wrap');
+  // A searched place hands the heading to the search flight.
+  const ferry = await runner('fly_to_location', {
+    query: 'Ferry Building, San Francisco',
+    headingDeg: 270,
+  });
+  assert.equal(searchOptions.heading, 270);
+  assert.equal(ferry.headingDeg, 270);
+  // Omitted, each place keeps its own framing and the result says nothing.
+  headings.length = 0;
+  const plain = await runner('fly_to_location', { query: 'Texas State Capitol' });
+  assert.equal(plain.headingDeg, undefined);
+  assert.deepEqual(headings, [180], 'the Capitol preset faces south');
+});

@@ -13,6 +13,8 @@
  *     layersOn     layer ids enabled at the end
  *     layersOff    layer ids that must NOT be enabled at the end
  *     hudLayout    the HUD layout at the end
+ *     facing       { headingDeg, toleranceDeg } compass direction the camera
+ *                  faces at the end (0 north, 90 east)
  *     centreSharp  seconds within which no drawn Google 3D tile over the
  *                  central 30 % of the view is still coarser than Cesium's
  *                  target (the stuck blurry centre; needs the Google key)
@@ -42,6 +44,8 @@ export const PROMPTS = Object.freeze([
       'Fly to the Texas State Capitol in Austin and give me a low oblique view from the south.',
     checks: {
       cameraNear: { lat: 30.2747, lon: -97.7404, km: 5 },
+      // From the south = facing north.
+      facing: { headingDeg: 0, toleranceDeg: 30 },
       centreSharp: 20,
     },
   },
@@ -51,6 +55,7 @@ export const PROMPTS = Object.freeze([
       'Show me the Ferry Building in San Francisco from about a kilometre up, looking west.',
     checks: {
       cameraNear: { lat: 37.7955, lon: -122.3937, km: 5 },
+      facing: { headingDeg: 270, toleranceDeg: 30 },
       centreSharp: 20,
     },
   },

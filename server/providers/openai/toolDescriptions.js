@@ -34,6 +34,11 @@ export const ACTION_DESCRIPTIONS = {
             'Optional camera range from the target in meters. Omit it for automatic whole-country/whole-city or close-landmark framing; provide it only when the user explicitly requests a numeric height or distance.',
           $position: 3,
         },
+        headingDeg: {
+          description:
+            'Optional compass direction the camera FACES on arrival, degrees clockwise from north: 0 north, 90 east, 180 south, 270 west. A view "from the south" faces north (0); "looking west" is 270. Omit to keep the place\'s default framing.',
+          $position: 3,
+        },
         waitForArrival: {
           description:
             'Set true when a later tool depends on the destination viewport. The result then waits for the camera flight and returns arrived=true; cancellation returns ok=false.',
