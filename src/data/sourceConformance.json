@@ -1,0 +1,80 @@
+{
+  "version": 1,
+  "source": "seed from gods-eye-view tests until gev-open-sources publishes conformance/cases.json (refresh: npm run sources:cases)",
+  "credentials": {
+    "flag": [
+      "https://ex.org/vp?accesskey=1",
+      "https://ex.org/vp?x-api-key=1",
+      "https://ex.org/vp?sessionToken=1",
+      "https://ex.org/vp?app_id=1",
+      "https://ex.org/vp?client_id=1",
+      "https://ex.org/vp?code=1",
+      "https://ex.org/vp?k=1",
+      "https://ex.org/vp?a=1&amp;key=2",
+      "https://ex.org/vp#token=1",
+      "https://ex.org/vp#!/k=1",
+      "https://ex.org/vp?q=eyJhbGciOi",
+      "https://ex.org/sk-abc/vp",
+      "https://user@ex.org/vp",
+      "https://ex.org/api/v1/key/abc123/agency/x/vehiclePositions",
+      "https://ex.org/api-key/abc123/vp",
+      "https://ex.org/access_token/abc/vp",
+      "https://ex.org/keys/abc/vp",
+      "https://ex.org/access-key/abc/vp",
+      "https://ex.org/key//abc",
+      "https://ex.org/feed;apikey=abc",
+      "https://ex.org/feed;x=AIzaSyA",
+      "https://ex.org/vp?x=Bearer%20abc",
+      "https://ex.org/vp?Authorization=x",
+      "https://ex.org/vp?clientid=x",
+      "https://ex.org/vp?pw=x",
+      "https://ex.org/vp?myappid=x",
+      "https://ex.org/vp?client_id_type=x",
+      "https://ex.org/vp?openweather_appid=x",
+      "https://ex.org/gtfs/realtime/0123456789abcdef0123456789abcdef"
+    ],
+    "pass": [
+      "https://ex.org/vp?datasource=1&dataset=2&provider=3&dataFormat=4",
+      "https://ex.org/vp?src=1&network=2&tcar=3&tae=4&tni=5&useoriginalId=6",
+      "https://ex.org/gbfs/key",
+      "https://ex.org/feed;v=2/vp",
+      "https://ex.org/transitous-sk-zsr/vp",
+      "https://ex.org/vp/123e4567-e89b-12d3-a456-426614174000"
+    ]
+  },
+  "headers": {
+    "flag": [
+      { "Authorization": "x" },
+      { "x-api-key": "x" },
+      { "Accept": "eyJhbGciOi" },
+      { "User-Agent": "x Bearer abcdefgh1234" },
+      { "Accept": "a\nb" }
+    ],
+    "pass": [
+      { "ET-Client-Name": "gods-eye-view-transit" },
+      { "Accept": "application/json" },
+      {}
+    ]
+  },
+  "coverage": {
+    "limits": {
+      "regional": [20, 30],
+      "national": [60, 90],
+      "global": null
+    },
+    "pass": [
+      { "bbox": [48.8, 2.2, 48.95, 2.45], "class": "regional" },
+      { "bbox": [49.86, -6.42, 55.82, 1.77], "class": "regional" },
+      { "bbox": [25.8, -124.2, 49.0, -71.9], "class": "national" },
+      { "bbox": [-90, -180, 90, 180], "class": "global" }
+    ],
+    "fail": [
+      { "bbox": [4.82, -52.37, 4.94, 52.3], "class": "regional" },
+      { "bbox": [4.82, -52.37, 4.94, 52.3], "class": "national" },
+      { "bbox": [47.26, 4.51, 78.25, 31.11], "class": "regional" },
+      { "bbox": [10, 0, 5, 1], "class": "regional" },
+      { "bbox": [0, 10, 1, 5], "class": "regional" },
+      { "bbox": [0, 10, 1, 5], "class": "national" }
+    ]
+  }
+}

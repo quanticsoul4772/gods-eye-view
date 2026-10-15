@@ -45,6 +45,8 @@
     "preview": "vite preview",
     "test": "node scripts/run-unit-tests.mjs",
     "sources:snapshot": "node scripts/sources-snapshot.mjs",
+    "sources:cases": "node scripts/sources-cases.mjs",
+    "sources:smoke": "node scripts/sources-smoke.mjs",
     "test:track": "node scripts/track-regression.mjs",
     "qa:ask-claude": "node scripts/qa-ask-claude.mjs",
     "qa:ask-live": "node scripts/qa-ask-live.mjs",

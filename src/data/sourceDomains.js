@@ -1,13 +1,28 @@
 /**
  * The source-directory domains the app knows, in one place: the decoder
  * format each needs, whether the app shows it or only refers to it, the
- * `find_data_sources` topic that asks for it, and the noun an answer names it
- * by. Adding a domain starts here.
+ * `find_data_sources` topic that asks for it, the noun an answer names it by,
+ * and the coverage class that bounds how large its area may be. Adding a
+ * domain starts here. App-owned on purpose: the directory's own coverage
+ * classes never widen these limits.
  */
 export const TRANSIT_DOMAIN = 'transit.vehicles';
 export const BIKESHARE_DOMAIN = 'bikeshare.stations';
 export const CAMERAS_DOMAIN = 'cameras.stills';
 export const SHAREDMOBILITY_DOMAIN = 'sharedmobility.vehicles';
+export const EARTHQUAKES_DOMAIN = 'hazards.earthquakes';
+export const DISASTERS_DOMAIN = 'hazards.disasters';
+
+/**
+ * Largest plausible area per coverage class, [latitude, longitude] in degrees;
+ * null = the whole globe. Shared with the directory through the conformance
+ * cases (`src/data/sourceConformance.json`).
+ */
+export const COVERAGE_LIMITS = Object.freeze({
+  regional: Object.freeze([20, 30]),
+  national: Object.freeze([60, 90]),
+  global: null,
+});
 
 export const SOURCE_DOMAINS = Object.freeze([
   Object.freeze({
@@ -16,6 +31,8 @@ export const SOURCE_DOMAINS = Object.freeze([
     topic: 'transit',
     noun: 'transit',
     shown: true,
+    // National feeds are answered per view (Amtrak spans about 52°).
+    coverage: 'national',
   }),
   Object.freeze({
     domain: BIKESHARE_DOMAIN,
@@ -23,6 +40,7 @@ export const SOURCE_DOMAINS = Object.freeze([
     topic: 'bikeshare',
     noun: 'bike-share',
     shown: true,
+    coverage: 'regional',
   }),
   Object.freeze({
     domain: SHAREDMOBILITY_DOMAIN,
@@ -30,6 +48,7 @@ export const SOURCE_DOMAINS = Object.freeze([
     topic: 'sharedmobility',
     noun: 'shared vehicle',
     shown: true,
+    coverage: 'regional',
   }),
   // Referral only: the camera lists the directory carries duplicate the
   // built-in CCTV packs, so the app names them but never draws them.
@@ -39,25 +58,66 @@ export const SOURCE_DOMAINS = Object.freeze([
     topic: 'cameras',
     noun: 'traffic camera',
     shown: false,
+    coverage: 'regional',
+    note: 'duplicates the built-in CCTV packs',
+  }),
+  // Referral only, worldwide: named when asked for hazards, never for a place.
+  Object.freeze({
+    domain: EARTHQUAKES_DOMAIN,
+    format: 'geojson.earthquakes',
+    topic: 'hazards',
+    noun: 'earthquake feed',
+    shown: false,
+    coverage: 'global',
+    note: "shown by the app's earthquake layer",
+  }),
+  Object.freeze({
+    domain: DISASTERS_DOMAIN,
+    format: 'geojson.gdacs-events',
+    topic: 'hazards',
+    noun: 'disaster alert',
+    shown: false,
+    coverage: 'global',
+    note: "listed for reference; the app doesn't draw it",
   }),
 ]);
 
+const rowOf = (domain) => SOURCE_DOMAINS.find((d) => d.domain === domain);
+
 /** The decoder format the app shows a domain with, or undefined (not shown). */
 export const formatOfDomain = (domain) => {
-  const known = SOURCE_DOMAINS.find((d) => d.domain === domain);
+  const known = rowOf(domain);
   return known?.shown ? known.format : undefined;
 };
 
-/** The domain a `find_data_sources` topic asks for, or undefined (any). */
-export const domainOfTopic = (topic) =>
-  SOURCE_DOMAINS.find((d) => d.topic === topic)?.domain;
+/** The domains a `find_data_sources` topic asks for ([] = any). */
+export const domainsOfTopic = (topic) =>
+  SOURCE_DOMAINS.filter((d) => d.topic === topic).map((d) => d.domain);
+
+/** The domain a one-domain topic asks for, or undefined (any, or several). */
+export const domainOfTopic = (topic) => {
+  const domains = domainsOfTopic(topic);
+  return domains.length === 1 ? domains[0] : undefined;
+};
 
 /** The word an answer names a domain by. */
-export const nounOfDomain = (domain) =>
-  SOURCE_DOMAINS.find((d) => d.domain === domain)?.noun || domain;
+export const nounOfDomain = (domain) => rowOf(domain)?.noun || domain;
 
-/** `find_data_sources` topics. */
+/** Why a referral-only domain is listed but not drawn, or null. */
+export const noteOfDomain = (domain) => rowOf(domain)?.note || null;
+
+/** A domain's coverage class (regional when the app doesn't know it). */
+export const coverageClassOfDomain = (domain) =>
+  rowOf(domain)?.coverage || 'regional';
+
+/** Worldwide and referral-only: left out of place answers unless asked for. */
+export const isWorldwideReference = (domain) => {
+  const known = rowOf(domain);
+  return Boolean(known && !known.shown && known.coverage === 'global');
+};
+
+/** `find_data_sources` topics, each once. */
 export const SOURCE_TOPICS = Object.freeze([
-  ...SOURCE_DOMAINS.map((d) => d.topic),
+  ...new Set(SOURCE_DOMAINS.map((d) => d.topic)),
   'any',
 ]);

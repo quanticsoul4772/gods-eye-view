@@ -7,12 +7,21 @@ export function createSourceDirectorySource({
 } = {}) {
   return {
     /**
-     * @param {{lat?: number, lon?: number, bbox?: number[], domain?: string,
+     * @param {{lat?: number, lon?: number, bbox?: number[], domain?: string, domains?: string[],
      *   usable?: boolean, limit?: number, signal?: AbortSignal}} query
      *   `bbox` is `[south, west, north, east]`: sources overlapping that area.
      * @returns {Promise<{generatedAt: string|null, total: number, sources: object[]}>}
      */
-    async find({ lat, lon, bbox, domain, usable, limit = 10, signal } = {}) {
+    async find({
+      lat,
+      lon,
+      bbox,
+      domain,
+      domains,
+      usable,
+      limit = 10,
+      signal,
+    } = {}) {
       signal?.throwIfAborted();
       const params = new URLSearchParams();
       if (Array.isArray(bbox) && bbox.length === 4)
@@ -21,7 +30,8 @@ export function createSourceDirectorySource({
         params.set('lat', String(lat));
         params.set('lon', String(lon));
       }
-      if (domain) params.set('domain', domain);
+      for (const d of [domain, ...(Array.isArray(domains) ? domains : [])])
+        if (d) params.append('domain', d);
       if (typeof usable === 'boolean') params.set('usable', String(usable));
       params.set('limit', String(limit));
       const response = await fetchImpl(`/api/sources/directory?${params}`, {

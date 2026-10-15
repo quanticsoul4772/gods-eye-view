@@ -1,8 +1,8 @@
 /**
  * The keyless source directory (github.com/quanticsoul4772/gev-open-sources):
  * a published list of live feeds that need no key, each with its decoder,
- * licence decision and health. The server loads it daily (bundled snapshot
- * first), and offers only entries that are verified, cleared for display, of a
+ * licence decision and health. The server checks it hourly (bundled snapshot
+ * first; unchanged files cost a 304), and offers only entries that are verified, cleared for display, of a
  * format the app decodes, and that pass the URL guards below.
  *
  * The directory is harvested from third-party catalogs, so it is never trusted
@@ -15,7 +15,12 @@ import {
   fetchPinnedRadioResponse,
   resolveRadioProxyAddresses,
 } from './radio/transport.js';
-import { formatOfDomain } from '../../src/data/sourceDomains.js';
+import {
+  COVERAGE_LIMITS,
+  coverageClassOfDomain,
+  formatOfDomain,
+  isWorldwideReference,
+} from '../../src/data/sourceDomains.js';
 import {
   bboxLonSpan,
   lonInBox,
@@ -24,7 +29,12 @@ import {
 
 export const SOURCE_DIRECTORY_URL =
   'https://quanticsoul4772.github.io/gev-open-sources/v1/index.json';
-export const SOURCE_DIRECTORY_REFRESH_MS = 24 * 60 * 60 * 1000;
+/**
+ * How often the index is checked. Unchanged files answer 304 through the
+ * per-file ETag cache. While the size guard keeps refusing a refresh the cache
+ * isn't advanced, so changed domain files are downloaded again each hour.
+ */
+export const SOURCE_DIRECTORY_REFRESH_MS = 60 * 60 * 1000;
 const SNAPSHOT_URL = new URL('./sourceDirectorySnapshot.json', import.meta.url);
 const ID_PATTERN = /^[a-z0-9][a-z0-9-]{1,63}$/;
 // The credential rule: a parameter (query, fragment, or `;name=value` in a
@@ -179,7 +189,7 @@ const isWebLink = (value) => {
  * identification (Entur requires `ET-Client-Name`) and content negotiation,
  * as short printable values that don't look like tokens.
  */
-function areSafeHeaders(headers) {
+export function areSafeHeaders(headers) {
   if (headers === undefined) return true;
   if (!headers || typeof headers !== 'object' || Array.isArray(headers))
     return false;
@@ -194,17 +204,6 @@ function areSafeHeaders(headers) {
 }
 
 /**
- * Largest plausible service area (degrees [lat, lon]); beyond it a coverage
- * box is bad data. Bike share and shared vehicles serve a city or region;
- * transit includes national feeds (answered per view, e.g. Amtrak at about
- * 52° of longitude), so it may span a continent but not half the world.
- */
-const MAX_COVERAGE_DEG = Object.freeze({
-  'transit.vehicles': [60, 90],
-  default: [20, 30],
-});
-
-/**
  * A coverage box the app can activate a feed by: absent, or
  * [south, west, north, east] in range and no larger than its domain allows.
  * A box with a flipped sign or a stray far-away point (Cayenne's spanning
@@ -217,7 +216,10 @@ export function isPlausibleCoverage(bbox, domain) {
   if (!Array.isArray(bbox) || bbox.length !== 4 || !bbox.every(Number.isFinite))
     return false;
   const [south, west, north, east] = bbox;
-  const [maxLat, maxLon] = MAX_COVERAGE_DEG[domain] || MAX_COVERAGE_DEG.default;
+  // The limit is the domain's, from the app table; a class the directory
+  // publishes is never read, so upstream data can't widen it.
+  const limit = COVERAGE_LIMITS[coverageClassOfDomain(domain)];
+  const [maxLat, maxLon] = limit || [180, 360];
   return (
     south >= -90 &&
     north <= 90 &&
@@ -429,6 +431,50 @@ export async function loadDirectory(
   };
 }
 
+/** Usable entry ids per domain: in a snapshot, the entries that kept `access`. */
+function usableIdsByDomain(directory) {
+  const out = new Map();
+  for (const e of directory?.entries || []) {
+    if (!e?.access) continue;
+    if (!out.has(e.domain)) out.set(e.domain, new Set());
+    out.get(e.domain).add(e.id);
+  }
+  return out;
+}
+
+/**
+ * Usable ids lost and gained per domain between two snapshots, and whether
+ * the new one may be written: a domain may lose at most min(5, 10 %) of its
+ * usable entries (a short upstream outage once hid 10 bike-share systems).
+ * No baseline, or a domain new in `next`, never refuses.
+ * @param {object|null} previous the committed snapshot
+ * @param {object} next the snapshot about to be written
+ * @returns {{ok: boolean, domains: Array<{domain: string, before: number,
+ *   after: number, lost: string[], gained: string[], refused: boolean}>}}
+ */
+export function compareSnapshots(previous, next) {
+  const before = usableIdsByDomain(previous);
+  const after = usableIdsByDomain(next);
+  const domains = [];
+  for (const domain of new Set([...before.keys(), ...after.keys()])) {
+    const was = before.get(domain) || new Set();
+    const now = after.get(domain) || new Set();
+    const lost = [...was].filter((id) => !now.has(id)).sort();
+    const gained = [...now].filter((id) => !was.has(id)).sort();
+    const allowed = Math.min(5, Math.floor(was.size * 0.1));
+    domains.push({
+      domain,
+      before: was.size,
+      after: now.size,
+      lost,
+      gained,
+      refused: was.size > 0 && lost.length > allowed,
+    });
+  }
+  domains.sort((a, b) => a.domain.localeCompare(b.domain));
+  return { ok: domains.every((d) => !d.refused), domains };
+}
+
 function readSnapshot() {
   try {
     return JSON.parse(fs.readFileSync(SNAPSHOT_URL, 'utf8'));
@@ -456,6 +502,13 @@ export function createSourceDirectory({
   let cache = new Map();
   let timer = null;
   let usable = current.entries.filter(isUsableEntry);
+  // Hourly refreshes would repeat the same warning all day: say each once.
+  let lastWarning = null;
+  const warnOnce = (message) => {
+    if (message === lastWarning) return;
+    lastWarning = message;
+    console.warn(message);
+  };
 
   async function refresh() {
     try {
@@ -463,8 +516,8 @@ export function createSourceDirectory({
       if (!loaded) return false;
       const next = mergeDirectory(loaded.directory, live ? current : null);
       if (!next) {
-        console.warn(
-          `[sources] directory refresh refused by the size guard: ${url}`,
+        warnOnce(
+          `[sources] directory refresh refused by the size guard: ${url} (${loaded.directory?.generated_at || 'no date'})`,
         );
         return false;
       }
@@ -472,9 +525,10 @@ export function createSourceDirectory({
       live = true;
       usable = current.entries.filter(isUsableEntry);
       cache = loaded.cache;
+      lastWarning = null;
       return true;
     } catch (error) {
-      console.warn(
+      warnOnce(
         `[sources] directory refresh failed: ${error?.message || error}`,
       );
       return false;
@@ -527,11 +581,18 @@ export function parseArea(value) {
  * @param {{lat?: number, lon?: number, area?: {south: number, west: number,
  *   north: number, east: number}|null, domain?: string, usable?: boolean}} query
  */
-function referralRows(entries, { lat, lon, area, domain, usable } = {}) {
+function referralRows(
+  entries,
+  { lat, lon, area, domain, domains, usable } = {},
+) {
   const hasPoint = Number.isFinite(lat) && Number.isFinite(lon);
+  const wanted = new Set(
+    [domain, ...(Array.isArray(domains) ? domains : [])].filter(Boolean),
+  );
   const rows = [];
   for (const e of entries) {
-    if (domain && e.domain !== domain) continue;
+    if (wanted.size ? !wanted.has(e.domain) : isWorldwideReference(e.domain))
+      continue;
     if (typeof usable === 'boolean' && isUsableEntry(e) !== usable) continue;
     const b = e.coverage?.bbox;
     // A bad box (flipped sign, stray point) would name the feed half a world away.
@@ -593,7 +654,8 @@ const clampLimit = (limit) =>
 
 /**
  * Vite plugin: loads the directory (snapshot, then daily refresh) and serves
- *   GET /api/sources/directory?lat=&lon=|bbox=s,w,n,e&domain=&usable=&limit=
+ *   GET /api/sources/directory?lat=&lon=|bbox=s,w,n,e&domain=…&usable=&limit=
+ *     (`domain` may repeat; without it, worldwide reference-only domains are left out)
  *     → the first `limit` referral rows, and `total` matching rows
  * @param {ReturnType<typeof createSourceDirectory>} directory
  */
@@ -614,7 +676,7 @@ export function sourceDirectoryProxy(directory) {
         lat: num('lat'),
         lon: num('lon'),
         area: parseArea(url.searchParams.get('bbox')),
-        domain: url.searchParams.get('domain') || undefined,
+        domains: url.searchParams.getAll('domain').filter(Boolean),
         usable:
           usable === 'true' ? true : usable === 'false' ? false : undefined,
       });

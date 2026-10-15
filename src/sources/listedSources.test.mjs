@@ -247,3 +247,28 @@ test('bike-share status names listed sources where no system is in range', () =>
   state._activeCityIds.add('nyc');
   assert.equal(getStats(2).statusMessage, undefined);
 });
+
+test('the directory route and client take several domains', async () => {
+  const get = route([
+    listed('a-quakes', { domain: 'hazards.earthquakes' }),
+    listed('b-gdacs', { domain: 'hazards.disasters' }),
+    listed('c-transit'),
+  ]);
+  assert.equal(
+    get('domain=hazards.earthquakes&domain=hazards.disasters').total,
+    2,
+  );
+  const urls = [];
+  const { createSourceDirectorySource } = await import('./sourceDirectory.js');
+  const client = createSourceDirectorySource({
+    fetchImpl: async (u) => {
+      urls.push(u);
+      return new Response(JSON.stringify({ sources: [], total: 0 }));
+    },
+  });
+  await client.find({ domains: ['hazards.earthquakes', 'hazards.disasters'] });
+  assert.match(
+    urls[0],
+    /domain=hazards\.earthquakes&domain=hazards\.disasters/,
+  );
+});

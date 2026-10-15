@@ -7,6 +7,7 @@ import { deflateRawSync } from 'node:zlib';
 import test from 'node:test';
 import { PbfWriter } from 'pbf';
 import {
+  compareSnapshots,
   createSourceDirectory,
   hasCredential,
   isSafeSourceUrl,
@@ -811,7 +812,7 @@ test('camera lists are referral only: never usable, named by find_data_sources',
   assert.equal(queries[0].domain, 'cameras.stills');
   assert.match(
     answer.summary,
-    /1 listed but not shown .*Digitraffic weather cameras \(traffic camera\)/,
+    /1 listed for reference: Digitraffic weather cameras \(traffic camera; duplicates the built-in CCTV packs\)/,
   );
 });
 
@@ -911,4 +912,149 @@ test('a box crossing the 180° line is a small area, matched on both sides of it
   assert.equal(referralEntries([suva], { lat: -18.1, lon: 178.4 }).length, 1);
   assert.equal(referralEntries([suva], { lat: -18.1, lon: -179.9 }).length, 1);
   assert.equal(referralEntries([suva], { lat: -18.1, lon: 3 }).length, 0);
+});
+
+const hazard = (over = {}) =>
+  entry({
+    id: 'gdacs-latest-alerts',
+    domain: 'hazards.disasters',
+    format: 'geojson.gdacs-events',
+    name: 'GDACS latest alerts',
+    provider: 'GDACS',
+    coverage: { bbox: [-90, -180, 90, 180], countries: [] },
+    ...over,
+  });
+
+test('hazards: referral only, worldwide, asked for by topic, never in a place answer', async () => {
+  const { SOURCE_TOPICS, domainsOfTopic } = await import('./sourceDomains.js');
+  assert.equal(
+    new Set(SOURCE_TOPICS).size,
+    SOURCE_TOPICS.length,
+    'no duplicate topics',
+  );
+  assert.deepEqual(domainsOfTopic('hazards').sort(), [
+    'hazards.disasters',
+    'hazards.earthquakes',
+  ]);
+  const quakes = hazard({
+    id: 'usgs-eq-1-0-week',
+    domain: 'hazards.earthquakes',
+    format: 'geojson.earthquakes',
+    name: 'USGS M1.0+ earthquakes, past week',
+  });
+  assert.equal(isUsableEntry(hazard()), false, 'the app draws neither');
+  const local = entry();
+  const everything = [hazard(), quakes, local];
+  // A place answer without a topic leaves worldwide reference feeds out,
+  // totals included.
+  const place = referralEntries(everything, { lat: 51.5, lon: -0.12 });
+  assert.deepEqual(
+    place.map((r) => r.id),
+    ['bods-england'],
+  );
+  // Asked for by domain, both appear anywhere on Earth.
+  const asked = referralEntries(everything, {
+    lat: -33.9,
+    lon: 151.2,
+    domains: ['hazards.disasters', 'hazards.earthquakes'],
+  });
+  assert.equal(asked.length, 2);
+  assert.match(
+    referralSummary('Sydney', asked),
+    /2 listed for reference: .*GDACS latest alerts \(disaster alert; listed for reference; the app doesn't draw it\).*\(earthquake feed; shown by the app's earthquake layer\)/,
+  );
+});
+
+test('find_data_sources sends one domain as before and several as a list', async () => {
+  const queries = [];
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: {
+      sources: {
+        find: async (query) => {
+          queries.push(query);
+          return { generatedAt: 'g', sources: [] };
+        },
+      },
+    },
+  });
+  await catalog.call('find_data_sources', {
+    area: { lat: 51.5, lon: -0.12, radius_km: 5 },
+    topic: 'hazards',
+  });
+  await catalog.call('find_data_sources', {
+    area: { lat: 51.5, lon: -0.12, radius_km: 5 },
+    topic: 'transit',
+  });
+  assert.deepEqual(queries[0].domains.sort(), [
+    'hazards.disasters',
+    'hazards.earthquakes',
+  ]);
+  assert.equal(queries[1].domain, 'transit.vehicles');
+});
+
+test('coverage limits come from the domain, never from a class the directory sends', () => {
+  // A national transit feed wider than a region (Go-Ahead Norway, 31° tall).
+  const wide = [47.26, 4.51, 78.25, 31.11];
+  assert.equal(isPlausibleCoverage(wide, 'transit.vehicles'), true);
+  assert.equal(
+    isUsableEntry(
+      entry({ coverage: { bbox: wide, countries: ['NO'], class: 'regional' } }),
+    ),
+    true,
+    'a narrower class upstream does not hide it',
+  );
+  // Nor does a wider one let a bike-share box through.
+  assert.equal(
+    isUsableEntry(
+      entry({
+        domain: 'bikeshare.stations',
+        format: 'gbfs.station-status',
+        coverage: { bbox: wide, countries: ['NO'], class: 'global' },
+      }),
+    ),
+    false,
+  );
+  assert.equal(
+    isPlausibleCoverage([-90, -180, 90, 180], 'hazards.earthquakes'),
+    true,
+  );
+});
+
+test('snapshot comparison: lost usable ids refuse a write past min(5, 10 %)', () => {
+  const snap = (domain, ids) => ({
+    entries: ids.map((id) => ({
+      id,
+      domain,
+      access: { url: 'https://x.example/f' },
+    })),
+  });
+  const ids = Array.from({ length: 498 }, (_, i) => `gbfs-${i}`);
+  const before = snap('bikeshare.stations', ids);
+  // Ten systems hidden by a short outage: refused, and named.
+  let result = compareSnapshots(
+    before,
+    snap('bikeshare.stations', ids.slice(10)),
+  );
+  assert.equal(result.ok, false);
+  assert.equal(result.domains[0].lost.length, 10);
+  // Five is within the allowance.
+  result = compareSnapshots(before, snap('bikeshare.stations', ids.slice(5)));
+  assert.equal(result.ok, true);
+  // A small domain: 10 % of 6 is 0, so losing one is refused.
+  result = compareSnapshots(
+    snap('hazards.disasters', ['a', 'b', 'c', 'd', 'e', 'f']),
+    snap('hazards.disasters', ['a', 'b', 'c', 'd', 'e']),
+  );
+  assert.equal(result.ok, false);
+  // No baseline, or a domain new in the next copy: never refused.
+  assert.equal(compareSnapshots(null, before).ok, true);
+  result = compareSnapshots(before, {
+    entries: [...before.entries, ...snap('cameras.stills', ['c1']).entries],
+  });
+  assert.equal(result.ok, true);
+  assert.deepEqual(
+    result.domains.find((d) => d.domain === 'cameras.stills').gained,
+    ['c1'],
+  );
 });
