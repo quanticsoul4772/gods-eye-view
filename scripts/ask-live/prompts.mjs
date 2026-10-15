@@ -13,6 +13,9 @@
  *     layersOn     layer ids enabled at the end
  *     layersOff    layer ids that must NOT be enabled at the end
  *     hudLayout    the HUD layout at the end
+ *     centreSharp  seconds within which no drawn Google 3D tile over the
+ *                  central 30 % of the view is still coarser than Cesium's
+ *                  target (the stuck blurry centre; needs the Google key)
  *     maxRounds    at most this many /api/claude/ask round trips
  *
  * Checks catch regressions; the report is still read by a person (or a
@@ -26,8 +29,52 @@ const SHIBUYA = { lat: 35.6595, lon: 139.7005, height: 250, pitch: -60 };
 const MONGOLIAN_STEPPE = { lat: 46.5, lon: 104.0, height: 1500, pitch: -60 };
 const PARIS = { lat: 48.8566, lon: 2.3522, height: 2500, pitch: -50 };
 const LAGOS = { lat: 6.5244, lon: 3.3792, height: 3000, pitch: -50 };
+// The reported blurry-centre view: downtown Austin, 841 m, 30° down.
+const AUSTIN_OBLIQUE = { lat: 30.2672, lon: -97.7431, height: 841, pitch: -30 };
 
 export const PROMPTS = Object.freeze([
+  // — the middle of an oblique city view comes into focus —
+  // Cesium's own rule left the centre of these views coarse for good; the
+  // empty-tile refinement fix (src/maps/tileRefinement.js) sharpens them.
+  {
+    id: 'austin-capitol-oblique',
+    prompt:
+      'Fly to the Texas State Capitol in Austin and give me a low oblique view from the south.',
+    checks: {
+      cameraNear: { lat: 30.2747, lon: -97.7404, km: 5 },
+      centreSharp: 20,
+    },
+  },
+  {
+    id: 'sf-ferry-building-oblique',
+    prompt:
+      'Show me the Ferry Building in San Francisco from about a kilometre up, looking west.',
+    checks: {
+      cameraNear: { lat: 37.7955, lon: -122.3937, km: 5 },
+      centreSharp: 20,
+    },
+  },
+  {
+    id: 'eiffel-tower-skyline',
+    prompt: 'Take me to the Eiffel Tower, tilted so I can see the skyline.',
+    checks: {
+      cameraNear: { lat: 48.8584, lon: 2.2945, km: 5 },
+      centreSharp: 20,
+    },
+  },
+  {
+    // No camera move: the view the user reported, held still.
+    id: 'austin-hold-centre',
+    prompt: "Don't move the camera. What's in the middle of the screen?",
+    start: AUSTIN_OBLIQUE,
+    checks: {
+      answer: /Austin|Texas|Capitol|Congress/i,
+      noTools: ['fly_to_location'],
+      cameraNear: { lat: 30.2672, lon: -97.7431, km: 1 },
+      centreSharp: 20,
+    },
+  },
+
   // — the HUD layout by voice —
   {
     id: 'hud-professional-roundtrip',

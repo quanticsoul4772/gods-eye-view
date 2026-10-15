@@ -5,10 +5,11 @@
  * fix (default) and with Fast centre.
  *
  * For each view, in a fresh browser context with the cache off: park the
- * camera, then every 250 ms force a frame and count the drawn tiles that are
- * still coarser than Cesium's target (and have finer children) over the
- * central 30 % of the screen. "Sharp" is the first sample after which that
- * count stays 0. A view that never gets there shows "never".
+ * camera, then every 250 ms force a frame and count the drawn tiles over the
+ * central 30 % of the screen that are still coarser than Cesium's target
+ * while a child of theirs is in view (a coarse tile whose children are all
+ * out of view is not waiting on anything). "Sharp" is the first sample after
+ * which that count stays 0. A view that never gets there shows "never".
  *
  * Needs a production build with GOOGLE_MAPS_API_KEY in .env (the key is baked
  * in at build time) and a real GPU. Each run is one billable Google tiles
@@ -140,7 +141,10 @@ async function measure(browser, view, mode) {
           const rays = centralRays();
           let count = 0;
           for (const tile of tileset._selectedTiles) {
-            if (!tile.children.length || tile._finalResolution === false)
+            if (
+              tile._finalResolution === false ||
+              !tile.children.some((child) => child.isVisible)
+            )
               continue;
             if (!(tile._screenSpaceError > target)) continue;
             if (

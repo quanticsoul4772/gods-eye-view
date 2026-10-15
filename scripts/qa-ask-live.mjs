@@ -190,6 +190,73 @@ async function appState() {
   });
 }
 
+/**
+ * Seconds until the middle of the view is sharp: no drawn Google 3D tile
+ * under any of nine rays through the central 30 % of the screen is still
+ * coarser than Cesium's target while a child of it is in view (so it is
+ * waiting to refine). Forces a frame per sample. Same measure as
+ * scripts/qa-centre-detail.mjs. null when it never got there.
+ */
+async function centreSharpSeconds(limitS) {
+  return page.evaluate(async (limitMs) => {
+    const gev = window.__godsEyeView;
+    const tileset = gev.tileset;
+    if (!tileset) return { error: 'no Google 3D tiles (no key?)' };
+    const { scene, camera } = gev.viewer;
+    const frame = () =>
+      new Promise((resolve) => {
+        const remove = scene.postRender.addEventListener(() => {
+          remove();
+          resolve();
+        });
+        gev.requestRender();
+      });
+    const hits = (ray, sphere) => {
+      const o = ray.origin;
+      const d = ray.direction;
+      const c = sphere.center;
+      const lx = c.x - o.x;
+      const ly = c.y - o.y;
+      const lz = c.z - o.z;
+      const along = lx * d.x + ly * d.y + lz * d.z;
+      if (along < 0) return lx * lx + ly * ly + lz * lz <= sphere.radius ** 2;
+      const miss = lx * lx + ly * ly + lz * lz - along * along;
+      return miss <= sphere.radius ** 2;
+    };
+    const coarse = () => {
+      const w = scene.canvas.clientWidth;
+      const h = scene.canvas.clientHeight;
+      const rays = [];
+      for (const fx of [-0.15, 0, 0.15])
+        for (const fy of [-0.15, 0, 0.15])
+          rays.push(
+            camera.getPickRay({ x: w * (0.5 + fx), y: h * (0.5 + fy) }),
+          );
+      const target = tileset.memoryAdjustedScreenSpaceError;
+      let count = 0;
+      for (const tile of tileset._selectedTiles) {
+        if (
+          tile._finalResolution === false ||
+          !tile.children.some((child) => child.isVisible)
+        )
+          continue;
+        if (!(tile._screenSpaceError > target)) continue;
+        if (rays.some((ray) => hits(ray, tile.boundingSphere))) count += 1;
+      }
+      return count;
+    };
+    const start = performance.now();
+    while (performance.now() - start < limitMs) {
+      await frame();
+      const count = coarse();
+      if (count === 0 && tileset.tilesLoaded)
+        return { seconds: (performance.now() - start) / 1000 };
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    return { seconds: null, coarse: coarse() };
+  }, limitS * 1000);
+}
+
 function runChecks(checks = {}, calls, state, rounds) {
   const failures = [];
   const called = new Set(calls.map((c) => c.name));
@@ -217,6 +284,14 @@ function runChecks(checks = {}, calls, state, rounds) {
     failures.push(
       `HUD layout ${state.hudLayout}, expected ${checks.hudLayout}`,
     );
+  if (checks.centreSharp) {
+    const sharp = state.centreSharp;
+    if (sharp?.error) failures.push(`centre sharpness: ${sharp.error}`);
+    else if (sharp?.seconds == null)
+      failures.push(
+        `centre still coarse after ${checks.centreSharp} s (${sharp?.coarse} tiles)`,
+      );
+  }
   return failures;
 }
 
@@ -266,6 +341,8 @@ try {
     await pause(2500); // let a final fly-to settle before reading the camera
     const totalMs = Date.now() - startedAt;
     const state = await appState();
+    if (item.checks?.centreSharp)
+      state.centreSharp = await centreSharpSeconds(item.checks.centreSharp);
     const calls = transcript(rounds);
     const modelMs = rounds.reduce(
       (sum, r) => sum + ((r.receivedAt || r.sentAt) - r.sentAt),
