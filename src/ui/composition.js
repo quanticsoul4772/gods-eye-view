@@ -9,7 +9,7 @@ import {
   flyToPOI,
   searchAndFlyTo,
 } from '../locations.js';
-import { interruptCameraMotion } from '../cameraVerbs.js';
+import { interruptCameraMotion, prefersReducedMotion } from '../cameraVerbs.js';
 import { IntelHUD } from '../hud.js';
 import { ShareLinkManager } from '../sharelink.js';
 import { OrbitController } from '../orbit.js';
@@ -25,8 +25,11 @@ import {
 } from '../data/trackedReadout.js';
 import {
   destroyWorldOverlay,
+  hitTestWorldOverlay,
   initWorldOverlay,
 } from '../overlays/worldOverlay.js';
+import { isPointerFree } from '../data/inputOwnership.js';
+import { getContextStore } from '../data/contextStore.js';
 import {
   destroyDetection,
   initDetection,
@@ -73,6 +76,7 @@ export class StyleManager extends ApplicationShell {
         flyToPOI,
         searchAndFlyTo,
         interruptCameraMotion,
+        prefersReducedMotion,
         IntelHUD,
         ShareLinkManager,
         OrbitController,
@@ -83,7 +87,10 @@ export class StyleManager extends ApplicationShell {
         destroyTrackedReadout,
         initTrackedReadout,
         destroyWorldOverlay,
+        hitTestWorldOverlay,
         initWorldOverlay,
+        isPointerFree,
+        getContextStore,
         destroyDetection,
         initDetection,
         cycleDetectionMode,

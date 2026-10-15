@@ -51,6 +51,8 @@ export function bindDisplayControls({ elements, actions }) {
       el.dataset.mode === 'all' ? 'all' : 'proximity',
     );
   for (const el of elements.fadeSliders || []) listen(el, 'input', 'setFade');
+  for (const el of elements.tileDetailButtons || [])
+    listen(el, 'click', 'setTileDetail', (el) => el.dataset.tileDetail);
   return {
     destroy() {
       for (const remove of removers.splice(0)) remove();

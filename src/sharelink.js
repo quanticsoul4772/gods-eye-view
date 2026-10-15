@@ -120,6 +120,9 @@ export class ShareLinkManager {
     // null = the altitude-adaptive terminus (the default). A number pins the
     // outside-fill opacity as a percent, 94..100. (`sce`, 2026-08-17)
     this._scopeTerminusPct = null;
+    // 'fast-centre' writes `fc=1`; Standard writes nothing, so a link never
+    // switches the recipient's own Fast centre setting off.
+    this._tileDetail = 'standard';
     this._mapStack = 'photoreal';
     this._layerStateProvider = null;
     this._panelStateProvider = null;
@@ -234,6 +237,7 @@ export class ShareLinkManager {
       // a value pins the terminus opacity percent, clamped into the SUPPORTED
       // 94..100 band. `sce=0` used to survive as a sub-94 terminus — a hole in
       // the mask — and then got written straight back out on the next update.
+      tileDetail: params.get('fc') === '1' ? 'fast-centre' : undefined,
       scopeTerminusPct: params.has('sce')
         ? clampScopeTerminusPct(params.get('sce'))
         : null,
@@ -358,6 +362,7 @@ export class ShareLinkManager {
         scopeEnabled: visualCurrent ? state.scopeEnabled : undefined,
         scopeFeatherPct: visualCurrent ? state.scopeFeatherPct : undefined,
         scopeTerminusPct: visualCurrent ? state.scopeTerminusPct : undefined,
+        tileDetail: visualCurrent ? state.tileDetail : undefined,
         mapStack: mapCurrent ? state.mapStack : undefined,
         panelState,
         styleParams: visualCurrent ? state.styleParams : undefined,
@@ -502,6 +507,8 @@ export class ShareLinkManager {
     else if (typeof extras.scopeTerminusPct === 'number') {
       this._scopeTerminusPct = clampScopeTerminusPct(extras.scopeTerminusPct);
     }
+    if (typeof extras.tileDetail === 'string')
+      this._tileDetail = extras.tileDetail;
     if (typeof extras.mapStack === 'string') this._mapStack = extras.mapStack;
     this._scheduleUpdate();
   }
@@ -586,6 +593,7 @@ export class ShareLinkManager {
     // unsupported terminus even if the field was set from somewhere else.
     const terminusPct = clampScopeTerminusPct(this._scopeTerminusPct);
     if (terminusPct != null) params.set('sce', String(terminusPct));
+    if (this._tileDetail === 'fast-centre') params.set('fc', '1');
     params.set('map', this._mapStack);
     const layerState = this._layerStateProvider?.();
     if (layerState) encodeLayerStateParams(params, layerState);

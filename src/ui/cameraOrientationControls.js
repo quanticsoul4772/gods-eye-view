@@ -14,6 +14,8 @@ function trackedTarget(viewer) {
 export const OBLIQUE_PITCH = Cesium.Math.toRadians(-35);
 export const STRAIGHT_DOWN_PITCH = Cesium.Math.toRadians(-89);
 const OBLIQUE_THRESHOLD = Cesium.Math.toRadians(-60);
+/** Steeper than this, focusing slides the camera instead of turning it. */
+export const FOCUS_SLIDE_PITCH = Cesium.Math.toRadians(-75);
 
 function normalizedHeading(heading) {
   const wrapped = Cesium.Math.zeroToTwoPi(
@@ -26,19 +28,45 @@ function normalizedHeading(heading) {
 
 /** Return the world position under the center of the canvas, when available. */
 export function pickViewTarget(viewer) {
-  const scene = viewer?.scene;
-  const camera = viewer?.camera;
-  const canvas = scene?.canvas;
-  if (!scene || !camera || !canvas) return null;
+  const canvas = viewer?.scene?.canvas;
+  if (!canvas) return null;
   const width = canvas.clientWidth || canvas.width || 0;
   const height = canvas.clientHeight || canvas.height || 0;
   if (!width || !height) return null;
-  const center = new Cesium.Cartesian2(width / 2, height / 2);
+  return pickGroundAt(viewer, new Cesium.Cartesian2(width / 2, height / 2));
+}
+
+/**
+ * The world position under a canvas position (CSS pixels).
+ *
+ * `seaLevel: false` answers only with surface actually drawn there: no
+ * hidden globe, no ellipsoid. Under Google 3D tiles the globe is hidden and
+ * sea level can be far below the visible ground.
+ */
+export function pickGroundAt(viewer, center, { seaLevel = true } = {}) {
+  const scene = viewer?.scene;
+  const camera = viewer?.camera;
+  if (!scene || !camera || !center) return null;
   let target = null;
 
   if (scene.pickPositionSupported && typeof scene.pickPosition === 'function') {
     try {
       target = scene.pickPosition(center);
+    } catch {
+      target = null;
+    }
+  }
+  // pickPosition reads the depth of the last drawn frame, which an input
+  // event between frames finds gone. A ray pick renders its own pass, so a
+  // click always finds the 3D tiles it landed on.
+  if (
+    !seaLevel &&
+    !isPickedWorldPosition(target) &&
+    typeof scene.pickFromRay === 'function' &&
+    typeof camera.getPickRay === 'function'
+  ) {
+    try {
+      target = scene.pickFromRay(camera.getPickRay(center))?.position || null;
     } catch {
       target = null;
     }
@@ -49,6 +77,7 @@ export function pickViewTarget(viewer) {
   // far below the view and would swing the camera on every tilt.
   if (
     !isPickedWorldPosition(target) &&
+    (seaLevel || scene.globe?.show) &&
     typeof camera.getPickRay === 'function'
   ) {
     try {
@@ -58,6 +87,7 @@ export function pickViewTarget(viewer) {
     }
   }
   if (
+    seaLevel &&
     !isPickedWorldPosition(target) &&
     typeof camera.pickEllipsoid === 'function'
   ) {
@@ -178,6 +208,60 @@ export function resetCameraNorth(viewer) {
   return setCameraTargetFrame(viewer, { ...frame, heading: 0 });
 }
 
+/**
+ * The camera pose that puts `point` in the middle of the view.
+ *
+ * An oblique camera turns in place, so the point keeps its distance and with
+ * it its level of detail. A camera looking nearly straight down would have
+ * to spin the map to turn (every heading is close to every other there), so
+ * it slides at the same height and angle until the point is ahead of it,
+ * which only brings the point closer.
+ *
+ * @returns {{destination: Cesium.Cartesian3, heading: number, pitch: number}|null}
+ */
+export function focusPose(camera, point) {
+  const position = camera?.positionWC;
+  if (!isPickedWorldPosition(position) || !isPickedWorldPosition(point))
+    return null;
+  const { heading, pitch } = camera;
+  if (pitch < FOCUS_SLIDE_PITCH) {
+    const eye = Cesium.Cartographic.fromCartesian(position);
+    const ground = Cesium.Cartographic.fromCartesian(point);
+    const drop = eye && ground ? eye.height - ground.height : NaN;
+    if (!(drop > 1)) return null;
+    // Cesium's lookAt offset for (heading, pitch, range) in the point's
+    // east-north-up frame, with the range that keeps the height.
+    const range = drop / Math.sin(-pitch);
+    const offset = new Cesium.Cartesian3(
+      -Math.sin(heading) * Math.cos(pitch) * range,
+      -Math.cos(heading) * Math.cos(pitch) * range,
+      -Math.sin(pitch) * range,
+    );
+    const destination = Cesium.Matrix4.multiplyByPoint(
+      Cesium.Transforms.eastNorthUpToFixedFrame(point),
+      offset,
+      new Cesium.Cartesian3(),
+    );
+    return { destination, heading, pitch };
+  }
+  const toLocal = Cesium.Matrix4.inverseTransformation(
+    Cesium.Transforms.eastNorthUpToFixedFrame(position),
+    new Cesium.Matrix4(),
+  );
+  const look = Cesium.Matrix4.multiplyByPointAsVector(
+    toLocal,
+    Cesium.Cartesian3.subtract(point, position, new Cesium.Cartesian3()),
+    new Cesium.Cartesian3(),
+  );
+  const distance = Cesium.Cartesian3.magnitude(look);
+  if (!(distance >= 1)) return null;
+  return {
+    destination: Cesium.Cartesian3.clone(position),
+    heading: Math.atan2(look.x, look.y),
+    pitch: Math.asin(Cesium.Math.clamp(look.z / distance, -1, 1)),
+  };
+}
+
 function headingDegrees(camera) {
   return Cesium.Math.toDegrees(normalizedHeading(camera?.heading));
 }
@@ -185,7 +269,11 @@ function headingDegrees(camera) {
 /** Ease an orbit without handing off the entity that owns the follow camera. */
 export function createCameraOrientationAnimator(
   viewer,
-  { now = () => performance.now(), duration = 650 } = {},
+  {
+    now = () => performance.now(),
+    duration = 650,
+    reduceMotion = () => false,
+  } = {},
 ) {
   let remove = null;
   let pending = null;
@@ -229,8 +317,61 @@ export function createCameraOrientationAnimator(
     viewer.scene.requestRender?.();
     return true;
   }
+  /** Ease the free camera to a {@link focusPose}, roll level. */
+  function moveTo(pose) {
+    cancel();
+    const camera = viewer.camera;
+    if (
+      !pose ||
+      viewer.trackedEntity ||
+      !isPickedWorldPosition(camera?.positionWC)
+    )
+      return false;
+    const from = Cesium.Cartesian3.clone(camera.positionWC);
+    const fromHeading = camera.heading;
+    const fromPitch = camera.pitch;
+    const headingDelta = Cesium.Math.negativePiToPi(pose.heading - fromHeading);
+    const destination = new Cesium.Cartesian3();
+    const step = (eased) => {
+      camera.setView({
+        destination: Cesium.Cartesian3.lerp(
+          from,
+          pose.destination,
+          eased,
+          destination,
+        ),
+        orientation: {
+          heading: fromHeading + headingDelta * eased,
+          pitch: Cesium.Math.lerp(fromPitch, pose.pitch, eased),
+          roll: 0,
+        },
+      });
+      viewer.scene?.requestRender?.();
+    };
+    if (
+      !viewer.scene?.preUpdate?.addEventListener ||
+      duration <= 0 ||
+      reduceMotion()
+    ) {
+      step(1);
+      return true;
+    }
+    const start = now();
+    remove = viewer.scene.preUpdate.addEventListener(() => {
+      if (viewer.isDestroyed?.() || viewer.trackedEntity) {
+        cancel();
+        return;
+      }
+      const progress = Cesium.Math.clamp((now() - start) / duration, 0, 1);
+      step(Cesium.EasingFunction.CUBIC_IN_OUT(progress));
+      if (progress === 1) cancel();
+    });
+    viewer.scene.requestRender?.();
+    return true;
+  }
   return {
     animate,
+    moveTo,
     cancel,
     get destination() {
       return pending;
@@ -244,6 +385,8 @@ export function bindCameraOrientationControls({
   elements,
   runNavigation,
   showToast,
+  isCockpitActive = () => false,
+  reduceMotion,
 }) {
   const tiltButton = elements?.tiltButton;
   const northButton = elements?.northButton;
@@ -254,7 +397,7 @@ export function bindCameraOrientationControls({
   // of the screen: 4 ms median and up to 12 ms, measured on this machine. It is
   // therefore held between refreshes rather than recomputed per frame.
   let tilted = false;
-  const animator = createCameraOrientationAnimator(viewer);
+  const animator = createCameraOrientationAnimator(viewer, { reduceMotion });
 
   /** Recompute the tilt state exactly, paying for one pick. */
   const refreshTilt = () => {
@@ -369,6 +512,20 @@ export function bindCameraOrientationControls({
     sync,
     refreshTilt,
     cancel: animator.cancel,
+    /**
+     * Bring the ground under a canvas position (CSS pixels) to the middle of
+     * the view. Silent when there is no ground there or in cockpit.
+     */
+    focusAt(position) {
+      if (destroyed || isCockpitActive() || viewer.trackedEntity) return false;
+      const point = pickGroundAt(viewer, position, { seaLevel: false });
+      if (!point) return false;
+      return Boolean(
+        runNavigation('camera', () =>
+          animator.moveTo(focusPose(viewer.camera, point)),
+        ),
+      );
+    },
     destroy() {
       if (destroyed) return;
       destroyed = true;

@@ -21,6 +21,10 @@ import { LocalSdrControls } from './localSdrControls.js';
 import { LocationNavigation } from './locationNavigation.js';
 import { bindClearLayersControl } from './layers.js';
 import { bindCameraOrientationControls } from './cameraOrientationControls.js';
+import {
+  bindGroundFocusGesture,
+  isPlainGroundAt,
+} from './groundFocusGesture.js';
 import { createMapSourceControls } from './mapSource.js';
 import { STYLES } from './effects.js';
 import { DEFAULT_HUD_LAYOUT, isHudLayout } from '../hudLayouts.js';
@@ -548,6 +552,8 @@ export class StyleManager extends ShellFacade {
         _setModels3dEnabled: (...args) => this._setModels3dEnabled(...args),
         _syncModels3dModeRow: (...args) => this._syncModels3dModeRow(...args),
         _setModels3dMode: (...args) => this._setModels3dMode(...args),
+        _setTileDetailMode: (...args) =>
+          this._visualSettings._setTileDetailMode(...args),
       },
       readState: () => ({
         shareLinkManager: this.shareLinkManager,
@@ -559,6 +565,7 @@ export class StyleManager extends ShellFacade {
         _models3dEnabled: this._models3dEnabled,
         _models3dModeBtns: this._models3dModeBtns,
         _detectionAllocationBtns: this._detectionAllocationBtns,
+        _tileDetailBtns: this._visualSettings._tileDetailBtns,
       }),
       claimDetection: () => {
         this._visualSettings._detectionUserOverridden = true;
@@ -1465,6 +1472,27 @@ export class StyleManager extends ShellFacade {
       runNavigation: (noun, navigate) =>
         this._navigation.runOrientation(noun, navigate),
       showToast: (message) => this._showToast(message),
+      isCockpitActive: () => !!this.cockpitView?.active,
+      reduceMotion: this.services.prefersReducedMotion,
+    });
+    const { hitTestWorldOverlay, isPointerFree, getContextStore } =
+      this.services;
+    this._groundFocusGesture?.destroy();
+    this._groundFocusGesture = bindGroundFocusGesture({
+      viewer: this.viewer,
+      focusAt: (position) => this._cameraOrientationControls?.focusAt(position),
+      isGroundAt: (position) =>
+        isPlainGroundAt(this.viewer.scene, position, {
+          getGroundTileset: () =>
+            this.mapStackController?.getImageryHostTileset?.(),
+          hitTestOverlay: hitTestWorldOverlay,
+        }),
+      isPointerFree,
+      readNavigationGeneration: () => this._navigation._navigationGeneration,
+      readSelection: () => {
+        const { selectedEntityId, selectedAt } = getContextStore();
+        return selectedEntityId ? `${selectedEntityId}@${selectedAt}` : null;
+      },
     });
   }
 
@@ -1583,6 +1611,7 @@ export class StyleManager extends ShellFacade {
     this._displayBindings.destroy();
     this._mapSourceControls?.destroy();
     this._cameraOrientationControls?.destroy();
+    this._groundFocusGesture?.destroy();
     this._clearLayersControl?.destroy();
     this._cctvControls?.destroy();
     this.services?.streetLevelLayer?.attachNavigation?.(null);

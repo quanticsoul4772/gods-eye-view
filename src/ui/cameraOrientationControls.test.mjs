@@ -6,6 +6,8 @@ import {
   STRAIGHT_DOWN_PITCH,
   bindCameraOrientationControls,
   createCameraOrientationAnimator,
+  focusPose,
+  pickGroundAt,
   pickViewTarget,
   readCameraTargetFrame,
   resetCameraNorth,
@@ -687,4 +689,162 @@ test('rapid tilt presses reverse direction and north-up keeps the requested tilt
   assert.ok(Math.abs(frame.heading) < 1e-6);
   controls.destroy();
   assert.equal(viewer.scene.preUpdate.numberOfListeners, 0);
+});
+
+// ── Double-click focus: the clicked ground comes to the middle of the view ──
+
+/** Angle between the camera's view direction and the ray to `point`. */
+function aimError(camera, point) {
+  const ray = Cesium.Cartesian3.normalize(
+    Cesium.Cartesian3.subtract(
+      point,
+      camera.positionWC,
+      new Cesium.Cartesian3(),
+    ),
+    new Cesium.Cartesian3(),
+  );
+  return Cesium.Cartesian3.angleBetween(camera.directionWC, ray);
+}
+
+function applyPose(camera, pose) {
+  camera.setView({
+    destination: pose.destination,
+    orientation: { heading: pose.heading, pitch: pose.pitch, roll: 0 },
+  });
+}
+
+const groundNear = (eastM, northM) =>
+  Cesium.Matrix4.multiplyByPoint(
+    Cesium.Transforms.eastNorthUpToFixedFrame(AUSTIN_GROUND),
+    new Cesium.Cartesian3(eastM, northM, 0),
+    new Cesium.Cartesian3(),
+  );
+
+test('an oblique camera turns in place to look at the clicked ground', () => {
+  const { viewer } = createRealViewer(AUSTIN_GROUND);
+  orbit(viewer, AUSTIN_GROUND, 30, Cesium.Math.toRadians(-30), 1700);
+  const before = Cesium.Cartesian3.clone(viewer.camera.positionWC);
+  // A spot to the lower left of the middle of the view.
+  const point = groundNear(-600, -900);
+  const pose = focusPose(viewer.camera, point);
+  assert.ok(Cesium.Cartesian3.equalsEpsilon(pose.destination, before, 0, 1e-6));
+  applyPose(viewer.camera, pose);
+  assert.ok(aimError(viewer.camera, point) < 1e-6);
+  assert.ok(Math.abs(Cesium.Math.negativePiToPi(viewer.camera.roll)) < 1e-9);
+});
+
+test('a straight-down camera slides at the same height instead of spinning', () => {
+  const { viewer } = createRealViewer(AUSTIN_GROUND);
+  orbit(viewer, AUSTIN_GROUND, 0, STRAIGHT_DOWN_PITCH, 1000);
+  const { camera } = viewer;
+  const heightBefore = camera.positionCartographic.height;
+  const headingBefore = camera.heading;
+  // Below the middle of the screen: turning there would face south.
+  const point = groundNear(0, -300);
+  const pose = focusPose(camera, point);
+  assert.equal(pose.heading, headingBefore);
+  applyPose(camera, pose);
+  assert.ok(Math.abs(camera.positionCartographic.height - heightBefore) < 0.5);
+  assert.ok(aimError(camera, point) < 1e-4);
+  assert.ok(
+    Math.abs(Cesium.Math.negativePiToPi(camera.heading - headingBefore)) < 1e-3,
+  );
+});
+
+test('focus has no pose for a point at or above a straight-down camera', () => {
+  const { viewer } = createRealViewer(AUSTIN_GROUND);
+  orbit(viewer, AUSTIN_GROUND, 0, STRAIGHT_DOWN_PITCH, 1000);
+  const above = Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 2000);
+  assert.equal(focusPose(viewer.camera, above), null);
+  assert.equal(focusPose(viewer.camera, null), null);
+});
+
+test('focus picks only drawn ground: never the hidden globe or sea level', () => {
+  const surface = Cesium.Cartesian3.fromDegrees(0, 0, 0);
+  const { viewer } = createViewer({ target: surface });
+  const at = new Cesium.Cartesian2(10, 10);
+  viewer.scene.globe.show = false;
+  assert.equal(pickGroundAt(viewer, at, { seaLevel: false }), null);
+  // Between frames the depth read misses; a ray pick still finds the tiles.
+  const tile = Cesium.Cartesian3.fromDegrees(0, 0, 170);
+  viewer.scene.pickFromRay = () => ({ position: tile });
+  assert.equal(pickGroundAt(viewer, at, { seaLevel: false }), tile);
+  delete viewer.scene.pickFromRay;
+  viewer.scene.globe.show = true;
+  assert.equal(pickGroundAt(viewer, at, { seaLevel: false }), surface);
+  // The centre pick used by tilt keeps its sea-level fallback.
+  viewer.scene.globe.pick = () => null;
+  assert.equal(pickGroundAt(viewer, at), surface);
+});
+
+test('the focus move eases, keeps roll level and gives way to other motion', () => {
+  const { viewer } = createRealViewer(AUSTIN_GROUND);
+  orbit(viewer, AUSTIN_GROUND, 30, Cesium.Math.toRadians(-30), 1700);
+  viewer.scene.preUpdate = new Cesium.Event();
+  let time = 0;
+  const animator = createCameraOrientationAnimator(viewer, {
+    now: () => time,
+    reduceMotion: () => false,
+  });
+  const point = groundNear(-600, -900);
+  assert.equal(animator.moveTo(focusPose(viewer.camera, point)), true);
+  assert.equal(animator.destination, null, 'tilt and north read no target');
+  time = 300;
+  viewer.scene.preUpdate.raiseEvent();
+  assert.ok(aimError(viewer.camera, point) > 1e-3, 'still on the way');
+  time = 700;
+  viewer.scene.preUpdate.raiseEvent();
+  assert.ok(aimError(viewer.camera, point) < 1e-6);
+  assert.ok(Math.abs(Cesium.Math.negativePiToPi(viewer.camera.roll)) < 1e-9);
+  assert.equal(viewer.scene.preUpdate.numberOfListeners, 0);
+
+  // A tilt press replaces a running focus move: one tween at a time.
+  animator.moveTo(focusPose(viewer.camera, groundNear(400, 200)));
+  animator.animate(readCameraTargetFrame(viewer), {
+    heading: 0,
+    pitch: OBLIQUE_PITCH,
+  });
+  assert.equal(viewer.scene.preUpdate.numberOfListeners, 1);
+  animator.cancel();
+});
+
+test('with reduced motion the focus move lands at once', () => {
+  const { viewer } = createRealViewer(AUSTIN_GROUND);
+  orbit(viewer, AUSTIN_GROUND, 30, Cesium.Math.toRadians(-30), 1700);
+  viewer.scene.preUpdate = new Cesium.Event();
+  const animator = createCameraOrientationAnimator(viewer, {
+    reduceMotion: () => true,
+  });
+  const point = groundNear(300, 300);
+  animator.moveTo(focusPose(viewer.camera, point));
+  assert.equal(viewer.scene.preUpdate.numberOfListeners, 0);
+  assert.ok(aimError(viewer.camera, point) < 1e-6);
+});
+
+test('focusAt is silent in cockpit and while following, and routes as camera navigation', () => {
+  const { viewer } = createRealViewer(AUSTIN_GROUND);
+  orbit(viewer, AUSTIN_GROUND, 30, Cesium.Math.toRadians(-30), 1700);
+  viewer.scene.pickPositionSupported = true;
+  viewer.scene.pickPosition = () => groundNear(-600, -900);
+  const routed = [];
+  let cockpit = true;
+  const controls = bindCameraOrientationControls({
+    viewer,
+    elements: {},
+    runNavigation: (noun, navigate) => {
+      routed.push(noun);
+      return navigate();
+    },
+    isCockpitActive: () => cockpit,
+  });
+  const at = new Cesium.Cartesian2(100, 700);
+  assert.equal(controls.focusAt(at), false);
+  cockpit = false;
+  viewer.trackedEntity = {};
+  assert.equal(controls.focusAt(at), false);
+  assert.deepEqual(routed, []);
+  viewer.trackedEntity = undefined;
+  assert.equal(controls.focusAt(at), true);
+  assert.deepEqual(routed, ['camera']);
+  controls.destroy();
 });

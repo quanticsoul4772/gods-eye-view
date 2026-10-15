@@ -107,6 +107,15 @@
       </div>
     </div>
     <div class="pp-toggle-group">
+      <div class="pp-slider-row pp-slider-row--standalone visible" id="tile-detail-row" title="How Google 3D tiles load. Fast centre sharpens the middle of the view first; it may briefly show coarse patches while moving.">
+        <span class="pp-slider-mini-label">Detail</span>
+        <div class="pp-mode-seg" role="radiogroup" aria-label="3D tile detail">
+          <button class="pp-mode-btn active" id="tile-detail-standard" data-tile-detail="standard" role="radio" aria-checked="true">Standard</button>
+          <button class="pp-mode-btn" id="tile-detail-fast-centre" data-tile-detail="fast-centre" role="radio" aria-checked="false">Fast centre</button>
+        </div>
+      </div>
+    </div>
+    <div class="pp-toggle-group">
       <button class="pp-toggle-btn" id="scope-toggle" title="Scope — the circular viewport mask" aria-pressed="false">
         <span class="pp-icon material-symbols-outlined" aria-hidden="true">adjust</span>
         <span class="pp-label">Scope</span>

@@ -778,3 +778,26 @@ test('visual input listeners are revoked before asynchronous UI teardown', () =>
   assert.match(VisualSettings.prototype.stop.toString(), /this\._styleParameters\?\.destroy\(\)/);
   assert.match(VisualSettings.prototype.stop.toString(), /this\._visualEffects\.stop\(\)/);
 });
+
+// ── `fc`: Fast centre tile detail ────────────────────────────────────────────
+//
+// A link only ever turns Fast centre on; Standard is written as nothing, so a
+// link without `fc` never switches off the recipient's own setting.
+
+test('fc=1 restores Fast centre; anything else leaves the setting alone', () => {
+  assert.equal(makeManager('#lat=10&lon=20&fc=1').parseInitialHash().tileDetail, 'fast-centre');
+  assert.equal(makeManager('#lat=10&lon=20').parseInitialHash().tileDetail, undefined);
+  assert.equal(makeManager('#lat=10&lon=20&fc=0').parseInitialHash().tileDetail, undefined);
+});
+
+test('serialization writes fc only for Fast centre', () => {
+  const manager = makeManager();
+  const hashFc = (tileDetail) => {
+    manager.onToggleChange(false, false, { tileDetail });
+    clearTimeout(manager._debounceTimer);
+    manager._updateHash();
+    return new URLSearchParams(window.location.hash.slice(1)).get('fc');
+  };
+  assert.equal(hashFc('fast-centre'), '1');
+  assert.equal(hashFc('standard'), null);
+});

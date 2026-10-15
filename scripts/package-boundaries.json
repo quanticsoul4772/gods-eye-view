@@ -680,7 +680,10 @@
       "src/ui/localSdrControls.js",
       "src/layers/localAdsb/feedNames.js",
       "src/ui/localSdrPresentation.js",
-      "src/data/cameraArrival.js"
+      "src/data/cameraArrival.js",
+      "src/maps/tilesetTuning.js",
+      "src/data/pickRegistry.js",
+      "src/ui/groundFocusGesture.js"
     ],
     "external": ["cesium"]
   },
@@ -2233,7 +2236,10 @@
       "src/sources/sourceDirectory.js",
       "src/data/sourceDomains.js",
       "src/data/sharedVehicleIcons.js",
-      "src/layers/bikeshare/vehicles.js"
+      "src/layers/bikeshare/vehicles.js",
+      "src/maps/tileRefinement.js",
+      "src/ui/groundFocusGesture.js",
+      "src/maps/tilesetTuning.js"
     ],
     "external": [
       "hls.js",
@@ -2897,7 +2903,8 @@
       "src/ui/visualEffects.js",
       "src/ui/visualInput.js",
       "src/ui/visualPresets.js",
-      "src/ui/visualSettings.js"
+      "src/ui/visualSettings.js",
+      "src/maps/tilesetTuning.js"
     ],
     "external": ["cesium"]
   },
