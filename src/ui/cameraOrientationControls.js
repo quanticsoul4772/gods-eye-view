@@ -49,24 +49,30 @@ export function pickGroundAt(viewer, center, { seaLevel = true } = {}) {
   if (!scene || !camera || !center) return null;
   let target = null;
 
-  if (scene.pickPositionSupported && typeof scene.pickPosition === 'function') {
-    try {
-      target = scene.pickPosition(center);
-    } catch {
-      target = null;
-    }
-  }
-  // pickPosition reads the depth of the last drawn frame, which an input
-  // event between frames finds gone. A ray pick renders its own pass, so a
-  // click always finds the 3D tiles it landed on.
+  // A ray pick first. pickPosition decodes the depth saved from the last
+  // drawn frame with the CURRENT frustum, and every scene.pick (a click, a
+  // hover) recomputes that frustum without drawing. With frames drawn only on
+  // request the two stay mismatched until the next frame: measured in Austin,
+  // a pick before Tilt put its pivot 51 m up in the air and moved the centre
+  // 87 m. A ray pick renders its own pass (4 ms median, 6 ms max on Google
+  // 3D tiles), so it answers with the surface that is there now.
   if (
-    !seaLevel &&
-    !isPickedWorldPosition(target) &&
     typeof scene.pickFromRay === 'function' &&
     typeof camera.getPickRay === 'function'
   ) {
     try {
       target = scene.pickFromRay(camera.getPickRay(center))?.position || null;
+    } catch {
+      target = null;
+    }
+  }
+  if (
+    !isPickedWorldPosition(target) &&
+    scene.pickPositionSupported &&
+    typeof scene.pickPosition === 'function'
+  ) {
+    try {
+      target = scene.pickPosition(center);
     } catch {
       target = null;
     }
@@ -393,8 +399,8 @@ export function bindCameraOrientationControls({
   const removers = [];
   let destroyed = false;
   let applied = null;
-  // The tilt state is the one thing here that costs a depth read of the middle
-  // of the screen: 4 ms median and up to 12 ms, measured on this machine. It is
+  // The tilt state is the one thing here that costs a pick of the middle of
+  // the screen: 4 ms median and up to 12 ms, measured on this machine. It is
   // therefore held between refreshes rather than recomputed per frame.
   let tilted = false;
   const animator = createCameraOrientationAnimator(viewer, { reduceMotion });

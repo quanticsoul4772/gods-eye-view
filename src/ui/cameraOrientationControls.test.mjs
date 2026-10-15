@@ -848,3 +848,22 @@ test('focusAt is silent in cockpit and while following, and routes as camera nav
   assert.deepEqual(routed, ['camera']);
   controls.destroy();
 });
+
+test('tilt pivots on the ray-picked ground, not a stale depth read', () => {
+  // After any scene.pick the depth of the last frame decodes against a
+  // recomputed frustum: here 51 m up in the air above the real ground.
+  const ground = Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 142);
+  const stale = Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 193);
+  const { viewer, calls } = createViewer({
+    cameraPosition: Cesium.Cartesian3.fromDegrees(-97.7431, 30.26, 841),
+    pickPosition: () => stale,
+  });
+  viewer.scene.pickFromRay = () => ({ position: ground });
+  assert.equal(pickViewTarget(viewer), ground);
+  toggleCameraTilt(viewer);
+  assert.equal(calls.find((call) => call.type === 'lookAt').target, ground);
+
+  // A ray that misses (sky, nothing loaded yet) still falls back.
+  viewer.scene.pickFromRay = () => undefined;
+  assert.equal(pickViewTarget(viewer), stale);
+});
