@@ -26,6 +26,36 @@ export function createBikeshareSource({
       const payload = await response.json();
       return Array.isArray(payload?.systems) ? payload.systems : [];
     },
+    /** Free-floating shared-vehicle systems (no feed URLs). */
+    async getVehicleSystems({ signal } = {}) {
+      signal?.throwIfAborted();
+      const response = await fetchImpl('/api/sharedmobility/systems', {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        signal,
+      });
+      if (!response.ok)
+        throw new Error('Shared vehicle systems HTTP ' + response.status);
+      const payload = await response.json();
+      return Array.isArray(payload?.systems) ? payload.systems : [];
+    },
+    /** One system's free vehicles, by directory entry id. */
+    async getVehicles(systemId, { signal } = {}) {
+      if (typeof systemId !== 'string' || !systemId)
+        throw new TypeError('A shared vehicle system id is required');
+      signal?.throwIfAborted();
+      const response = await fetchImpl(
+        '/api/sharedmobility/vehicles/' + encodeURIComponent(systemId),
+        { method: 'GET', headers: { Accept: 'application/json' }, signal },
+      );
+      if (!response.ok)
+        throw new Error('Shared vehicles HTTP ' + response.status);
+      const payload = await response.json();
+      signal?.throwIfAborted();
+      if (!Array.isArray(payload?.vehicles))
+        throw new Error('Malformed shared vehicle payload');
+      return payload;
+    },
     async getStations(upstreamUrl, { signal } = {}) {
       const url = new URL(upstreamUrl);
       if (url.protocol !== 'https:' || url.username || url.password || url.hash)

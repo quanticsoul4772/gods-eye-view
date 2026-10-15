@@ -253,7 +253,14 @@ const layers = [
   },
   {
     id: 'bikeshare',
-    aliases: ['bike share', 'bikes', 'bike stations'],
+    aliases: [
+      'bike share',
+      'bikes',
+      'bike stations',
+      'scooters',
+      'e-scooters',
+      'shared vehicles',
+    ],
     context: false,
     query: {
       fields: {
@@ -263,6 +270,10 @@ const layers = [
         name: ['t'],
         city: ['t'],
         renting: ['f'],
+        kind: ['t'],
+        formFactor: ['t'],
+        propulsion: ['t'],
+        operator: ['t'],
       },
     },
   },

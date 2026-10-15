@@ -3604,6 +3604,7 @@ test('actual Traffic, Bikeshare and Transit lifecycles retain sensitivity in eve
         deactivateAllCities: noop,
       },
       ingestion: { abortAllInFlight: noop },
+      vehicles: { sync: noop, disable: noop },
     },
   }).methods;
   app.viewer.camera.moveEnd = new Cesium.Event();

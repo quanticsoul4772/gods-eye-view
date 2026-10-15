@@ -54,6 +54,29 @@ export const POINT_HEIGHT_OFFSET_M = 2.0;
 
 export const MAX_TOTAL_POINTS = 8000;
 
+// --- Free-floating vehicles ---
+/** Vehicles show below this altitude (m): lower than stations, they are street-scale. */
+
+export const VEHICLE_ACTIVATION_ALTITUDE_M = 15000;
+
+export const VEHICLE_ENTER_ALTITUDE_M = VEHICLE_ACTIVATION_ALTITUDE_M - 1000;
+
+export const VEHICLE_EXIT_ALTITUDE_M = VEHICLE_ACTIVATION_ALTITUDE_M + 1000;
+
+/** Most vehicles drawn at once, nearest the camera centre first. */
+
+export const MAX_TOTAL_VEHICLES = 4000;
+
+/** Vertical offset (m) above the drawn surface for vehicle icons. */
+
+export const VEHICLE_HEIGHT_OFFSET_M = 1.5;
+
+/** On-screen vehicle icon size (px). */
+
+export const VEHICLE_ICON_PX = 18;
+
+export const BIKESHARE_MODES = Object.freeze(['stations', 'vehicles', 'both']);
+
 // --- Availability color palette ---
 /** Station has >60% bikes available. */
 

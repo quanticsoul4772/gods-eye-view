@@ -171,7 +171,12 @@ export function createIngestion({
      * @returns {Promise<void>}
      */
     async update() {
-      if (!layerState._enabled || layerState._activeCityIds.size === 0) return;
+      if (!layerState._enabled) return;
+      const vehicles = parts.vehicles.poll();
+      if (layerState._activeCityIds.size === 0) {
+        await vehicles;
+        return;
+      }
 
       const generation = layerState._proximityGeneration;
       const cityIds = Array.from(layerState._activeCityIds);
@@ -199,6 +204,7 @@ export function createIngestion({
 
       layerState._count = layerState._stationRenderMap.size;
       if (layerState._count > 0) layerState._lastUpdate = Date.now();
+      await vehicles;
     },
   };
 

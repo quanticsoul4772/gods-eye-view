@@ -5,12 +5,45 @@ import {
   BIKESHARE_SELECTED_OVERLAY_SOURCE_OPTIONS,
 } from './policy.js';
 
+const FORM_FACTOR_LABELS = Object.freeze({
+  bicycle: 'Bike',
+  cargo_bicycle: 'Cargo bike',
+  scooter_standing: 'E-scooter',
+  scooter_seated: 'Seated scooter',
+  moped: 'Moped',
+  car: 'Car',
+  other: 'Shared vehicle',
+  unknown: 'Shared vehicle',
+});
+const PROPULSION_LABELS = Object.freeze({
+  human: 'pedal',
+  electric_assist: 'e-assist',
+  electric: 'electric',
+  combustion: 'combustion',
+  combustion_diesel: 'diesel',
+  hybrid: 'hybrid',
+  plug_in_hybrid: 'plug-in hybrid',
+  hydrogen_fuel_cell: 'hydrogen',
+});
+
+/** The label a free-floating vehicle goes by (no id). */
+export function sharedVehicleLabel(record) {
+  const kind = FORM_FACTOR_LABELS[record?.formFactor] || 'Shared vehicle';
+  return record?.operator ? `${kind} · ${record.operator}` : kind;
+}
+
 export function createSelection({
   state: layerState,
   services,
   parts,
   source,
 }) {
+  /** A station or vehicle render record by key. */
+  const recordFor = (key) =>
+    layerState._stationRenderMap.get(key) ||
+    layerState._vehicleRenderMap.get(key) ||
+    null;
+
   /**
    * Build a multi-line text label for the selected station popup.
    * Shows station name, availability counts, and any abnormal operational flags.
@@ -19,6 +52,7 @@ export function createSelection({
    */
 
   function buildSelectionLabel(record) {
+    if (record?.kind === 'vehicle') return buildVehicleLabel(record);
     const stationName = String(record?.stationName || '').trim();
     const stationLabel =
       stationName ||
@@ -45,6 +79,24 @@ export function createSelection({
       lines.push(abnormal.join(' · '));
     }
 
+    return lines.join('\n');
+  }
+
+  /** A free-floating vehicle's card: what it is and who runs it; never an id. */
+  function buildVehicleLabel(record) {
+    const kind = FORM_FACTOR_LABELS[record.formFactor] || 'Shared vehicle';
+    const lines = [record.operator ? `${kind} · ${record.operator}` : kind];
+    const detail = [];
+    if (record.propulsion)
+      detail.push(PROPULSION_LABELS[record.propulsion] || record.propulsion);
+    if (Number.isFinite(record.reportedAt)) {
+      const min = Math.max(
+        0,
+        Math.round((Date.now() - record.reportedAt) / 60_000),
+      );
+      detail.push(min < 1 ? 'reported just now' : `reported ${min} min ago`);
+    }
+    if (detail.length) lines.push(detail.join(' · '));
     return lines.join('\n');
   }
 
@@ -89,7 +141,7 @@ export function createSelection({
 
   function _clearSelection() {
     if (layerState._selectedKey) {
-      const record = layerState._stationRenderMap.get(layerState._selectedKey);
+      const record = recordFor(layerState._selectedKey);
       if (record?.point) {
         record.point.show = true;
       }
@@ -113,7 +165,7 @@ export function createSelection({
   function _selectStation(key) {
     _clearSelection();
 
-    const record = layerState._stationRenderMap.get(key);
+    const record = recordFor(key);
     if (!record || !record.point?.position || !layerState._viewer) return;
 
     layerState._selectedKey = key;
@@ -167,15 +219,12 @@ export function createSelection({
         if (
           primitive &&
           typeof primitive.id === 'string' &&
-          layerState._stationRenderMap.has(primitive.id)
+          recordFor(primitive.id)
         ) {
           _selectStation(primitive.id);
           return;
         }
-        if (
-          typeof picked.id === 'string' &&
-          layerState._stationRenderMap.has(picked.id)
-        ) {
+        if (typeof picked.id === 'string' && recordFor(picked.id)) {
           _selectStation(picked.id);
           return;
         }

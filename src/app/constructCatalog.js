@@ -135,7 +135,7 @@ export function createApplicationCatalog({
         createApplicationCctv({ surface, source: sources.cctv }),
         createApplicationRadio({ surface, source: sources.radio }),
         createApplicationTransit({ surface, source: sources.transit }),
-        createApplicationBikeshare({ source: sources.bikeshare }),
+        createApplicationBikeshare({ surface, source: sources.bikeshare }),
         createApplicationDirections({ source: sources.directions }),
         createApplicationRecentImagery({ source: sources['recent-imagery'] }),
         vessels,

@@ -1163,7 +1163,9 @@
       "src/data/inputOwnership.js",
       "src/data/cameraSensitivity.js",
       "src/sources/sourceDirectory.js",
-      "src/data/sourceDomains.js"
+      "src/data/sourceDomains.js",
+      "src/data/sharedVehicleIcons.js",
+      "src/layers/bikeshare/vehicles.js"
     ],
     "external": ["cesium"]
   },
@@ -2229,7 +2231,9 @@
       "src/sceneCommandRelease.js",
       "src/layers/transit/catalog.js",
       "src/sources/sourceDirectory.js",
-      "src/data/sourceDomains.js"
+      "src/data/sourceDomains.js",
+      "src/data/sharedVehicleIcons.js",
+      "src/layers/bikeshare/vehicles.js"
     ],
     "external": [
       "hls.js",
@@ -2761,7 +2765,9 @@
       "src/hudLayoutPolicy.js",
       "src/layers/transit/catalog.js",
       "src/sources/sourceDirectory.js",
-      "src/data/sourceDomains.js"
+      "src/data/sourceDomains.js",
+      "src/data/sharedVehicleIcons.js",
+      "src/layers/bikeshare/vehicles.js"
     ],
     "external": [
       "hls.js",

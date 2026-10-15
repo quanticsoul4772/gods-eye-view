@@ -1,6 +1,7 @@
 import * as Cesium from 'cesium';
 import { GBFS_CITY_REGISTRY } from './registry.js';
 import { BIKESHARE_SELECTED_OVERLAY_SOURCE_ID } from './policy.js';
+import { modeHasStations } from './vehicles.js';
 import {
   claimCameraSensitivity,
   releaseCameraSensitivity,
@@ -30,6 +31,7 @@ export function createLifecycle({
       viewer.scene.primitives.add(layerState._pointCollection);
       registerSpriteCollection('bikeshare', layerState._pointCollection);
       layerState._pointCollection.show = false;
+      parts.vehicles.init(viewer);
 
       layerState._enabled = false;
       layerState._cameraDebounceTimer = null;
@@ -76,15 +78,19 @@ export function createLifecycle({
     enable(viewer) {
       layerState._enabled = true;
       layerState._error = null;
-      layerState._pointCollection.show = true;
+      layerState._pointCollection.show = modeHasStations(layerState._mode);
       layerState._overlayHost.setVisible(
         BIKESHARE_SELECTED_OVERLAY_SOURCE_ID,
         true,
       );
       parts.selection._installClickHandler(viewer);
       // Pick-ownership (H2): station point ids are string render-map keys.
-      registerPickOwner('bikeshare', (pickedId) =>
-        layerState._stationRenderMap.has(pickedId),
+      // Vehicle billboard ids are "veh:<index>" keys of their own render map.
+      registerPickOwner(
+        'bikeshare',
+        (pickedId) =>
+          layerState._stationRenderMap.has(pickedId) ||
+          layerState._vehicleRenderMap.has(pickedId),
       );
 
       if (!layerState._cameraChangedAttached) {
@@ -97,6 +103,7 @@ export function createLifecycle({
       }
 
       layerState._systemsReady = typeof source?.getSystems !== 'function';
+      parts.vehicles.sync();
       void parts.viewport.runProximityCheck();
       // Directory systems join once the server's list arrives; only then is
       // "no system here" known, so that status and its count wait for it.
@@ -160,6 +167,7 @@ export function createLifecycle({
 
       parts.ingestion.abortAllInFlight();
       parts.viewport.deactivateAllCities();
+      parts.vehicles.disable();
       layerState._cityRuntime.clear();
       layerState._pointCollection.show = false;
       layerState._count = 0;
@@ -195,6 +203,7 @@ export function createLifecycle({
         viewer.scene.primitives.remove(layerState._pointCollection);
         layerState._pointCollection = null;
       }
+      parts.vehicles.destroy(viewer);
       layerState._viewer = null;
     },
   };

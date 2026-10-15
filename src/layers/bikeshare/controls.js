@@ -1,5 +1,27 @@
-import { STATUS_POLL_MS } from './policy.js';
+import {
+  BIKESHARE_MODES,
+  STATUS_POLL_MS,
+  VEHICLE_ACTIVATION_ALTITUDE_M,
+} from './policy.js';
 import { listedSourcesText } from '../../sources/sourceDirectory.js';
+import { modeHasStations, modeHasVehicles } from './vehicles.js';
+import { sharedVehicleLabel } from './selection.js';
+
+const MODE_CHIPS = Object.freeze({
+  stations: { label: 'Stations', title: 'Docking stations and their bikes' },
+  vehicles: {
+    label: 'Vehicles',
+    title: 'Free-floating bikes, scooters and other shared vehicles',
+  },
+  both: { label: 'Both', title: 'Stations and free-floating vehicles' },
+});
+
+const compact = (n) =>
+  n >= 10_000
+    ? `${Math.round(n / 1000)}K`
+    : n >= 1000
+      ? `${(n / 1000).toFixed(1)}K`
+      : String(n);
 
 export function createControls({ state: layerState, services, parts, source }) {
   const methods = {
@@ -18,6 +40,50 @@ export function createControls({ state: layerState, services, parts, source }) {
      * @param {Object} [options] - Sampling options (maxCount, seed).
      * @returns {Array<{ position: Cesium.Cartesian3, id: string, type: string, skipLabel: boolean }>}
      */
+    /** Saved and URL-restored options: what the layer draws. */
+    getParams() {
+      return { mode: layerState._mode };
+    },
+
+    /**
+     * Switch between stations, vehicles and both. Stored while the layer is
+     * off (saved options apply before enable); while on, the part the new
+     * mode leaves out is torn down and the camera check runs again.
+     * @returns {boolean|undefined} false only for an unknown mode.
+     */
+    setParams(params = {}) {
+      if (params.mode === undefined) return undefined;
+      if (!BIKESHARE_MODES.includes(params.mode)) return false;
+      if (params.mode === layerState._mode) return true;
+      layerState._mode = params.mode;
+      if (!layerState._enabled) return true;
+      layerState._proximityGeneration++;
+      if (!modeHasStations(layerState._mode)) {
+        parts.selection._clearSelection();
+        parts.viewport.deactivateAllCities();
+        layerState._cityRuntime.clear();
+        layerState._count = 0;
+      }
+      if (layerState._pointCollection)
+        layerState._pointCollection.show = modeHasStations(layerState._mode);
+      parts.vehicles.sync();
+      void parts.viewport.runProximityCheck();
+      return true;
+    },
+
+    /** Stations | Vehicles | Both chips on the layer row. */
+    getRowControls() {
+      return {
+        chips: BIKESHARE_MODES.map((mode) => ({
+          id: `mode-${mode}`,
+          label: MODE_CHIPS[mode].label,
+          title: MODE_CHIPS[mode].title,
+          active: layerState._mode === mode,
+          params: { mode },
+        })),
+      };
+    },
+
     getDetectableObjects(options = {}) {
       return parts.queries.collectDetectableStations(options);
     },
@@ -27,7 +93,9 @@ export function createControls({ state: layerState, services, parts, source }) {
      * query engine. On demand only (once per spoken query); [] while the
      * layer is off.
      * @param {number} [maxCount=Infinity] Most records to return.
-     * @returns {Array<Object>} {id, name, city, lat, lon, bikesAvailable, docksAvailable, capacity, renting}.
+     * @returns {Array<Object>} {id, kind, name, city, lat, lon, bikesAvailable,
+     *   docksAvailable, capacity, renting, formFactor, propulsion, operator}:
+     *   stations first, then free-floating vehicles (no vehicle ids).
      */
     getAnalystRecords(maxCount = Infinity) {
       if (!layerState._enabled) return [];
@@ -42,6 +110,7 @@ export function createControls({ state: layerState, services, parts, source }) {
           continue;
         result.push({
           id: record.stationName || `Dock ${record.stationId}`,
+          kind: 'station',
           name: record.stationName || null,
           city: record.cityId || null,
           lat: info.lat,
@@ -50,6 +119,27 @@ export function createControls({ state: layerState, services, parts, source }) {
           docksAvailable: num(record.docksAvailable),
           capacity: num(record.capacity),
           renting: record.isRenting !== false,
+          formFactor: null,
+          propulsion: null,
+          operator: null,
+        });
+      }
+      for (const record of layerState._vehicleRenderMap.values()) {
+        if (result.length >= maxCount) break;
+        result.push({
+          id: sharedVehicleLabel(record),
+          kind: 'vehicle',
+          name: null,
+          city: record.systemName || null,
+          lat: record.lat,
+          lon: record.lon,
+          bikesAvailable: null,
+          docksAvailable: null,
+          capacity: null,
+          renting: null,
+          formFactor: record.formFactor,
+          propulsion: record.propulsion,
+          operator: record.operator || null,
         });
       }
       return result;
@@ -60,31 +150,68 @@ export function createControls({ state: layerState, services, parts, source }) {
      * @returns {{ count: number, lastUpdate: number|null, loading: boolean, loadingLabel?: string, error?: string }}
      */
     getStats() {
+      const mode = layerState._mode;
+      const withStations = modeHasStations(mode);
+      const withVehicles = modeHasVehicles(mode);
+      const stations = withStations ? layerState._count : 0;
+      const vehicles = withVehicles ? layerState._vehicleCount : 0;
       const stats = {
-        count: layerState._count,
+        count: stations + vehicles,
         lastUpdate: layerState._lastUpdate,
         loading: layerState._loading,
       };
+      if (mode === 'both' && stations && vehicles)
+        stats.countLabel = `${compact(stations)} st · ${compact(vehicles)} veh`;
       if (layerState._loading) {
+        const feeds =
+          (withStations ? layerState._activeCityIds.size : 0) +
+          (withVehicles ? layerState._activeVehicleIds.size : 0);
         stats.loadingLabel =
-          layerState._activeCityIds.size > 0
-            ? `syncing ${layerState._activeCityIds.size} city feeds...`
+          feeds > 0
+            ? `syncing ${feeds} feed${feeds === 1 ? '' : 's'}...`
             : 'scanning nearby systems...';
       }
-      if (layerState._error) stats.error = layerState._error;
-      else if (
+      // Each part reports its own failure; in Both, a vehicle failure only
+      // counts once no vehicles are drawn at all.
+      const error =
+        (withStations && layerState._error) ||
+        (withVehicles &&
+          layerState._vehicleError &&
+          (mode === 'vehicles' || layerState._vehicleCount === 0) &&
+          layerState._vehicleError) ||
+        null;
+      if (error) {
+        stats.error = error;
+        return stats;
+      }
+      if (layerState._loading) return stats;
+      const stationsEmpty =
         layerState._altitudeGateEnabled &&
         layerState._systemsReady &&
-        layerState._activeCityIds.size === 0 &&
-        !layerState._loading
+        layerState._activeCityIds.size === 0;
+      const vehiclesEmpty =
+        layerState._vehicleGate &&
+        layerState._vehicleSystemsReady &&
+        layerState._activeVehicleIds.size === 0;
+      if (mode === 'vehicles' && !layerState._vehicleGate) {
+        stats.status = 'zoom-in';
+        stats.statusMessage = `Fly below ${Math.round(VEHICLE_ACTIVATION_ALTITUDE_M / 1000)} km for shared vehicles`;
+      } else if (
+        mode === 'vehicles'
+          ? vehiclesEmpty
+          : stationsEmpty &&
+            (mode === 'stations' || vehiclesEmpty || !layerState._vehicleGate)
       ) {
         stats.status = 'empty';
-        stats.statusMessage = `No system here${listedSourcesText(
-          source.listed?.count(
-            layerState._center?.lat,
-            layerState._center?.lon,
-          ),
-        )}`;
+        stats.statusMessage =
+          mode === 'vehicles'
+            ? 'No shared vehicles here'
+            : `No system here${listedSourcesText(
+                source.listed?.count(
+                  layerState._center?.lat,
+                  layerState._center?.lon,
+                ),
+              )}`;
       }
       return stats;
     },

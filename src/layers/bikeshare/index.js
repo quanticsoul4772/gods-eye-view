@@ -9,6 +9,7 @@ import { createTesting } from './testing.js';
 import { createControls } from './controls.js';
 import { createLifecycle } from './lifecycle.js';
 import { createState } from './state.js';
+import { createVehicles } from './vehicles.js';
 
 /** Construct one layer with its own scene state and supplied application services. */
 export function createBikeshareLayer({ services, source }) {
@@ -24,6 +25,7 @@ export function createBikeshareLayer({ services, source }) {
   parts.model = createModel(context);
   parts.viewport = createViewport(context);
   parts.rendering = createRendering(context);
+  parts.vehicles = createVehicles(context);
   parts.selection = createSelection(context);
   parts.queries = createQueries(context);
   parts.testing = createTesting(context);

@@ -50,16 +50,32 @@ test('bikeshare stations join coordinates from station information', () => {
     _stationInfoCache: new Map([
       ['austin', new Map([['1', { lat: 30.27, lon: -97.74 }]])],
     ]),
+    _vehicleRenderMap: new Map([
+      [
+        'veh:0',
+        {
+          key: 'veh:0',
+          kind: 'vehicle',
+          lat: 30.2712,
+          lon: -97.7431,
+          formFactor: 'scooter_standing',
+          propulsion: 'electric',
+          operator: 'Lime',
+          systemName: 'Lime Austin',
+        },
+      ],
+    ]),
   };
   const { methods } = bikeshareControls({ state, parts: {} });
   const rows = methods.getAnalystRecords();
   assert.equal(
     rows.length,
-    1,
+    2,
     'a station without coordinates is not countable',
   );
   assert.deepEqual(rows[0], {
     id: 'Congress',
+    kind: 'station',
     name: 'Congress',
     city: 'austin',
     lat: 30.27,
@@ -68,8 +84,28 @@ test('bikeshare stations join coordinates from station information', () => {
     docksAvailable: 6,
     capacity: 10,
     renting: true,
+    formFactor: null,
+    propulsion: null,
+    operator: null,
   });
   assertDeclaredFields('bikeshare', rows[0]);
+  // A free-floating vehicle: named by kind and operator, never by a vendor id.
+  assert.deepEqual(rows[1], {
+    id: 'E-scooter · Lime',
+    kind: 'vehicle',
+    name: null,
+    city: 'Lime Austin',
+    lat: 30.2712,
+    lon: -97.7431,
+    bikesAvailable: null,
+    docksAvailable: null,
+    capacity: null,
+    renting: null,
+    formFactor: 'scooter_standing',
+    propulsion: 'electric',
+    operator: 'Lime',
+  });
+  assertDeclaredFields('bikeshare', rows[1]);
   state._enabled = false;
   assert.deepEqual(methods.getAnalystRecords(), []);
 });

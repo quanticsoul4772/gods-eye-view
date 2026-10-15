@@ -5,6 +5,7 @@ import {
   CITY_RANGE_BASE_KM,
   CAMERA_DEBOUNCE_MS,
 } from './policy.js';
+import { modeHasStations } from './vehicles.js';
 
 export function createViewport({ state: layerState, services, parts, source }) {
   const { governorRequestRender } = services.render;
@@ -78,25 +79,31 @@ export function createViewport({ state: layerState, services, parts, source }) {
   }
 
   /**
-   * Determine which cities are close enough to the camera to warrant loading.
-   * Compares haversine distance from the camera center to each city's center
-   * against the city's configured load radius.
+   * Determine which systems are close enough to the camera to warrant loading.
+   * Compares haversine distance from the camera center to each system's center
+   * against its load radius (at least `baseKm`).
    * @param {{ lat: number, lon: number }} center - Camera center in degrees.
-   * @returns {Set<string>} Set of city ids currently within load range.
+   * @param {Map<string, Object>} [systems] - Station cities by default.
+   * @param {number} [baseKm] - Smallest load radius.
+   * @returns {Set<string>} Set of ids currently within load range.
    */
 
-  function computeInRangeCities(center) {
+  function computeInRangeCities(
+    center,
+    systems = layerState._cities,
+    baseKm = CITY_RANGE_BASE_KM,
+  ) {
     const active = new Set();
     if (!center) return active;
 
-    for (const city of layerState._cities.values()) {
+    for (const city of systems.values()) {
       const distance = parts.model.haversineKm(
         center.lat,
         center.lon,
         city.centerLat,
         city.centerLon,
       );
-      const radius = Math.max(CITY_RANGE_BASE_KM, city.loadRadiusKm);
+      const radius = Math.max(baseKm, city.loadRadiusKm);
       if (distance <= radius) active.add(city.id);
     }
 
@@ -191,14 +198,21 @@ export function createViewport({ state: layerState, services, parts, source }) {
 
     const generation = ++layerState._proximityGeneration;
     const altitude = getCameraAltitude(layerState._viewer);
+    const center = getCameraCenterLatLon(layerState._viewer);
+    layerState._center = center;
+    // Vehicles have their own gate and radius, and run whatever stations do.
+    parts.vehicles.proximity(center, altitude);
+    if (!modeHasStations(layerState._mode)) {
+      layerState._altitudeGateEnabled = false;
+      deactivateAllCities();
+      return;
+    }
     // Altitude gate: disable all cities when camera is too high
     if (!shouldActivateAtAltitude(altitude)) {
       deactivateAllCities();
       return;
     }
 
-    const center = getCameraCenterLatLon(layerState._viewer);
-    layerState._center = center;
     if (!center) return;
 
     // Diff active set against newly computed in-range set

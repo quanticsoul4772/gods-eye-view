@@ -38,7 +38,8 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // omit top-level anyOf (OpenAI rejects it). Contacts list routing preserves
     // requested radius and center authority in descriptions only.
     // Street Level adds its toggle enum values and generated alias hint.
-    '9eb113454c5af5e32e27ffcdc7919d0e4600ba1d204f8f175e071152be41ad0f',
+    // Bike share's shared-vehicle aliases and fields extend the manifest hints.
+    '83f146cab487e1fa446032ab63e4b66c821be399a940e5f53137bdb8c47d607d',
   );
 });
 

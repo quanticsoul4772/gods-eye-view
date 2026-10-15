@@ -1,3 +1,5 @@
+import { sharedVehicleLabel } from './selection.js';
+
 export function createQueries({ state: layerState, services, parts, source }) {
   /**
    * Build a compact HUD detection ID string for a station.
@@ -30,22 +32,22 @@ export function createQueries({ state: layerState, services, parts, source }) {
    */
 
   function collectDetectableStations(options = {}) {
-    if (
-      !layerState._enabled ||
-      !layerState._pointCollection ||
-      !layerState._pointCollection.show ||
-      layerState._stationRenderMap.size === 0
-    )
-      return [];
+    if (!layerState._enabled) return [];
 
-    // Gather all visible station records (include selected even though its point is hidden)
+    // Gather visible station and vehicle records (include the selected one
+    // even though its point is hidden).
     const records = [];
-    for (const record of layerState._stationRenderMap.values()) {
-      const isSelected = record.key === layerState._selectedKey;
-      if ((!record.point?.show && !isSelected) || !record.point?.position)
-        continue;
-      records.push(record);
-    }
+    const add = (map, collection) => {
+      if (!collection?.show) return;
+      for (const record of map.values()) {
+        const isSelected = record.key === layerState._selectedKey;
+        if ((!record.point?.show && !isSelected) || !record.point?.position)
+          continue;
+        records.push(record);
+      }
+    };
+    add(layerState._stationRenderMap, layerState._pointCollection);
+    add(layerState._vehicleRenderMap, layerState._vehicleCollection);
     if (records.length === 0) return [];
 
     // Deterministic subsampling: pick every Nth station, offset by seed
@@ -62,7 +64,10 @@ export function createQueries({ state: layerState, services, parts, source }) {
       result.push({
         position: record.point.position,
         sourceId: record.key,
-        id: buildDetectionId(record),
+        id:
+          record.kind === 'vehicle'
+            ? `🛴 ${sharedVehicleLabel(record)}`
+            : buildDetectionId(record),
         type: 'VEH',
         skipLabel: record.key === layerState._selectedKey,
       });

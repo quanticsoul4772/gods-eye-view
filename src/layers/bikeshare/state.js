@@ -114,5 +114,53 @@ export function createState({ services }) {
   /** Whether the MAX_TOTAL_POINTS cap warning has already been logged. */
 
   layerState._limitWarned = false;
+
+  // ---------------------------------------------------------------------------
+  // Free-floating shared vehicles (vehicles.js)
+  // ---------------------------------------------------------------------------
+
+  /** What the layer draws: 'stations', 'vehicles' or 'both'. */
+
+  layerState._mode = 'stations';
+
+  /** @type {Map<string, Object>} Shared-vehicle systems from the server, by id. */
+
+  layerState._vehicleSystems = new Map();
+
+  layerState._vehicleSystemsReady = false;
+
+  layerState._vehicleSystemsLoading = null;
+
+  /** Hysteresis flag for the vehicles' own (lower) altitude gate. */
+
+  layerState._vehicleGate = false;
+
+  /** @type {Set<string>} Vehicle systems currently in range. */
+
+  layerState._activeVehicleIds = new Set();
+
+  /** @type {Map<string, {vehicles: Object[], expiresAt: number}>} Latest snapshot per active system. */
+
+  layerState._vehicleSnapshots = new Map();
+
+  /** @type {Map<string, AbortController>} In-flight vehicle requests. */
+
+  layerState._inFlightVehicles = new Map();
+
+  /** @type {Map<string, Object>} Render records keyed "veh:<index>". */
+
+  layerState._vehicleRenderMap = new Map();
+
+  /** @type {Cesium.BillboardCollection|null} */
+
+  layerState._vehicleCollection = null;
+
+  layerState._vehicleCount = 0;
+
+  layerState._vehicleError = null;
+
+  /** @type {Set<string>} Vehicle systems whose credit is registered. */
+
+  layerState._creditedVehicleSystems = new Set();
   return layerState;
 }

@@ -297,6 +297,13 @@ function imageryPinOption(key, token) {
 }
 
 const OPTION_GROUPS = Object.freeze({
+  bikeshare: Object.freeze([
+    enumOption('mode', 'm', 'stations', ['stations', 'vehicles', 'both'], {
+      stations: 's',
+      vehicles: 'v',
+      both: 'b',
+    }),
+  ]),
   traffic: Object.freeze([
     enumOption('roadMode', 'r', null, ['tomtom', 'osm', 'hybrid'], {
       tomtom: 't',
@@ -587,7 +594,12 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     token: 'z',
     disposition: 'enabled-only',
   }),
-  Object.freeze({ id: 'bikeshare', token: 'b', disposition: 'enabled-only' }),
+  Object.freeze({
+    id: 'bikeshare',
+    token: 'b',
+    disposition: 'enabled+options',
+    optionOwner: 'bikeshare',
+  }),
   Object.freeze({
     id: 'cctv',
     token: 'c',
