@@ -16,6 +16,7 @@ import { radioBrowserProxy } from './radio.js';
 import { gbfsProxy } from './gbfs.js';
 import { localReceiversProxy } from './local-receivers.js';
 import { transitProxy } from './transit.js';
+import { sharedMobilityProxy } from './sharedMobility.js';
 import {
   createSourceDirectory,
   publicOnlyFetch,
@@ -63,6 +64,7 @@ function localProviderPlugins({ realtime } = {}) {
     cctvProxy({ sourceRoot: defaultSourceRoot }),
     radioBrowserProxy(),
     gbfsProxy({ directory }),
+    sharedMobilityProxy({ directory }),
     localReceiversProxy(),
     transitProxy({ directory, directoryFetch: publicOnlyFetch }),
     adsbLolProxy(),

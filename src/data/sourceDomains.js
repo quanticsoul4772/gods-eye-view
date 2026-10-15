@@ -7,6 +7,7 @@
 export const TRANSIT_DOMAIN = 'transit.vehicles';
 export const BIKESHARE_DOMAIN = 'bikeshare.stations';
 export const CAMERAS_DOMAIN = 'cameras.stills';
+export const SHAREDMOBILITY_DOMAIN = 'sharedmobility.vehicles';
 
 export const SOURCE_DOMAINS = Object.freeze([
   Object.freeze({
