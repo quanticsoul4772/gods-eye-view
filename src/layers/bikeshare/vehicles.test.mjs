@@ -464,3 +464,12 @@ test('a fetch abandoned by disable does not end the loading of the next enable',
   assert.equal(app.state._loadingOps, 1, 'the old fetch did not end it');
   assert.equal(app.state._loading, true);
 });
+
+test('bike-share stats say what the count is of in each mode', async () => {
+  const app = harness({ mode: 'stations' });
+  assert.equal(app.controls.getStats().countOf, 'stations');
+  app.state._mode = 'vehicles';
+  assert.equal(app.controls.getStats().countOf, 'shared vehicles');
+  app.state._mode = 'both';
+  assert.equal(app.controls.getStats().countOf, 'stations and shared vehicles');
+});

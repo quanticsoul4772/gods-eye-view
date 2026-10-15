@@ -158,6 +158,13 @@ export function createControls({ state: layerState, services, parts, source }) {
       const vehicles = withVehicles ? layerState._vehicleCount : 0;
       const stats = {
         count: stations + vehicles,
+        // What the count is of, for captions and voice answers.
+        countOf:
+          mode === 'vehicles'
+            ? 'shared vehicles'
+            : mode === 'both'
+              ? 'stations and shared vehicles'
+              : 'stations',
         lastUpdate: layerState._lastUpdate,
         loading: layerState._loading,
       };

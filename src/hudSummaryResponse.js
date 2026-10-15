@@ -62,7 +62,7 @@ export const HUD_SUMMARY_INSTRUCTIONS = [
  * @param {{ now?: number }} [options]
  * @returns {{
  *   enabledLayerLabels: string[],
- *   enabledLayers: Array<{id: string|null, name: string|null, feedState: string, source: string|null, count: number}>,
+ *   enabledLayers: Array<{id: string|null, name: string|null, feedState: string, source: string|null, count: number, countOf?: string}>,
  *   feedProvenance: object,
  * }}
  */
@@ -77,6 +77,7 @@ export function hudSummaryLayerContext(layers = [], options) {
       feedState: s.feedState,
       source: s.source,
       count: s.count,
+      ...(s.countOf ? { countOf: s.countOf } : {}),
     })),
     feedProvenance: envelope,
   };

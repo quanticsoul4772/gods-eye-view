@@ -123,6 +123,7 @@ export function worstFeedState(states) {
  *   feedState: string,
  *   source: string|null,
  *   count: number,
+ *   countOf: string|null,
  *   lastUpdate: number|null,
  *   ageSec: number|null,
  *   ageLabel: string|null,
@@ -139,6 +140,12 @@ export function layerSnapshot(layer = {}, { now = Date.now() } = {}) {
     ? Number(stats.lastUpdate)
     : null;
   const feedState = enabled ? layerFeedState({ ...stats, source }) : 'off';
+  // What the count counts, when a layer says so (bike share: stations or
+  // shared vehicles), so a caption doesn't guess from the layer's name.
+  const countOf =
+    typeof stats.countOf === 'string' && stats.countOf.trim()
+      ? stats.countOf.trim().slice(0, 40)
+      : null;
   return {
     id: layer.id || layer.layerKey || null,
     name: layer.name || layer.label || layer.id || layer.layerKey || null,
@@ -146,6 +153,7 @@ export function layerSnapshot(layer = {}, { now = Date.now() } = {}) {
     feedState,
     source,
     count,
+    countOf,
     lastUpdate,
     ageSec: snapshotAgeSec(lastUpdate, now),
     ageLabel: snapshotAgeLabel(lastUpdate, now),
@@ -245,6 +253,7 @@ export function viewStateLayerRow(layer, options) {
     name: snap.name,
     enabled: snap.enabled,
     count: snap.count,
+    ...(snap.countOf ? { countOf: snap.countOf } : {}),
     error: snap.error,
     feedState: snap.feedState,
     source: snap.source,
