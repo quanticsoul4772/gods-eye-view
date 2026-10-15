@@ -12,6 +12,7 @@ import { createPlaceSearch } from '../search/placeSearch.js';
 //
 // Run with: npm test   (node --test)
 import { test } from 'node:test';
+import * as Cesium from 'cesium';
 import assert from 'node:assert/strict';
 import {
   resolveAnnotationTarget as resolveTarget,
@@ -622,3 +623,31 @@ test('a not-found is remembered only when every source consulted gave a verdict'
 function resolveAnnotationTarget(options) {
   return resolveTarget({ placeSearch: createStandalonePlaceSearch({ resolveApiKey: () => globalThis.window?.__GOOGLE_MAPS_API_KEY__ }), ...options });
 }
+
+test('a pixel pick is ray-picked; a live pointer preview keeps the cheap depth read', async () => {
+  const { pickWorldFromScreen } = await import('./annotationResolver.js');
+  const ground = Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 142);
+  const stale = Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 193);
+  let rays = 0;
+  const viewer = {
+    scene: {
+      canvas: { clientWidth: 800, clientHeight: 600 },
+      pickFromRay: () => {
+        rays += 1;
+        return { position: ground };
+      },
+      pickPositionSupported: true,
+      pickPosition: () => stale,
+    },
+    camera: { getPickRay: (position) => ({ position }), pickEllipsoid: () => null },
+  };
+  // A click, or the agent pointing at a pixel: the surface drawn there now.
+  assert.equal(Math.round(pickWorldFromScreen(viewer, 0.5, 0.5).height), 142);
+  assert.equal(rays, 1);
+  // A drag preview runs per pointer move; a 4 ms ray pick each would stall it.
+  assert.equal(
+    Math.round(pickWorldFromScreen(viewer, 0.5, 0.5, { live: true }).height),
+    193,
+  );
+  assert.equal(rays, 1, 'no ray pick per pointer move');
+});

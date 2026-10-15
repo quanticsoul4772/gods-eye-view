@@ -26,7 +26,10 @@ import {
   US_CENSUS_CREDIT,
 } from '../data/dataCredits.js';
 import { unavailablePlaceSearch } from '../search/placeSearch.js';
-import { isPickedWorldPosition } from '../data/scenePick.js';
+import {
+  isPickedWorldPosition,
+  pickRenderedSurface,
+} from '../data/scenePick.js';
 
 /** Ms the analyst region lookup waits on geocode + admin boundary. */
 export const REGION_FALLBACK_BUDGET_MS = 3_000;
@@ -1905,7 +1908,7 @@ export function createAnnotationResolver({
    * fallback: the agent indicates a spot in the viewport screenshot when it can't
    * name the place, and we anchor the mark to the actual world point under it.
    */
-  function pickWorldFromScreen(viewer, nx, ny) {
+  function pickWorldFromScreen(viewer, nx, ny, { live = false } = {}) {
     const scene = viewer?.scene;
     if (!scene) return null;
     const canvas = scene.canvas;
@@ -1920,8 +1923,12 @@ export function createAnnotationResolver({
     // can return a NaN or centre-of-the-earth Cartesian, and converting one of
     // those throws inside Cesium. A degenerate pick IS a missed pick, so it falls
     // through to the next stage and ultimately to the caller's null.
+    // A click or a question picks ray first (see pickRenderedSurface). A
+    // `live` preview follows every pointer move, where a 4 ms ray pick per
+    // event would stall the drag; it keeps the cheap depth read.
     let cart = null;
-    if (
+    if (!live) cart = pickRenderedSurface(scene, viewer.camera, pos);
+    else if (
       scene.pickPositionSupported &&
       typeof scene.pickPosition === 'function'
     ) {

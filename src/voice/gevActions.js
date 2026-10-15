@@ -41,7 +41,10 @@ import {
   adjustOrbitRange,
 } from '../cameraVerbs.js';
 import * as defaultFloorServices from '../data/groundFloor.js';
-import { isPickedWorldPosition } from '../data/scenePick.js';
+import {
+  isPickedWorldPosition,
+  pickRenderedSurface,
+} from '../data/scenePick.js';
 import { ISS_NORAD } from '../layers/satellites/policy.js';
 import { countryNameAt } from '../data/adminBoundaries.js';
 import { unavailablePlaceSearch } from '../search/placeSearch.js';
@@ -4289,15 +4292,8 @@ function getViewTargetCartesian(viewer) {
   const width = canvas.clientWidth || canvas.width || 0;
   const height = canvas.clientHeight || canvas.height || 0;
   const center = new Cesium.Cartesian2(width / 2, height / 2);
-  let position = null;
-
-  if (scene.pickPositionSupported && typeof scene.pickPosition === 'function') {
-    try {
-      position = scene.pickPosition(center);
-    } catch {
-      position = null;
-    }
-  }
+  // A voice turn often follows a click or hover pick: ray first.
+  let position = pickRenderedSurface(scene, viewer.camera, center);
 
   if (
     !isPickedWorldPosition(position) &&

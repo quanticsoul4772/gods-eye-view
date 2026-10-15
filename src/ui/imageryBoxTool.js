@@ -114,12 +114,12 @@ export function initImageryBoxTool({
     outline.show = visible;
     requestRender();
   };
-  const worldAt = (position) => {
+  const worldAt = (position, options) => {
     if (!position) return null;
     const canvas = viewer.scene.canvas;
     const w = canvas?.clientWidth || canvas?.width || 1;
     const h = canvas?.clientHeight || canvas?.height || 1;
-    const point = pickWorld(viewer, position.x / w, position.y / h);
+    const point = pickWorld(viewer, position.x / w, position.y / h, options);
     const lon = Number(point?.lon);
     const lat = Number(point?.lat);
     return Number.isFinite(lon) && Number.isFinite(lat) ? { lon, lat } : null;
@@ -159,7 +159,8 @@ export function initImageryBoxTool({
     setPreview(true);
   };
   const onMove = (event) => {
-    const point = anchor && !destroyed && worldAt(event.endPosition);
+    const point =
+      anchor && !destroyed && worldAt(event.endPosition, { live: true });
     if (!point) return;
     corner = point;
     requestRender();

@@ -1,5 +1,8 @@
 import * as Cesium from 'cesium';
-import { isPickedWorldPosition } from '../data/scenePick.js';
+import {
+  isPickedWorldPosition,
+  pickRenderedSurface,
+} from '../data/scenePick.js';
 
 function trackedTarget(viewer) {
   const entity = viewer.trackedEntity;
@@ -47,36 +50,8 @@ export function pickGroundAt(viewer, center, { seaLevel = true } = {}) {
   const scene = viewer?.scene;
   const camera = viewer?.camera;
   if (!scene || !camera || !center) return null;
-  let target = null;
-
-  // A ray pick first. pickPosition decodes the depth saved from the last
-  // drawn frame with the CURRENT frustum, and every scene.pick (a click, a
-  // hover) recomputes that frustum without drawing. With frames drawn only on
-  // request the two stay mismatched until the next frame: measured in Austin,
-  // a pick before Tilt put its pivot 51 m up in the air and moved the centre
-  // 87 m. A ray pick renders its own pass (4 ms median, 6 ms max on Google
-  // 3D tiles), so it answers with the surface that is there now.
-  if (
-    typeof scene.pickFromRay === 'function' &&
-    typeof camera.getPickRay === 'function'
-  ) {
-    try {
-      target = scene.pickFromRay(camera.getPickRay(center))?.position || null;
-    } catch {
-      target = null;
-    }
-  }
-  if (
-    !isPickedWorldPosition(target) &&
-    scene.pickPositionSupported &&
-    typeof scene.pickPosition === 'function'
-  ) {
-    try {
-      target = scene.pickPosition(center);
-    } catch {
-      target = null;
-    }
-  }
+  // The surface drawn there now, ray first (see pickRenderedSurface).
+  let target = pickRenderedSurface(scene, camera, center);
   // Terrain before the ellipsoid: globe.pick intersects the rendered surface,
   // so over keyless elevated terrain it returns the ground the operator is
   // looking at. pickEllipsoid answers with sea level, which on a plateau sits

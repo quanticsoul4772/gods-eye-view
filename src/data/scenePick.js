@@ -47,3 +47,47 @@ export function isPickedWorldPosition(position) {
   const magnitude = Math.hypot(x, y, z);
   return magnitude >= MIN_PICK_MAGNITUDE_M && magnitude <= MAX_PICK_MAGNITUDE_M;
 }
+
+/**
+ * The rendered surface under a canvas position (CSS pixels), or null.
+ *
+ * A ray pick first. `scene.pickPosition` decodes the depth saved from the
+ * last drawn frame with the main view's CURRENT frustum, and every
+ * `scene.pick` (a click, a hover) recomputes that frustum without drawing.
+ * With frames drawn only on request the two stay mismatched until the next
+ * frame: in Austin a click before a depth read put the point 51 m up in the
+ * air. A ray pick renders its own pass, 4 ms median on Google 3D tiles
+ * against 1 ms, so it suits a pick per click or per question, not per mouse
+ * move. The depth read stays as the next step for a ray that finds nothing.
+ *
+ * @param {object} scene Cesium Scene.
+ * @param {object} camera Cesium Camera.
+ * @param {{x: number, y: number}} position Canvas position in CSS pixels.
+ * @returns {object|null} Cartesian3 on the rendered surface.
+ */
+export function pickRenderedSurface(scene, camera, position) {
+  if (!scene || !camera || !position) return null;
+  let target = null;
+  if (
+    typeof scene.pickFromRay === 'function' &&
+    typeof camera.getPickRay === 'function'
+  ) {
+    try {
+      target = scene.pickFromRay(camera.getPickRay(position))?.position ?? null;
+    } catch {
+      target = null;
+    }
+  }
+  if (
+    !isPickedWorldPosition(target) &&
+    scene.pickPositionSupported &&
+    typeof scene.pickPosition === 'function'
+  ) {
+    try {
+      target = scene.pickPosition(position);
+    } catch {
+      target = null;
+    }
+  }
+  return isPickedWorldPosition(target) ? target : null;
+}

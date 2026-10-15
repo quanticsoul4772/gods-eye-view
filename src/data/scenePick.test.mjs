@@ -129,3 +129,28 @@ test('the guard rejects each way Cesium mishandles a degenerate pick', () => {
   assert.ok(Math.abs(Cesium.Math.toDegrees(carto.longitude) + 97.7431) < 1e-6);
   assert.ok(Math.abs(Cesium.Math.toDegrees(carto.latitude) - 30.2672) < 1e-6);
 });
+
+test('the rendered surface is ray-picked before the depth read', async () => {
+  const { pickRenderedSurface } = await import('./scenePick.js');
+  const ground = Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 142);
+  // After a click's scene.pick the depth read decodes against a recomputed
+  // frustum: 51 m up in the air.
+  const stale = Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 193);
+  const camera = { getPickRay: (position) => ({ position }) };
+  const scene = (ray) => ({
+    pickFromRay: ray,
+    pickPositionSupported: true,
+    pickPosition: () => stale,
+  });
+  const at = { x: 400, y: 300 };
+  assert.equal(pickRenderedSurface(scene(() => ({ position: ground })), camera, at), ground);
+  // Nothing on the ray (tiles not loaded yet): the depth read answers.
+  assert.equal(pickRenderedSurface(scene(() => undefined), camera, at), stale);
+  // A degenerate ray hit is a miss too.
+  const nan = new Cesium.Cartesian3(Number.NaN, 0, 0);
+  assert.equal(pickRenderedSurface(scene(() => ({ position: nan })), camera, at), stale);
+  // A scene without ray picking keeps the depth read; nothing at all is null.
+  assert.equal(pickRenderedSurface({ pickPositionSupported: true, pickPosition: () => stale }, camera, at), stale);
+  assert.equal(pickRenderedSurface({ pickPositionSupported: false }, camera, at), null);
+  assert.equal(pickRenderedSurface(null, camera, at), null);
+});

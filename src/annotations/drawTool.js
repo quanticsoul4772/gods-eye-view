@@ -178,11 +178,11 @@ export function initDrawTool({ viewer, annotations }) {
   };
 
   // ---- vertices from clicks --------------------------------------------
-  const worldAt = (position) => {
+  const worldAt = (position, options) => {
     const canvas = viewer.scene.canvas;
     const w = canvas.clientWidth || canvas.width || 1;
     const h = canvas.clientHeight || canvas.height || 1;
-    return pickWorldFromScreen(viewer, position.x / w, position.y / h);
+    return pickWorldFromScreen(viewer, position.x / w, position.y / h, options);
   };
   const onClick = (event) => {
     if (!session || destroyed) return;
@@ -204,7 +204,7 @@ export function initDrawTool({ viewer, annotations }) {
   };
   const onMove = (event) => {
     if (!session || session.shape === 'pin' || destroyed) return;
-    const p = worldAt(event.endPosition);
+    const p = worldAt(event.endPosition, { live: true });
     cursor = p
       ? Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.height || 0)
       : null;

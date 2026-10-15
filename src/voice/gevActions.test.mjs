@@ -4125,3 +4125,28 @@ test('fly_to_location faces the requested compass heading on every flight path',
   assert.equal(plain.headingDeg, undefined);
   assert.deepEqual(headings, [180], 'the Capitol preset faces south');
 });
+
+test('the voice view-centre target is ray-picked, not read from stale depth', () => {
+  // A voice turn often follows a click or hover pick, after which the depth
+  // read decodes against a recomputed frustum and lands off the ground.
+  const ground = Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 142);
+  const stale = Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 193);
+  withCapturedTimers(({ flush }) => {
+    const harness = createPrewarmHarness({ pickPosition: () => stale });
+    let rays = 0;
+    harness.viewer.scene.pickFromRay = () => {
+      rays += 1;
+      return { position: ground };
+    };
+    createGevActionRunner({
+      viewer: harness.viewer,
+      styleManager: {},
+      dataManager: { layers: new Map(), isEnabled: () => false, getAll: () => [] },
+    });
+    harness.fireMoveEnd();
+    flush();
+    assert.equal(rays, 1, 'the centre target is ray-picked');
+    assert.equal(harness.calls.pickPosition, 0, 'the ray hit needs no depth read');
+    assert.equal(harness.calls.pickEllipsoid, 0, 'nor a sea-level fallback');
+  });
+});
