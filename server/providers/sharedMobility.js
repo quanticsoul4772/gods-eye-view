@@ -11,7 +11,7 @@
  * snapshot per system is held: no history, no trails.
  */
 import { fetchGbfsUpstream } from './gbfs.js';
-import { publicOnlyFetch } from './sourceDirectory.js';
+import { isPlausibleCoverage, publicOnlyFetch } from './sourceDirectory.js';
 import { coalesceProxyRequest } from './common/http.js';
 import { makeRateLimiter } from './common/rate-limit.js';
 import { bboxToCircle } from '../../src/data/geoCircle.js';
@@ -35,17 +35,6 @@ const TYPES_RETRY_MS = 60 * 60 * 1000;
 const SERVE_STALE_MS = 10 * 60 * 1000;
 const COOLDOWN_STEPS_MS = [5_000, 15_000, 60_000, 300_000];
 const ID_PATTERN = /^[a-z0-9][a-z0-9-]{1,63}$/;
-
-const isBbox = (b) =>
-  Array.isArray(b) &&
-  b.length === 4 &&
-  b.every(Number.isFinite) &&
-  b[0] >= -90 &&
-  b[2] <= 90 &&
-  b[1] >= -180 &&
-  b[3] <= 180 &&
-  b[0] <= b[2] &&
-  b[1] <= b[3];
 
 const hostOf = (url) => {
   try {
@@ -86,7 +75,8 @@ export function createSharedMobilityService({
       .usable(SHAREDMOBILITY_DOMAIN)
       .filter(
         (e) =>
-          isBbox(e.coverage?.bbox) &&
+          Array.isArray(e.coverage?.bbox) &&
+          isPlausibleCoverage(e.coverage.bbox, e.domain) &&
           !PEER_TO_PEER_HOSTS.has(hostOf(e.access?.url)),
       );
   }

@@ -100,8 +100,8 @@ test('credentials: names, path keys, fragments, token values, userinfo', () => {
     'https://ex.org/keys/abc/vp',
     'https://ex.org/access-key/abc/vp',
     'https://ex.org/gtfs/realtime/0123456789abcdef0123456789abcdef',
-    'https://ex.org/vp/AKIAABCDEFGHIJKLMNOP.json',
-    'https://ex.org/vp#!/token=1',
+    'https://ex.org/vp/feed.AKIAABCDEFGHIJKLMNOP',
+    'https://ex.org/vp#!/k=1',
   ])
     assert.equal(hasCredential(url), true, url);
   for (const url of [
@@ -834,5 +834,56 @@ test('a coverage box must be a plausible service area, or the feed is listed but
     isPlausibleCoverage([26.2, 127.6, 45, 145.6]),
     true,
     'Japan-wide',
+  );
+});
+
+test('national transit may span a continent; bike share may not', () => {
+  const amtrak = [25.8, -124.2, 49.0, -71.9]; // 23° × 52°
+  assert.equal(isPlausibleCoverage(amtrak, 'transit.vehicles'), true);
+  assert.equal(isPlausibleCoverage(amtrak, 'bikeshare.stations'), false);
+  assert.equal(isPlausibleCoverage(amtrak, 'sharedmobility.vehicles'), false);
+  // Cayenne's flipped sign is too wide even for a national feed.
+  assert.equal(
+    isPlausibleCoverage(
+      [4.822652, -52.365129, 4.9354710874831, 52.296379],
+      'transit.vehicles',
+    ),
+    false,
+  );
+  // The exact limits pass; a hair over does not.
+  assert.equal(isPlausibleCoverage([0, 0, 20, 30]), true);
+  assert.equal(isPlausibleCoverage([0, 0, 20.01, 30]), false);
+});
+
+test('referral never names a feed by a coverage box that cannot be real', () => {
+  const cayenne = entry({
+    id: 'mdb-tdg-83386',
+    name: 'Réseau urbain Agglobus',
+    health: { status: 'candidate' },
+    coverage: {
+      bbox: [4.822652, -52.365129, 4.9354710874831, 52.296379],
+      countries: ['FR'],
+    },
+  });
+  // Lagos lies inside the bad box.
+  assert.deepEqual(referralEntries([cayenne], { lat: 6.0, lon: 3.38 }), []);
+  assert.equal(
+    referralEntries([cayenne]).length,
+    1,
+    'still listed without a place',
+  );
+});
+
+test('a token anywhere in a header value is refused, as the directory refuses it', () => {
+  assert.equal(
+    isUsableEntry(
+      entry({
+        access: {
+          ...entry().access,
+          headers: { 'User-Agent': 'x Bearer abcdefgh1234' },
+        },
+      }),
+    ),
+    false,
   );
 });

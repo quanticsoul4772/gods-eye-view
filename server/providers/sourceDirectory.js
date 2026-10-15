@@ -183,25 +183,36 @@ function areSafeHeaders(headers) {
       SAFE_HEADERS.has(name.toLowerCase()) &&
       typeof value === 'string' &&
       /^[\x20-\x7e]{1,100}$/.test(value) &&
-      !TOKEN_VALUE.test(value),
+      !TOKEN_VALUE.test(value) &&
+      !SECRET_VALUE.test(value),
   );
 }
 
-/** Largest plausible service area (degrees); beyond it a coverage box is bad data. */
-const MAX_COVERAGE_LAT_DEG = 20;
-const MAX_COVERAGE_LON_DEG = 30;
+/**
+ * Largest plausible service area (degrees [lat, lon]); beyond it a coverage
+ * box is bad data. Bike share and shared vehicles serve a city or region;
+ * transit includes national feeds (answered per view, e.g. Amtrak at about
+ * 52° of longitude), so it may span a continent but not half the world.
+ */
+const MAX_COVERAGE_DEG = Object.freeze({
+  'transit.vehicles': [60, 90],
+  default: [20, 30],
+});
 
 /**
  * A coverage box the app can activate a feed by: absent, or
- * [south, west, north, east] in range and no larger than a country. A box
- * with a flipped sign or a stray far-away point (Cayenne's spanning 105° of
- * longitude) would switch the feed on half a world away.
+ * [south, west, north, east] in range and no larger than its domain allows.
+ * A box with a flipped sign or a stray far-away point (Cayenne's spanning
+ * 105° of longitude) would switch the feed on half a world away.
+ * @param {number[]|null|undefined} bbox
+ * @param {string} [domain]
  */
-export function isPlausibleCoverage(bbox) {
+export function isPlausibleCoverage(bbox, domain) {
   if (bbox === undefined || bbox === null) return true;
   if (!Array.isArray(bbox) || bbox.length !== 4 || !bbox.every(Number.isFinite))
     return false;
   const [south, west, north, east] = bbox;
+  const [maxLat, maxLon] = MAX_COVERAGE_DEG[domain] || MAX_COVERAGE_DEG.default;
   return (
     south >= -90 &&
     north <= 90 &&
@@ -209,8 +220,8 @@ export function isPlausibleCoverage(bbox) {
     east <= 180 &&
     south <= north &&
     west <= east &&
-    north - south <= MAX_COVERAGE_LAT_DEG &&
-    east - west <= MAX_COVERAGE_LON_DEG
+    north - south <= maxLat &&
+    east - west <= maxLon
   );
 }
 
@@ -222,7 +233,7 @@ export function isUsableEntry(entry) {
     entry.health?.status === 'verified' &&
     entry.licence?.display === true &&
     entry.format === formatOfDomain(entry.domain) &&
-    isPlausibleCoverage(entry.coverage?.bbox) &&
+    isPlausibleCoverage(entry.coverage?.bbox, entry.domain) &&
     isSafeSourceUrl(entry.access?.url) &&
     areSafeHeaders(headers) &&
     Object.values(entry.access?.related || {}).every(isSafeSourceUrl) &&
@@ -519,6 +530,8 @@ function referralRows(entries, { lat, lon, area, domain, usable } = {}) {
     if (domain && e.domain !== domain) continue;
     if (typeof usable === 'boolean' && isUsableEntry(e) !== usable) continue;
     const b = e.coverage?.bbox;
+    // A bad box (flipped sign, stray point) would name the feed half a world away.
+    if ((area || hasPoint) && !isPlausibleCoverage(b, e.domain)) continue;
     if (
       area &&
       !(
