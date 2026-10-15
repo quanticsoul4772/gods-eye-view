@@ -2,6 +2,7 @@ import * as Cesium from 'cesium';
 import {
   CAMERA_DEBOUNCE_MS,
   MAX_TOTAL_VEHICLES,
+  STATUS_POLL_MS,
   VEHICLE_ENTER_ALTITUDE_M,
   VEHICLE_EXIT_ALTITUDE_M,
   VEHICLE_HEIGHT_OFFSET_M,
@@ -13,6 +14,9 @@ import {
   sharedVehicleIcon,
 } from '../../data/sharedVehicleIcons.js';
 
+/** A failed system list is asked for again after this long. */
+const SYSTEMS_RETRY_MS = 30_000;
+
 /** Whether a mode draws stations / vehicles. */
 export const modeHasStations = (mode) => mode !== 'vehicles';
 export const modeHasVehicles = (mode) => mode === 'vehicles' || mode === 'both';
@@ -23,7 +27,8 @@ export const modeHasVehicles = (mode) => mode === 'vehicles' || mode === 'both';
  * own radius below a lower altitude gate than stations; each keeps only its
  * latest snapshot. Every arrival rebuilds ONE pool of billboards, reused by
  * index: merged, same-operator duplicates dropped, nearest first, capped.
- * Vehicles carry no ids, so nothing follows one vehicle across polls.
+ * Vehicles carry no ids and arrive in position order, so nothing follows
+ * one vehicle across polls.
  */
 export function createVehicles({ state: layerState, services, parts, source }) {
   const { governorRequestRender } = services.render;
@@ -48,7 +53,7 @@ export function createVehicles({ state: layerState, services, parts, source }) {
     layerState._vehicleCollection.show = false;
   }
 
-  /** Load the system list once; resolves when known. */
+  /** Load the system list; a failure is retried after SYSTEMS_RETRY_MS. */
   function loadSystems() {
     if (!supported()) {
       layerState._vehicleSystemsReady = true;
@@ -68,16 +73,32 @@ export function createVehicles({ state: layerState, services, parts, source }) {
             )
             .map((s) => [s.id, Object.freeze({ ...s })]),
         );
+        layerState._vehicleSystemsReady = true;
+        layerState._vehicleSystemsRetryAt = 0;
       })
       .catch((error) => {
         console.warn('[Data:Bikeshare] shared vehicle systems:', error);
         layerState._vehicleError = 'Shared vehicle systems unavailable';
+        layerState._vehicleSystemsRetryAt = Date.now() + SYSTEMS_RETRY_MS;
       })
       .finally(() => {
-        layerState._vehicleSystemsReady = true;
         layerState._vehicleSystemsLoading = null;
       });
     return layerState._vehicleSystemsLoading;
+  }
+
+  /** Ask for the system list when it is missing and not waiting out a failure. */
+  function ensureSystems() {
+    if (
+      layerState._vehicleSystemsReady ||
+      layerState._vehicleSystemsLoading ||
+      layerState._vehicleSystemsRetryAt > Date.now()
+    )
+      return;
+    void loadSystems().then(() => {
+      if (wanted() && layerState._vehicleSystemsReady)
+        void parts.viewport.runProximityCheck();
+    });
   }
 
   /** Show or hide the vehicles for the current mode; loads systems on first need. */
@@ -88,10 +109,7 @@ export function createVehicles({ state: layerState, services, parts, source }) {
       deactivateAll();
       return;
     }
-    if (!layerState._vehicleSystemsReady && !layerState._vehicleSystemsLoading)
-      void loadSystems().then(() => {
-        if (wanted()) void parts.viewport.runProximityCheck();
-      });
+    ensureSystems();
   }
 
   function gateOpen(altitude) {
@@ -110,6 +128,7 @@ export function createVehicles({ state: layerState, services, parts, source }) {
       if (!wanted() || !layerState._vehicleGate) deactivateAll();
       return;
     }
+    ensureSystems();
     const next = parts.viewport.computeInRangeCities(
       center,
       layerState._vehicleSystems,
@@ -126,13 +145,15 @@ export function createVehicles({ state: layerState, services, parts, source }) {
         layerState._activeVehicleIds.add(id);
         void fetchSystem(id);
       }
-    if (changed) rebuild();
+    // The camera moved: the nearest MAX_TOTAL_VEHICLES change with it.
+    if (changed || layerState._vehicleSnapshots.size) rebuild();
   }
 
   async function fetchSystem(id) {
     if (layerState._inFlightVehicles.has(id)) return;
     const controller = new AbortController();
     layerState._inFlightVehicles.set(id, controller);
+    const epoch = layerState._vehicleLoadEpoch;
     parts.ingestion.beginLoading();
     try {
       const snapshot = await source.getVehicles(id, {
@@ -163,16 +184,21 @@ export function createVehicles({ state: layerState, services, parts, source }) {
     } finally {
       if (layerState._inFlightVehicles.get(id) === controller)
         layerState._inFlightVehicles.delete(id);
-      parts.ingestion.endLoading();
+      // A disable reset the loading count; this fetch's share is gone with it.
+      if (epoch === layerState._vehicleLoadEpoch) parts.ingestion.endLoading();
     }
   }
 
-  /** Refetch active systems whose snapshot has expired (the layer's update tick). */
+  /**
+   * Refetch active systems whose snapshot expires before the next tick is
+   * halfway (the layer's update tick): an expiry landing just after a tick
+   * would otherwise skip it and double the refresh interval.
+   */
   function poll() {
     if (!wanted()) return Promise.resolve();
-    const now = Date.now();
+    const dueBy = Date.now() + STATUS_POLL_MS / 2;
     const due = [...layerState._activeVehicleIds].filter(
-      (id) => !(layerState._vehicleSnapshots.get(id)?.expiresAt > now),
+      (id) => !(layerState._vehicleSnapshots.get(id)?.expiresAt > dueBy),
     );
     return Promise.all(due.map(fetchSystem));
   }
@@ -224,11 +250,13 @@ export function createVehicles({ state: layerState, services, parts, source }) {
       if (!layerState._activeVehicleIds.has(id)) continue;
       const system = layerState._vehicleSystems.get(id);
       const operator = system?.provider || system?.name || '';
+      const feedOwner = system?.feedHost || operator;
       for (const v of snapshot.vehicles) {
         if (!Number.isFinite(v?.lat) || !Number.isFinite(v?.lon)) continue;
-        // Overlapping regional and local feeds of one operator list the
-        // same vehicles; within one feed, vehicles parked together all stay.
-        const key = `${operator}|${v.lat}|${v.lon}|${v.formFactor}`;
+        // Overlapping regional and local feeds of one operator (one feed
+        // host, many provider names) list the same vehicles; within one
+        // feed, vehicles parked together all stay.
+        const key = `${feedOwner}|${v.lat}|${v.lon}|${v.formFactor}`;
         const owner = seen.get(key);
         if (owner && owner !== id) continue;
         seen.set(key, id);
@@ -332,6 +360,7 @@ export function createVehicles({ state: layerState, services, parts, source }) {
   }
 
   function disable() {
+    layerState._vehicleLoadEpoch += 1;
     clearTimeout(reheightTimer);
     reheightTimer = null;
     deactivateAll();

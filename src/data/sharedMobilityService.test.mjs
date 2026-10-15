@@ -204,6 +204,39 @@ test('vehicles: over the upstream budget with nothing cached answers 503', async
   assert.equal(calls.length, 0);
 });
 
+test('vehicles: unreadable vehicle types are not asked for again on every refresh', async () => {
+  mock.timers.enable({ apis: ['Date'], now: 1_800_000_000_000 });
+  const warn = mock.method(console, 'warn', () => {});
+  try {
+    let typeCalls = 0;
+    const { get } = setup({
+      respond: (url) => {
+        if (url.includes('vehicle_types')) {
+          typeCalls += 1;
+          return new Response('nope', { status: 404 });
+        }
+        return new Response(JSON.stringify(feed));
+      },
+    });
+    await get('/vehicles/gbfs-nextbike-ka-vehicles');
+    mock.timers.tick(61_000);
+    await get('/vehicles/gbfs-nextbike-ka-vehicles');
+    assert.equal(typeCalls, 1, 'second refresh reuses the failure');
+    mock.timers.tick(60 * 60_000);
+    await get('/vehicles/gbfs-nextbike-ka-vehicles');
+    assert.equal(typeCalls, 2, 'asked again after an hour');
+  } finally {
+    warn.mock.restore();
+    mock.timers.reset();
+  }
+});
+
+test('systems carry the feed host the layer de-duplicates by, never a URL', async () => {
+  const { get } = setup();
+  const [system] = (await get('/systems')).body.systems;
+  assert.equal(system.feedHost, 'gbfs.nextbike.net');
+});
+
 test('vehicles: unreadable vehicle types fall back to the entry form factor', async () => {
   const warn = mock.method(console, 'warn', () => {});
   try {

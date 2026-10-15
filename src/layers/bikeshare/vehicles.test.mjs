@@ -86,6 +86,8 @@ function harness({
   ground = null,
   camera = { ...KA },
   failVehicles = false,
+  systemsSource = null,
+  vehiclesSource = null,
 } = {}) {
   const calls = { stations: 0, vehicles: [] };
   const credits = [];
@@ -94,9 +96,10 @@ function harness({
       calls.stations += 1;
       throw new Error('stations must not be fetched for vehicle systems');
     },
-    getVehicleSystems: async () => systems,
-    getVehicles: async (id) => {
+    getVehicleSystems: systemsSource || (async () => systems),
+    getVehicles: async (id, options) => {
       calls.vehicles.push(id);
+      if (vehiclesSource) return vehiclesSource(id, options);
       if (failVehicles) throw new Error('upstream down');
       return { system: id, vehicles: vehicles[id] || [], expiresInS: 60 };
     },
@@ -185,13 +188,27 @@ test('vehicles wait for their own lower altitude gate', async () => {
   assert.match(stats.statusMessage, /^Fly below 15 km/);
 });
 
-test('one pool: same-operator duplicates drawn once, other operators kept, nearest first', async () => {
+test("one pool: one operator's overlapping feeds drawn once, other operators kept, nearest first", async () => {
   const shared = [vehicle(49.01, 8.405), vehicle(49.02, 8.41, 'cargo_bicycle')];
+  const donkey = 'stables.donkey.bike';
   const app = harness({
     systems: [
-      system({ id: 'gbfs-donkey-bayern-vehicles', provider: 'Donkey' }),
-      system({ id: 'gbfs-donkey-kelheim-vehicles', provider: 'Donkey' }),
-      system({ id: 'gbfs-lime-ka-vehicles', provider: 'Lime' }),
+      // The real overlapping entries: one feed host, different provider names.
+      system({
+        id: 'gbfs-donkey-bayern-vehicles',
+        provider: 'Donkey Republic Bayern Komplett',
+        feedHost: donkey,
+      }),
+      system({
+        id: 'gbfs-donkey-kelheim-vehicles',
+        provider: 'Donkey Kelheim',
+        feedHost: donkey,
+      }),
+      system({
+        id: 'gbfs-lime-ka-vehicles',
+        provider: 'Lime',
+        feedHost: 'data.lime.bike',
+      }),
     ],
     vehicles: {
       'gbfs-donkey-bayern-vehicles': shared,
@@ -205,7 +222,8 @@ test('one pool: same-operator duplicates drawn once, other operators kept, neare
   const operators = [...app.state._vehicleRenderMap.values()].map(
     (r) => r.operator,
   );
-  assert.deepEqual(operators.sort(), ['Donkey', 'Donkey', 'Lime']);
+  assert.equal(operators.filter((o) => o === 'Lime').length, 1);
+  assert.equal(operators.filter((o) => o.startsWith('Donkey')).length, 2);
   // Two bikes parked together in ONE feed both stay.
   app.state._vehicleSnapshots
     .get('gbfs-lime-ka-vehicles')
@@ -332,4 +350,117 @@ test('the mode rides in the layer URL; old links mean stations', () => {
       .mode,
     'stations',
   );
+});
+
+test('a failed system list is retried, not final', async () => {
+  let attempt = 0;
+  const warn = test.mock.method(console, 'warn', () => {});
+  try {
+    const app = harness({
+      systemsSource: async () => {
+        attempt += 1;
+        if (attempt === 1) throw new Error('503');
+        return [system()];
+      },
+    });
+    await app.start();
+    assert.equal(app.state._vehicleSystemsReady, false);
+    assert.equal(
+      app.controls.getStats().error,
+      'Shared vehicle systems unavailable',
+    );
+    // Within the retry wait, a camera move does not ask again.
+    await app.parts.viewport.runProximityCheck();
+    await flush();
+    assert.equal(attempt, 1);
+    app.state._vehicleSystemsRetryAt = Date.now() - 1;
+    await app.parts.viewport.runProximityCheck();
+    await flush();
+    assert.equal(attempt, 2);
+    assert.equal(app.state._vehicleSystemsReady, true);
+    assert.equal(app.state._vehicleRenderMap.size, 1);
+    assert.equal(app.controls.getStats().error, undefined);
+  } finally {
+    warn.mock.restore();
+  }
+});
+
+test('a snapshot expiring before the next tick is halfway is fetched on this tick', async () => {
+  const app = harness();
+  await app.start();
+  const snapshot = app.state._vehicleSnapshots.get('gbfs-nextbike-ka-vehicles');
+  // A 60 s feed fetched on the last tick expires a moment after this one.
+  snapshot.expiresAt = Date.now() + 2_000;
+  await app.parts.ingestion.methods.update();
+  await flush();
+  assert.equal(app.calls.vehicles.length, 2);
+});
+
+test('a settled camera re-picks the nearest vehicles without new data', async () => {
+  const app = harness({
+    vehicles: {
+      'gbfs-nextbike-ka-vehicles': [vehicle(49.0, 8.4), vehicle(49.03, 8.4)],
+    },
+    camera: { lat: 49.0, lon: 8.4 },
+  });
+  await app.start();
+  assert.equal(app.state._vehicleRenderMap.get('veh:0').lat, 49.0);
+  app.state._viewer = fakeViewer({ lat: 49.03, lon: 8.4 });
+  await app.parts.viewport.runProximityCheck();
+  await flush();
+  assert.equal(app.calls.vehicles.length, 1, 'no refetch needed');
+  assert.equal(app.state._vehicleRenderMap.get('veh:0').lat, 49.03);
+});
+
+test('Vehicles → Stations inside the station hysteresis band keeps the station gate', async () => {
+  const app = harness({ camera: { ...KA, height: 30_000 } });
+  await app.start();
+  assert.equal(app.state._altitudeGateEnabled, true, 'gate opened below 48 km');
+  app.state._viewer = fakeViewer({ ...KA, height: 50_000 });
+  await app.parts.viewport.runProximityCheck();
+  assert.equal(
+    app.state._altitudeGateEnabled,
+    true,
+    'still open inside the band',
+  );
+  app.controls.setParams({ mode: 'stations' });
+  await flush();
+  assert.equal(app.state._altitudeGateEnabled, true);
+});
+
+test('leaving stations drops their old error with them', async () => {
+  const app = harness({ mode: 'stations' });
+  app.state._error = 'GBFS fetch error';
+  app.controls.setParams({ mode: 'vehicles' });
+  await flush();
+  assert.equal(app.state._error, null);
+  app.controls.setParams({ mode: 'stations' });
+  await flush();
+  assert.equal(app.controls.getStats().error, undefined);
+});
+
+test('a fetch abandoned by disable does not end the loading of the next enable', async () => {
+  const pending = [];
+  const app = harness({
+    vehiclesSource: (id, { signal }) =>
+      new Promise((resolve, reject) => {
+        pending.push({ resolve, reject });
+        signal?.addEventListener('abort', () =>
+          reject(Object.assign(new Error('aborted'), { name: 'AbortError' })),
+        );
+      }),
+  });
+  await app.start();
+  assert.equal(app.state._loadingOps, 1);
+  // Disable (as lifecycle does: vehicles first, then the count is reset).
+  app.parts.vehicles.disable();
+  app.state._loadingOps = 0;
+  app.state._loading = false;
+  // Enable again before the aborted fetch has settled.
+  app.state._enabled = true;
+  await app.start();
+  assert.equal(app.state._loadingOps, 1, 'the new fetch is loading');
+  await flush();
+  assert.equal(app.state._loadingOps, 1, 'the old fetch did not end it');
+  assert.equal(app.state._loading, true);
 });

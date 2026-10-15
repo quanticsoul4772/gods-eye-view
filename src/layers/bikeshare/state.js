@@ -131,6 +131,14 @@ export function createState({ services }) {
 
   layerState._vehicleSystemsLoading = null;
 
+  /** When a failed system list may be asked for again (ms epoch; 0 = now). */
+
+  layerState._vehicleSystemsRetryAt = 0;
+
+  /** Bumped on disable: fetches from before it no longer count as loading. */
+
+  layerState._vehicleLoadEpoch = 0;
+
   /** Hysteresis flag for the vehicles' own (lower) altitude gate. */
 
   layerState._vehicleGate = false;

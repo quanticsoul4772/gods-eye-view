@@ -30,6 +30,8 @@ import {
  */
 export const PEER_TO_PEER_HOSTS = new Set(['locomotion.app']);
 const TYPES_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+/** A failed vehicle_types fetch is retried after this long, not on every refresh. */
+const TYPES_RETRY_MS = 60 * 60 * 1000;
 const SERVE_STALE_MS = 10 * 60 * 1000;
 const COOLDOWN_STEPS_MS = [5_000, 15_000, 60_000, 300_000];
 const ID_PATTERN = /^[a-z0-9][a-z0-9-]{1,63}$/;
@@ -100,6 +102,9 @@ export function createSharedMobilityService({
         centerLon: center.lon,
         loadRadiusKm: Math.max(10, loadRadiusKm),
         formFactors: normalizeFormFactors(e.gbfs?.form_factors),
+        // Overlapping entries of one operator share a feed host under
+        // different provider names; the layer de-duplicates by it.
+        feedHost: hostOf(e.access.url),
         attribution: e.licence?.attribution || e.provider,
         license: e.licence?.id || null,
         licenseUrl: e.licence?.url || null,
@@ -128,8 +133,13 @@ export function createSharedMobilityService({
       console.warn(
         `[shared-mobility] ${entry.id} vehicle types unavailable: ${error?.message || error}`,
       );
-      if (known) known.fetchedAt = now; // retry tomorrow, not every poll
-      return known?.types || new Map();
+      // Retry in an hour, not on every refresh (outside the fetch budget).
+      const types = known?.types || new Map();
+      vehicleTypes.set(entry.id, {
+        types,
+        fetchedAt: now - TYPES_MAX_AGE_MS + TYPES_RETRY_MS,
+      });
+      return types;
     }
   }
 

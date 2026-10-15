@@ -175,3 +175,26 @@ test('the shared-vehicle domain is shown and has its find_data_sources topic', a
   );
   assert.equal(nounOfDomain('sharedmobility.vehicles'), 'shared vehicle');
 });
+
+test('vehicles leave in position order, never the feed order', () => {
+  const bikes = [
+    { bike_id: 'a', lat: 49.03, lon: 8.41 },
+    { bike_id: 'b', lat: 49.01, lon: 8.43 },
+    { bike_id: 'c', lat: 49.01, lon: 8.42 },
+    { bike_id: 'd', lat: 49.02, lon: 8.4 },
+  ];
+  const forward = parseVehicleFeed({ data: { bikes } }).vehicles;
+  const reversed = parseVehicleFeed({
+    data: { bikes: [...bikes].reverse() },
+  }).vehicles;
+  assert.deepEqual(forward, reversed);
+  assert.deepEqual(
+    forward.map((v) => [v.lat, v.lon]),
+    [
+      [49.01, 8.42],
+      [49.01, 8.43],
+      [49.02, 8.4],
+      [49.03, 8.41],
+    ],
+  );
+});

@@ -35,11 +35,6 @@ export function createControls({ state: layerState, services, parts, source }) {
 
     updateInterval: STATUS_POLL_MS,
 
-    /**
-     * Return a sampled array of detectable station objects for HUD overlay rendering.
-     * @param {Object} [options] - Sampling options (maxCount, seed).
-     * @returns {Array<{ position: Cesium.Cartesian3, id: string, type: string, skipLabel: boolean }>}
-     */
     /** Saved and URL-restored options: what the layer draws. */
     getParams() {
       return { mode: layerState._mode };
@@ -63,6 +58,7 @@ export function createControls({ state: layerState, services, parts, source }) {
         parts.viewport.deactivateAllCities();
         layerState._cityRuntime.clear();
         layerState._count = 0;
+        layerState._error = null;
       }
       if (layerState._pointCollection)
         layerState._pointCollection.show = modeHasStations(layerState._mode);
@@ -84,6 +80,11 @@ export function createControls({ state: layerState, services, parts, source }) {
       };
     },
 
+    /**
+     * Return a sampled array of detectable station and vehicle objects for HUD overlay rendering.
+     * @param {Object} [options] - Sampling options (maxCount, seed).
+     * @returns {Array<{ position: Cesium.Cartesian3, id: string, type: string, skipLabel: boolean }>}
+     */
     getDetectableObjects(options = {}) {
       return parts.queries.collectDetectableStations(options);
     },

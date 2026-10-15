@@ -119,7 +119,6 @@ export function parseVehicleFeed(
       : null;
   const vehicles = [];
   for (const v of list) {
-    if (vehicles.length >= MAX_VEHICLES_PER_SYSTEM) break;
     if (!v || typeof v !== 'object') continue;
     // Docked vehicles belong to the station feed; some feeds send "" on free ones.
     if (typeof v.station_id === 'string' && v.station_id.trim()) continue;
@@ -146,7 +145,15 @@ export function parseVehicleFeed(
       reportedAt: toMinute(parseGbfsTime(v.last_reported)) ?? lastUpdated,
     });
   }
-  return { lastUpdated, vehicles };
+  // Position order, never the feed's: a feed sorted by vehicle id would
+  // otherwise let the k-th vehicle of one poll be matched to the next poll's.
+  vehicles.sort(
+    (a, b) =>
+      a.lat - b.lat ||
+      a.lon - b.lon ||
+      (a.formFactor < b.formFactor ? -1 : a.formFactor > b.formFactor ? 1 : 0),
+  );
+  return { lastUpdated, vehicles: vehicles.slice(0, MAX_VEHICLES_PER_SYSTEM) };
 }
 
 /** Seconds a feed may be cached: its `ttl` and the entry's minimum, within 60–300. */

@@ -202,13 +202,10 @@ export function createViewport({ state: layerState, services, parts, source }) {
     layerState._center = center;
     // Vehicles have their own gate and radius, and run whatever stations do.
     parts.vehicles.proximity(center, altitude);
-    if (!modeHasStations(layerState._mode)) {
-      layerState._altitudeGateEnabled = false;
-      deactivateAllCities();
-      return;
-    }
-    // Altitude gate: disable all cities when camera is too high
-    if (!shouldActivateAtAltitude(altitude)) {
+    // The station gate runs in every mode, so a switch back to stations
+    // inside the hysteresis band finds it as the camera left it.
+    const stationGate = shouldActivateAtAltitude(altitude);
+    if (!modeHasStations(layerState._mode) || !stationGate) {
       deactivateAllCities();
       return;
     }
