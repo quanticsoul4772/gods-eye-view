@@ -33,10 +33,14 @@ assistant tools leave them out and say how many.
 - **Solar:** footprints exploded into parts, parts within 500 m merged into
   sites, sites under 5 ha dropped: 24,339 sites, id `pv:<smallest PV_ID>`.
 - **Industrial:** GIHS `Type = 0` only (verified industrial; types 1 and 2 are
-  mostly recurring real-fire hotspots), minus 9 sites on active volcanoes
-  (Kīlauea ×4, Etna ×2, Masaya ×2, Villarrica), whose heat is real and must
-  stay visible: 23,222 sites, id `gihs:<record index>`. The exclusion list,
-  with a reason for each, is `EXCLUDE_GIHS` in the build script.
+  mostly recurring real-fire hotspots), minus 65 sites on or within 5 km of
+  volcanoes that have erupted since 1950 (Kīlauea, Etna, Masaya, Villarrica,
+  Krakatau and others), whose heat is real and must stay visible: 23,166
+  sites, id `gihs:<record index>`. The volcanoes were found by checking every
+  site against the Smithsonian Global Volcanism Program Holocene list (used
+  only for that check, not shipped). The exclusion list, with the volcano for
+  each, is `EXCLUDE_GIHS` in the build script; `--audit-volcanoes` repeats
+  the check and found no further sites.
 - **Geometry:** each site becomes its bounding box grown by 1 km, rounded
   outward to 4 decimals.
 
@@ -44,16 +48,16 @@ assistant tools leave them out and say how many.
 
 `mask.json` is `{format: 1, cellDeg, escalation, rows}`; rows are
 `[kind, west, south, east, north, siteId]`, kind 0 = solar, 1 = industrial
-(47,561 rows, 2,310,712 bytes; SHA-256 in [`mask.sha256`](mask.sha256)).
+(47,505 rows, 2,307,939 bytes; SHA-256 in [`mask.sha256`](mask.sha256)).
 `escalation` holds thresholds measured on FIRMS VIIRS data (7-day files to
 2026-10-16, 24 h files, and the US August 2025 archive): a solar site seen
-again 45 min to 24 h later, an industrial detection of at least 41.05 MW, or
+again 45 min to 24 h later, an industrial detection of at least 41.01 MW, or
 15+ pixels at one industrial site in one pass, still looks like a real fire
 and stays a fire.
 
 Measured on that data: Moapa (NV) solar glint 24/24 flagged; detections
 inside real fire areas flagged 190/146,859 (0.13 %; 0 of 34,049 in the 2025
-US replay's fire perimeters); 5.5–7.1 % of all VIIRS detections flagged.
+US replay's fire perimeters); 5.4–7.1 % of all VIIRS detections flagged.
 MODIS is not annotated: its larger pixels fall outside the 1 km buffer.
 
 ## Rebuild
@@ -64,6 +68,7 @@ Maintainer tool; requires Python with `duckdb` (spatial extension),
 ```sh
 python -I scripts/build-firms-static-mask.py --download --work /tmp/firms-mask --out src/data/local_data/firms_static_mask
 python -I scripts/build-firms-static-mask.py --download --work /tmp/firms-mask --out src/data/local_data/firms_static_mask --verify
+python -I scripts/build-firms-static-mask.py --gihs-rar RAR --work /tmp/firms-mask --audit-volcanoes GVP.geojson
 ```
 
 Rebuild yearly, or when solar or industrial sites start appearing as
