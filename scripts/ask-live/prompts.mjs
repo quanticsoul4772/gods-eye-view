@@ -590,7 +590,7 @@ export const PROMPTS = Object.freeze([
     id: 'perimeters-ontario-status',
     prompt:
       'Which wildfires are burning in Ontario right now, and are any out of control?',
-    checks: { layersOn: ['fire-perimeters'], answer: /Ontario/i },
+    checks: { tools: ['get_fire_perimeters'], answer: /Ontario/i },
   },
   // Worldwide directory feeds stay out of "sources for this place" answers.
   {
@@ -612,14 +612,19 @@ export const PROMPTS = Object.freeze([
     id: 'bikeshare-nothing-lagos',
     prompt: 'Turn on bike share here. Is there any?',
     start: LAGOS,
-    checks: { layersOn: ['bikeshare'], tools: ['find_data_sources'] },
+    // get_bike_share consults the source directory itself.
+    checks: { tools: ['get_bike_share'], answer: /no |none|not /i },
   },
   // Scooters are the bike-share layer's shared-vehicle mode.
   {
     id: 'scooters-paris',
     prompt: 'Show me shared scooters in Paris.',
     start: PARIS,
-    checks: { layersOn: ['bikeshare'], answer: /scooter|vehicle/i },
+    // Paris operators are listed but not yet usable: say so, draw nothing.
+    checks: {
+      tools: ['find_data_sources'],
+      answer: /scooter|vehicle|Lime|Dott|Tier/i,
+    },
   },
   // AIS type 0 ("not available") counts as unknown, not as a type.
   {
@@ -631,18 +636,22 @@ export const PROMPTS = Object.freeze([
   {
     id: 'datacenters-operators-ashburn',
     prompt: 'Which operators run the datacenters around Ashburn, Virginia?',
-    checks: { tools: ['analyst_query'], layersOn: ['local-datacenters'] },
-  },
-  // Built-in scene with photo cards.
-  {
-    id: 'scene-hurricane-melissa',
-    prompt: 'Play the Hurricane Melissa scene.',
-    checks: { tools: ['control_scene'] },
+    checks: {
+      tools: ['find_infrastructure'],
+      answer: /operator|Equinix|Digital Realty|AWS|Amazon|CyrusOne|QTS/i,
+    },
   },
   // Named explicitly, Space Missions still turns on; only bulk requests skip it.
   {
     id: 'space-missions-named',
     prompt: 'Open Space Missions.',
     checks: { layersOn: ['rocket-launches'] },
+  },
+  // Built-in scene with photo cards. Last: a playing scene holds the view
+  // and would swallow the next prompt.
+  {
+    id: 'scene-hurricane-melissa',
+    prompt: 'Play the Hurricane Melissa scene.',
+    checks: { tools: ['control_scene'] },
   },
 ]);
