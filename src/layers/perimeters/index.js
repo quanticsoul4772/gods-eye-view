@@ -261,7 +261,7 @@ export function createFirePerimetersLayer({
     id: 'fire-perimeters',
     name: 'Fire Perimeters',
     icon: '🔥',
-    source: 'NIFC WFIGS + BC + Ontario',
+    source: 'NIFC WFIGS + Canadian provinces',
     updateInterval: 300000,
 
     init(viewer) {
@@ -464,7 +464,7 @@ export function createFirePerimetersLayer({
           ...(index === 0
             ? {
                 blurb: t(
-                  'Colour shows reported containment (US) or stage of control (BC). Perimeters are simplified to about 100 m (US) and 20 m (Canada).',
+                  'Colour shows reported containment (US) or stage of control (Canada, where the province reports it). Perimeters are simplified to about 100 m (US) and 20 m (Canada).',
                 ),
               }
             : {}),

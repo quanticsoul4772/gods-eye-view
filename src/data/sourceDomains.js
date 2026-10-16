@@ -91,7 +91,7 @@ export const SOURCE_DOMAINS = Object.freeze([
     shown: true,
     coverage: 'global',
   }),
-  // Provincial fire perimeters (BC, Ontario): drawn in the Fire Perimeters
+  // Provincial fire perimeters (BC, Alberta, Ontario): drawn in the Fire Perimeters
   // layer beside NIFC WFIGS. Regional, so place answers name them.
   Object.freeze({
     domain: PERIMETERS_DOMAIN,

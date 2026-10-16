@@ -50,7 +50,7 @@ const exceededTransferLimit = (payload) =>
   payload?.properties?.exceededTransferLimit === true;
 
 const MIB = 1024 * 1024;
-// Provincial feeds update every 15 min (BC) to daily (Ontario).
+// Provincial feeds update from every 15 min (BC) to daily (Ontario).
 const DIRECTORY_REFRESH_MS = 15 * 60_000;
 const DIRECTORY_USER_AGENT = 'gods-eye-view-fire-perimeters/1.0';
 
