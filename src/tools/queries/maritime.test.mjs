@@ -252,7 +252,10 @@ test('AIS type 0 (not available) is counted as unknown, not as a type', async ()
     other_count: 0,
     unknown_count: 2,
   });
-  assert.match(result.summary, /most by type: Cargo \(1\), Tanker \(1\); 2 unknown\./);
+  assert.match(
+    result.summary,
+    /most by type: Cargo \(1\), Tanker \(1\); 2 unknown\./,
+  );
   assert.doesNotMatch(result.summary, /0 \(/);
   assert.equal(
     result.data.rows.find((row) => row.mmsi === '366000001').type,
