@@ -164,6 +164,9 @@ export function recipeToScene(recipe) {
         styleParams,
       },
       layers: keyframeLayers,
+      ...(Array.isArray(keyframe.dataPackIds)
+        ? { dataPackIds: [...keyframe.dataPackIds] }
+        : {}),
       ...(recipe.id ? { sourcePackId: recipe.id } : {}),
       ...(recipe.version ? { sourcePackVersion: recipe.version } : {}),
     };
@@ -181,8 +184,53 @@ export function recipeToScene(recipe) {
       ),
     ],
     appliedShotPacks: [],
+    // A built-in scene may ship its own photos and shapes (served from
+    // public/scene-assets/); copies, so editing the scene never touches
+    // the frozen recipe.
+    ...(Array.isArray(recipe.anchors)
+      ? { anchors: deepClone(recipe.anchors) }
+      : {}),
+    ...(Array.isArray(recipe.dataPacks)
+      ? { dataPacks: deepClone(recipe.dataPacks) }
+      : {}),
     shots,
   };
+}
+
+/**
+ * Bring a saved copy of a versioned built-in scene up to its recipe.
+ *
+ * A built-in scene is copied into the saved project once. When its recipe
+ * ships a higher `version`, the shots that came from the recipe, its anchors
+ * and its data packs are replaced; shots the user added are kept after them
+ * (minus references to packs that no longer exist).
+ * @param {Object} scene Saved scene (mutated).
+ * @param {Object} recipe Built-in recipe with `id` and `version`.
+ * @returns {boolean} Whether the scene changed.
+ */
+export function upgradeBuiltInScene(scene, recipe) {
+  if (!scene || !Number.isFinite(recipe?.version)) return false;
+  const fromRecipe = (shot) => shot.sourcePackId === recipe.id;
+  const saved = scene.shots.filter(fromRecipe);
+  if (
+    !saved.length ||
+    saved.every((shot) => shot.sourcePackVersion >= recipe.version)
+  )
+    return false;
+  const fresh = recipeToScene(recipe);
+  const packIds = new Set((fresh.dataPacks || []).map((pack) => pack.id));
+  const own = scene.shots.filter((shot) => !fromRecipe(shot));
+  for (const shot of own) {
+    if (!shot.dataPackIds) continue;
+    shot.dataPackIds = shot.dataPackIds.filter((id) => packIds.has(id));
+  }
+  scene.title = fresh.title;
+  if (fresh.anchors) scene.anchors = fresh.anchors;
+  else delete scene.anchors;
+  if (fresh.dataPacks) scene.dataPacks = fresh.dataPacks;
+  else delete scene.dataPacks;
+  scene.shots = [...fresh.shots, ...own];
+  return true;
 }
 
 /**

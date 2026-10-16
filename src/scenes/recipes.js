@@ -588,7 +588,236 @@ const BHOTE_KOSHI_NEPAL_BOOTSTRAP_RECIPE = BHOTE_KOSHI_NEPAL_APPEND_RECIPE
     })
   : null;
 
-const EVENT_RECIPES = [BHOTE_KOSHI_NEPAL_BOOTSTRAP_RECIPE].filter(Boolean);
+// Hurricane Melissa, Jamaica, October 2025: a built-in scene that carries its
+// own photos and shapes (public/scene-assets/melissa-2025/, sources and
+// licenses in that folder's README). Cameras stand south of each place and
+// look north, 900 m up at 40° down, so the place sits mid-frame.
+const MELISSA_ASSETS = 'melissa-2025';
+const NOAA_AERIALS = Object.freeze({
+  text: 'NOAA National Geodetic Survey emergency response imagery',
+  license: 'CC0-1.0',
+  url: 'https://storms.ngs.noaa.gov/storms/melissa/index.html',
+});
+const melissaPhoto = (id, file, anchorId, attribution) => ({
+  id,
+  version: 1,
+  format: 'photo',
+  source: { adapter: 'assets', path: `${MELISSA_ASSETS}/${file}` },
+  attribution,
+  placement: { anchorId },
+});
+const melissaAnchor = (id, title, lat, lon, alt = -5) => ({
+  id,
+  title,
+  lat,
+  lon,
+  alt,
+  altitudeReference: 'ellipsoid',
+});
+/** Camera 900 m up, south of the target, looking north 40° down at it. */
+const lookNorthAt = (lat, lon) => ({
+  lat: Number((lat - 911 / Math.tan((40 * Math.PI) / 180) / 111320).toFixed(5)),
+  lon,
+  alt: 900,
+  heading: 0,
+  pitch: -40,
+  roll: 0,
+});
+
+const HURRICANE_MELISSA_RECIPE = Object.freeze({
+  id: 'hurricane-melissa-2025',
+  version: 1,
+  title: 'Hurricane Melissa — Jamaica, Oct 2025',
+  style: 'normal',
+  ui: { hidePanels: false, hudMode: 'full', safeFrame: '16:9' },
+  layers: { flights: false, satellites: false },
+  post: {
+    bloom: 0,
+    sharpen: true,
+    detectionMode: 'OFF',
+    mapStack: 'photoreal',
+  },
+  installAlongsideSceneId: 'bhote-koshi-nepal-scene',
+  installAlongsideFallbackSceneId: 'flights-radar',
+  anchors: [
+    melissaAnchor(
+      'jamaica-night',
+      'Jamaica at night, before and after landfall: power lost across the west (VIIRS)',
+      18.15,
+      -77.35,
+      0,
+    ),
+    melissaAnchor(
+      'st-elizabeth',
+      'St Elizabeth coast, 8 Sep and 3 Nov 2025: forests stripped brown (Landsat 8 and 9)',
+      18.0256,
+      -77.851,
+    ),
+    melissaAnchor(
+      'black-river-aerial',
+      'Black River from the air, 31 Oct 2025: roofs gone, debris in the streets',
+      18.026338,
+      -77.847941,
+    ),
+    melissaAnchor(
+      'savanna-la-mar-aerial',
+      'Savanna-la-Mar from the air, 1 Nov 2025: roofs stripped to the rafters',
+      18.218469,
+      -78.129345,
+    ),
+    melissaAnchor(
+      'montego-bay-aerial',
+      'Montego River through Montego Bay, 6 Nov 2025: floodwater and flattened trees',
+      18.464728,
+      -77.918432,
+    ),
+  ],
+  dataPacks: [
+    {
+      id: 'track',
+      version: 1,
+      format: 'geojson',
+      source: { adapter: 'assets', path: `${MELISSA_ASSETS}/track.json` },
+      attribution: {
+        text: 'NOAA National Hurricane Center best track (HURDAT2, AL132025)',
+        license: 'Public domain (U.S. Government work)',
+        url: 'https://www.nhc.noaa.gov/data/tcr/AL132025_Melissa.pdf',
+      },
+      placement: { altitudeReference: 'ellipsoid' },
+    },
+    {
+      id: 'black-river-destroyed',
+      version: 1,
+      format: 'geojson',
+      source: {
+        adapter: 'assets',
+        path: `${MELISSA_ASSETS}/black-river-destroyed.json`,
+      },
+      attribution: {
+        text: '© European Union, Copernicus Emergency Management Service (EMSR847): buildings graded destroyed',
+        license: 'Copernicus EMS terms: reuse with source credit',
+        url: 'https://mapping.emergency.copernicus.eu/activations/EMSR847',
+      },
+      placement: { altitudeReference: 'ellipsoid' },
+    },
+    melissaPhoto(
+      'night-lights',
+      'night-lights-before-after.jpg',
+      'jamaica-night',
+      {
+        text: 'JPSS imagery: CSU/CIRA & NOAA/NESDIS',
+        license: 'Public domain (U.S. Government work)',
+        url: 'https://commons.wikimedia.org/wiki/File:Devastation_and_Power_Loss_Across_Jamaica_Following_Melissa_at_Night_(CIRA_2025-10-30_-_after0).png',
+      },
+    ),
+    melissaPhoto(
+      'st-elizabeth',
+      'st-elizabeth-before-after.jpg',
+      'st-elizabeth',
+      {
+        text: 'NASA Earth Observatory (Lauren Dauphin), Landsat data from USGS',
+        license: 'Public domain (U.S. Government work)',
+        url: 'https://commons.wikimedia.org/wiki/File:A_Direct_Hit_on_Jamaican_Forests_(154887_-_2_20251103_lrg).jpg',
+      },
+    ),
+    melissaPhoto(
+      'black-river-aerial',
+      'black-river-aerial.jpg',
+      'black-river-aerial',
+      NOAA_AERIALS,
+    ),
+    melissaPhoto(
+      'savanna-la-mar-aerial',
+      'savanna-la-mar-aerial.jpg',
+      'savanna-la-mar-aerial',
+      NOAA_AERIALS,
+    ),
+    melissaPhoto(
+      'montego-bay-aerial',
+      'montego-bay-aerial.jpg',
+      'montego-bay-aerial',
+      NOAA_AERIALS,
+    ),
+  ],
+  cameraPath: [
+    {
+      title: "Melissa's track across the Caribbean",
+      lat: 17.5,
+      lon: -76.5,
+      alt: 3200000,
+      heading: 0,
+      pitch: -90,
+      roll: 0,
+      duration: 4,
+      hold: 4,
+      dataPackIds: ['track'],
+    },
+    {
+      title: 'Category 5 landfall near New Hope, 28 Oct 2025',
+      lat: 17.45,
+      lon: -78.1,
+      alt: 95000,
+      heading: 10,
+      pitch: -45,
+      roll: 0,
+      duration: 5,
+      hold: 4,
+      dataPackIds: ['track'],
+    },
+    {
+      title: 'The night after',
+      lat: 18.15,
+      lon: -77.35,
+      alt: 420000,
+      heading: 0,
+      pitch: -90,
+      roll: 0,
+      duration: 4,
+      hold: 7,
+      dataPackIds: ['track', 'night-lights'],
+    },
+    {
+      title: 'St Elizabeth before and after',
+      lat: 17.88,
+      lon: -77.86,
+      alt: 14000,
+      heading: 0,
+      pitch: -40,
+      roll: 0,
+      duration: 5,
+      hold: 9,
+      dataPackIds: ['st-elizabeth'],
+    },
+    {
+      title: 'Black River',
+      ...lookNorthAt(18.026338, -77.847941),
+      duration: 5,
+      hold: 9,
+      dataPackIds: ['black-river-destroyed', 'black-river-aerial'],
+    },
+    {
+      title: 'Savanna-la-Mar',
+      ...lookNorthAt(18.218469, -78.129345),
+      duration: 5,
+      hold: 8,
+      dataPackIds: ['savanna-la-mar-aerial'],
+    },
+    {
+      title: 'Montego Bay',
+      ...lookNorthAt(18.464728, -77.918432),
+      duration: 5,
+      hold: 8,
+      dataPackIds: ['montego-bay-aerial'],
+    },
+  ],
+});
+
+// Melissa follows Nepal: _loadProject installs in this order, so Nepal must
+// already be in a saved project for Melissa to land right after it.
+const EVENT_RECIPES = [
+  BHOTE_KOSHI_NEPAL_BOOTSTRAP_RECIPE,
+  HURRICANE_MELISSA_RECIPE,
+].filter(Boolean);
 
 const PUBLIC_SCENE_RECIPES = [
   {

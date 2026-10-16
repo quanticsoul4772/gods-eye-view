@@ -51,6 +51,7 @@ import {
   uid,
   deepClone,
   recipeToScene,
+  upgradeBuiltInScene,
   createDefaultProject,
   normalizeShot,
   normalizeProject,
@@ -263,10 +264,16 @@ export class SceneDirector {
       const installed = new Set(project.installedBuiltInSceneIds || []);
       let migrated = false;
       for (const recipe of SCENE_RECIPES) {
-        if (
-          typeof recipe.installAlongsideSceneId !== 'string' ||
-          installed.has(recipe.id)
-        ) {
+        if (typeof recipe.installAlongsideSceneId !== 'string') continue;
+        if (installed.has(recipe.id)) {
+          // Installed once; a newer recipe version refreshes the saved copy.
+          if (
+            upgradeBuiltInScene(
+              project.scenes.find((scene) => scene.id === recipe.id),
+              recipe,
+            )
+          )
+            migrated = true;
           continue;
         }
         let anchorIndex = project.scenes.findIndex(

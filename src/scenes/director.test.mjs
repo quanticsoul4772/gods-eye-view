@@ -467,7 +467,9 @@ test('an older default project gains the complete selectable Nepal scene once', 
     assert.equal(nepal.shots.length, 25);
     assert.equal(nepal.shots[0].title, 'Global Incident Context');
     assert.equal(nepal.shots.at(-1).title, 'Final view');
-    assert.deepEqual(director._project.installedBuiltInSceneIds, ['bhote-koshi-nepal-scene']);
+    assert.deepEqual(director._project.installedBuiltInSceneIds, ['bhote-koshi-nepal-scene', 'hurricane-melissa-2025']);
+    const order = director._project.scenes.map(({ id }) => id);
+    assert.equal(order[order.indexOf(nepal.id) + 1], 'hurricane-melissa-2025');
   } finally {
     restore();
   }
@@ -503,7 +505,8 @@ test('an existing public default project gains Nepal without replacing authored 
       original.map(({ id, camera }) => ({ id, camera })));
     assert.equal(director._project.scenes[1].title, 'Nepal Flood Incident');
     assert.equal(director._project.scenes[1].shots.length, 25);
-    assert.deepEqual(director._project.installedBuiltInSceneIds, ['bhote-koshi-nepal-scene']);
+    assert.equal(director._project.scenes[2].id, 'hurricane-melissa-2025');
+    assert.deepEqual(director._project.installedBuiltInSceneIds, ['bhote-koshi-nepal-scene', 'hurricane-melissa-2025']);
   } finally { restore(); }
 });
 
@@ -1583,4 +1586,43 @@ test('camera refusal starts no authored frame or playback clock', async () => {
     assert.equal(director.getPlaybackTimingState().activeTimers, 0);
     assert.deepEqual(viewer.flights, []);
   } finally { restore(); }
+});
+
+test('a newer built-in recipe refreshes the saved Melissa scene and keeps shots the user added', async () => {
+  const { createDefaultProject } = await import('./project.js');
+  const project = createDefaultProject();
+  const melissa = project.scenes.find(({ id }) => id === 'hurricane-melissa-2025');
+  // As saved by an older release: fewer shots, no version stamp, no photos.
+  melissa.shots = melissa.shots.slice(0, 2).map(({ sourcePackVersion, ...shot }) => shot);
+  melissa.dataPacks = melissa.dataPacks.slice(0, 1);
+  melissa.shots[1].dataPackIds = ['track'];
+  const own = structuredClone(melissa.shots[0]);
+  own.id = 'shot-own';
+  own.title = 'My extra angle';
+  delete own.sourcePackId;
+  own.dataPackIds = ['track'];
+  melissa.shots.push(own);
+  const { director, restore } = makeDirector({ project });
+  try {
+    const scene = director._project.scenes.find(({ id }) => id === 'hurricane-melissa-2025');
+    const recipe = SCENE_RECIPES.find(({ id }) => id === 'hurricane-melissa-2025');
+    assert.equal(scene.shots.length, recipe.cameraPath.length + 1);
+    assert.equal(scene.dataPacks.length, recipe.dataPacks.length);
+    assert.equal(scene.shots.at(-1).title, 'My extra angle', 'user shots stay, after the recipe shots');
+    assert.ok(scene.shots.slice(0, -1).every((shot) => shot.sourcePackVersion === recipe.version));
+  } finally {
+    restore();
+  }
+});
+
+test('a deleted built-in scene stays deleted when its recipe is newer', async () => {
+  const { createDefaultProject } = await import('./project.js');
+  const project = createDefaultProject();
+  project.scenes = project.scenes.filter(({ id }) => id !== 'hurricane-melissa-2025');
+  const { director, restore } = makeDirector({ project });
+  try {
+    assert.equal(director._project.scenes.some(({ id }) => id === 'hurricane-melissa-2025'), false);
+  } finally {
+    restore();
+  }
 });
