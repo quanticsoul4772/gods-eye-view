@@ -32,6 +32,12 @@ const ALL_VESSELS = 1_000_000;
 const round = (value, digits) =>
   Number.isFinite(value) ? Number(value.toFixed(digits)) : null;
 const text = (value) => (typeof value === 'string' && value ? value : null);
+// AIS ship type 0 is "not available" (ITU-R M.1371); the source keeps it as
+// '0', so it is reported as unknown rather than counted as a type.
+const vesselType = (value) => {
+  const type = text(value);
+  return type === '0' ? null : type;
+};
 
 function vesselRow(record, from) {
   const point = { lat: record.latitude, lon: record.longitude };
@@ -39,7 +45,7 @@ function vesselRow(record, from) {
     mmsi: record.id,
     name: text(record.name),
     imo: text(record.imo),
-    type: text(record.type),
+    type: vesselType(record.type),
     destination: text(record.destination),
     lat: round(record.latitude, 5),
     lon: round(record.longitude, 5),
