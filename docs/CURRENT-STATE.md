@@ -1269,6 +1269,15 @@ cancels the body unread. A rejected or timed-out body is an upstream miss and
 follows each route's existing error and cached-data paths. FIRMS map-key
 status, the OpenSky token exchange and CCTV media keep their current handling.
 
+The route also bounds request frequency: 120 requests/minute per client
+address, with a global backstop of three times that. A refused request answers
+429 with `Retry-After` and `Cache-Control: no-store` and performs no outbound
+fetch. The bikeshare layer's own demand is about 15 requests a minute with
+every catalogued system in range, so an ordinary session never meets the limit;
+the method, host and path guards run unchanged.
+
+Updated: September 21, 2026
+
 ## Remaining local service modules
 
 Overpass query validation, geometry simplification, disk caching and upstream
@@ -1291,6 +1300,28 @@ Node-only package entries expose Overpass, military installations, regional
 services, local voice and standalone key setup. Importing them starts no network
 acquisition. Browser layer lifecycle, rendering and voice execution stay in their
 existing modules.
+
+## Web app install icons
+
+`public/manifest.webmanifest` declares the installable app: standalone display,
+`#0a0a0f` background and theme, and 192/512 icons plus a 512 maskable variant.
+`index.html` links the manifest, a 180px `apple-touch-icon` and a 32px PNG
+favicon; the existing SVG favicon still serves the browser tab. Safari ignores an
+SVG apple-touch-icon and substitutes a page screenshot, so the raster is what
+makes an installed icon appear at all.
+
+Manifest `start_url`, `scope` and icon paths are relative to the manifest, and
+Vite rewrites the `index.html` links under `base`, so a build served from a path
+prefix installs and launches inside that prefix.
+
+`node scripts/generate-icons.mjs` renders every raster from `public/logo.svg` and
+writes `public/icons/`. Output is committed, so building needs no image
+toolchain; re-run the script after changing the logo. Ordinary icons inset the
+mark to 78% of the canvas and the maskable variant to 54%, keeping it inside the
+circle Android may crop to. `src/tooling/webAppIcons.test.mjs` checks the links,
+the manifest fields and that each committed PNG is square at its declared size.
+It also builds the install links under `base: '/example/'` and asserts every
+emitted link and manifest URL stays inside that base.
 
 ## Local build preview
 
@@ -1330,6 +1361,9 @@ and stale/error responses remain unchanged. Each has a Node-only package entry
 under `gods-eye-view/server/providers/`. Portable terrain mechanics, traffic tile
 math and GBFS source rules are available under `gods-eye-view/sources/`.
 The browser layers and their rendering remain in their existing modules.
+GBFS null or empty availability counts retain an unknown value through station
+parsing and rendering; they use the neutral station color rather than reporting
+an empty dock. Explicit zero and caller-supplied numeric fallbacks remain valid.
 
 ## Terrain height cache bound
 
@@ -3256,7 +3290,7 @@ its criteria cannot be silently ignored.
 | CCTV                   | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Statens vegvesen (NO, stills + live HLS) + King County (WA) Open Data + WSDOT (WA) Open Data + NYC DOT TMC (opt-in) + City of Toronto RESCU + Catalonia (Servei Català de Trànsit) + Street View fallback | `src/data/cctv.js`                                    | `/api/cctv`                                              | 10s (active)                                                                      |
 | Radio                  | Radio Browser (public-domain station directory)                                                                                                                                                 | `src/data/radio.js`                                   | `/api/radio/stations`, `/api/radio/click/:uuid`          | 45 min directory refresh                                                          |
 | Transit 🚌             | Operator GTFS-Realtime VehiclePositions (7 keyless regions, `src/data/transitFeeds.js`)                                                                                                         | `src/layers/transit/` via `src/app/layers/transit.js` | `/api/transit`                                           | 15s (poll + delayed playback)                                                     |
-| Bikeshare 🚲           | GBFS (Lyft + BCycle + Social Bicycles + PBSC incl. Bike Share Toronto + Urban Sharing, Entur, JCDecaux NO)                                                                                                                                        | `src/data/bikeshare.js`                               | `/api/gbfs`                                              | 60s                                                                               |
+| Bikeshare 🚲           | GBFS (Lyft + BCycle + Social Bicycles + PBSC incl. Bike Share Toronto, Bike Itaú (Brazil) and Bicing (Barcelona) + Urban Sharing, Entur, JCDecaux NO + nextbike (AMBici))                                                                                                                                        | `src/data/bikeshare.js`                               | `/api/gbfs`                                              | 60s                                                                               |
 | Directions 🧭          | OSRM on FOSSGIS servers (OpenStreetMap)                                                                                                                                                         | `src/data/directions.js`                              | `/api/route` (`steps=1`)                                 | on placement / mode change                                                        |
 | Datacenters ▣          | OSM extract (bundled)                                                                                                                                                                           | `src/data/localLayers.js`                             | —                                                        | static                                                                            |
 | Dams ▰                 | OpenInfraMap/OSM extract (bundled)                                                                                                                                                              | `src/data/localLayers.js`                             | —                                                        | static                                                                            |
@@ -3672,8 +3706,11 @@ Transit is off by default, and share links use token `j`. The movement panel ord
 places Transit directly after Street Traffic and before Bike Share. Cameras and
 utilities retain their own groups. The layer polls
 registered feeds near the camera every 15 seconds, below a 3,000 km altitude
-gate. Seven keyless regions are available: Boston, Austin, Minneapolis–St Paul,
-Helsinki, the Netherlands, Norway and South East Queensland. Mode silhouettes
+gate. Sixteen keyless regions are available: Boston, Austin, Minneapolis–St Paul,
+Helsinki, the Netherlands, Norway, South East Queensland, and nine in
+Ontario — Toronto (TTC surface vehicles; the subway publishes no
+positions), MiWay, Hamilton HSR, Durham Region, YRT/Viva, Guelph,
+Burlington, Barrie and Kingston. Mode silhouettes
 identify buses, trams, subways, trains, ferries and unclassified vehicles.
 
 Retained transit history uses the same outlier quarantine as live observations and
@@ -4206,6 +4243,14 @@ silently demoting every later lookup for the session.
   (`calSource: 'manual'`) or curated pose (`poseSource: 'curated'`) is never presented as
   estimated, matching the CAL badge. Public camera state carries `headingConfidence` and
   `headingEstimated` (`src/layers/cctv/headingConfidence.js`, #639).
+- **CCTV identified hardware:** a camera whose source or seed names a hardware `model` that
+  resolves in `src/layers/cctv/modelSpecs.js` (vendored CC0 records from the CCTV Camera
+  Database) gets the model's specs appended to the HUD meta line. Only fixed single-lens
+  hardware fills the FOV, and only when the source or seed states none and the pose is not
+  curated, shown as `FOV n° (DATASHEET)` until a manual calibration moves it. PTZ, varifocal and
+  multi-sensor datasheets publish a capability range, not the lens's current zoom, so those
+  cameras keep their estimate and show `SPEC FOV min–max° (CAPABILITY)` beside it. Public
+  camera state carries `fovSource`, `specFovMinDeg`, `specFovMaxDeg` and `spec` (#452).
 - **FIRMS**: no ground clamping (zero 3D-tiles height sampling), ≤18 screen-decluttered ambient labels, click-to-inspect detail card, 2.5k/3k sprite budgets viewport-clipped by FRP.
 - **CCTV v2 foundation:** a pitched
   frustum wireframe (4 corner rays + far-cap rectangle) with a monitor plane at the frustum's
@@ -5364,6 +5409,22 @@ Local FM and internet radio are one listening surface: starting local FM stops
 internet-radio playback, and starting internet radio stops local FM. ADS-B
 reception does not interrupt internet radio.
 
+- **FM seek.** Seeking wraps across 87.5–108 MHz, covers both band edges and
+  skips the starting station. Spectra carry a decoder epoch, so a retune or mode
+  change rejects earlier output. A failed scan retune stops seeking. This
+  integrates Aditya's (@Rohilalala) contribution in #1174; it does not change
+  the peak-selection algorithm or guarantee that a final station retune succeeds.
+- **Streaming and playback.** Four ordered USB reads keep input available while
+  the page handles other work; control changes drain those reads before touching
+  the receiver. The worker must finish loading before reads start. Decoder work
+  is limited to eight unacknowledged blocks / 512 KiB, with a one-second oldest
+  block watchdog. Overload stops the receiver with an explicit error. Stop
+  terminates the worker immediately and disables the audio session; stale decoder
+  output and audio from retired sessions are refused. FM audio starts after an
+  80 ms prebuffer and retains at most 256 ms, dropping the oldest frames on
+  overflow. FM signal display updates are coalesced to at most four per second;
+  spectra are computed only while seeking. Optional `decoderDiagnostics` adds
+  bounded timing samples and overload snapshots without recording audio or IQ.
 - **Modes.** FM (87.5–108 MHz, tune, seek, volume) or ADS-B at 1090 MHz.
   With a receiver open, selecting ADS-B enables the Local ADS-B layer;
   selecting FM disables it.

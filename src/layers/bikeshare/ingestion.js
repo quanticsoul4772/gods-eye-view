@@ -95,7 +95,10 @@ export function createIngestion({
         const payload = await fetchGbfsJson(city.stationInformationUrl, {
           signal: controller.signal,
         });
-        const stationMap = parts.model.parseStationInformation(payload);
+        const stationMap = parts.model.stationsWithinCity(
+          city,
+          parts.model.parseStationInformation(payload),
+        );
         if (stationMap.size === 0) {
           throw new Error(`No station information for ${city.city}`);
         }

@@ -36,7 +36,7 @@ test('the worker demodulates AM blocks and reports squelch state', () => {
   });
   posted.length = 0;
   for (let block = 0; block < 3; block += 1)
-    send({ type: 'samples', buffer: amIqBuffer(offsetHz) });
+    send({ type: 'samples', buffer: amIqBuffer(offsetHz), spectrum: true });
 
   assert.equal(posted.length, 3);
   for (const message of posted) assert.equal(message.type, 'am');
@@ -45,7 +45,11 @@ test('the worker demodulates AM blocks and reports squelch state', () => {
   assert.ok(last.samples.length > 0);
   assert.equal(last.squelchOpen, true);
   assert.ok(Number.isFinite(last.snr));
-  assert.ok(last.bins instanceof Float32Array, 'every third block has bins');
+  assert.ok(
+    last.bins instanceof Float32Array,
+    'every third block has bins when a spectrum is asked for',
+  );
+  assert.equal(posted[0].bins, null, 'blocks between spectra carry none');
 });
 
 test('a squelch message takes effect without reconfiguring', () => {

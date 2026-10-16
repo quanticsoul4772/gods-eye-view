@@ -873,10 +873,14 @@
   "src/sdr/adsbDecoder.test.mjs",
   "src/sdr/airband.test.mjs",
   "src/sdr/controller.test.mjs",
+  "src/sdr/decoderDiagnostics.test.mjs",
   "src/sdr/gain.test.mjs",
   "src/sdr/sdrWorker.test.mjs",
+  "src/sdr/readPipeline.diag.test.mjs",
+  "src/sdr/sdrAudioWorklet.test.mjs",
   "src/sdr/spectrum.test.mjs",
   "src/sdr/usbDevices.test.mjs",
+  "src/sdr/workerAdmission.test.mjs",
   "src/sources/adsbRecords.test.mjs",
   "src/layers/localAdsb/index.test.mjs",
   "src/ui/localSdrControls.test.mjs",
@@ -1053,6 +1057,9 @@
   "src/costEndpointThrottle.test.mjs",
   "src/sources/gbfsStations.test.mjs",
   "scripts/qa-gbfs-names.mjs",
+  "scripts/generate-icons.mjs",
+  "src/tooling/webAppIcons.test.mjs",
   "src/ui/flyToDataSource.js",
-  "src/ui/flyToDataSource.test.mjs"
+  "src/ui/flyToDataSource.test.mjs",
+  "src/data/gbfsProxyRateLimit.test.mjs"
 ]

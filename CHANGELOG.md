@@ -25,6 +25,52 @@
 - Without a Google browser key, the page no longer logs a 404 console error on
   every load: the standalone server answers `/api/google/tiles-token` with 204
   when no provider offers tokens, which the app already reads as "no tokens".
+- Local FM seek finds stations after wrapping around 87.5–108 MHz, covers both
+  band edges, skips the starting station and rejects spectra from an earlier
+  tune (Aditya, @Rohilalala, #1174).
+- Local RTL-SDR keeps USB reads queued in order and bounds pending decoder
+  work. A stalled or overloaded decoder stops with an explicit error; stopping
+  terminates its worker and rejects late audio. FM playback buffers short
+  scheduling gaps, caps its audio queue at 256 ms, and reduces display updates
+  and spectrum calculations while listening.
+
+- Add Bogotá (Tembici, 250 stations) and Santiago de Chile (Bike Itaú, 200
+  stations) to the GBFS bikeshare registry, the layer's first stations in
+  Colombia and Chile. Both are PBSC feeds like the Brazilian Bike Itaú cities,
+  so no proxy change is needed. Both feeds also list depot stations on other
+  continents (São Paulo, Madrid) as in service; stations outside a city's load
+  radius are now dropped instead of drawn as live docks.
+
+- Add Barcelona's bike share to the GBFS registry: Bicing (543 stations, the
+  city's PBSC system) and AMBici (237 e-bike stations across the metropolitan
+  area, run by nextbike). Both are keyless GBFS 2.3 feeds listed in
+  MobilityData's systems catalogue; AMBici's is CC0. `gbfs.nextbike.net` joins
+  the proxy allowlist. These are the layer's first stations in Spain.
+
+- Add nine Ontario transit feeds: TTC, MiWay, Hamilton HSR, Durham Region,
+  YRT/Viva, Guelph, Burlington, Barrie and Kingston, each carrying its own
+  licence quote and attribution. A feed can now name its own modes, so Toronto's
+  trams read "Streetcar" while Helsinki's stay "Tram", and a feed whose route ids
+  are internal keys can translate them to the number a rider would say. TTC
+  vehicles take their mode from the fleet number first, so replacement buses on
+  streetcar routes read as buses and out-of-service streetcars stay streetcars.
+
+- CCTV cameras with identified hardware show the model's datasheet specs. When a
+  source names a camera model found in the vendored CCTV Camera Database records
+  (CC0), the HUD meta line adds its resolution, night vision and PTZ capability.
+  A fixed single-lens model's horizontal FOV fills in when the source states no
+  FOV and the pose is not curated (`FOV n° (DATASHEET)`); a PTZ or varifocal
+  range is what the lens can do, not its current zoom, so those cameras keep the
+  estimate and show `SPEC FOV min–max° (CAPABILITY)` beside it (bassem chagra,
+  #452).
+
+- Ship a web app manifest and raster home-screen icons, so adding the app to a
+  phone home screen or installing it on desktop uses the God's Eye View mark
+  instead of a blank tile. The icons are generated from `public/logo.svg` by
+  `node scripts/generate-icons.mjs` and committed, so a plain `vite build` needs
+  no image toolchain. The existing SVG favicon still serves the browser tab.
+  Manifest paths are relative to the manifest, so a build served under a path
+  prefix installs and launches inside that prefix.
 
 - Cyclone advisories no longer go dark while NHC publishes an advisory ahead
   of its nominal time: advisory and position times up to 90 minutes ahead of
@@ -100,6 +146,11 @@
   have wound down — CoGo's feed reports no stations and last moved a bike in
   March 2025. The three repointed feeds were verified live.
 
+- Add seven Brazilian Bike Itaú (Tembici) cities to the GBFS bikeshare registry:
+  São Paulo, Rio de Janeiro, Salvador, Recife, Porto Alegre, Brasília and
+  Curitiba (about 1,000 stations in total). These are the layer's first stations
+  in South America.
+
 - Add Bike Share Toronto (1,069 stations) to the bikeshare registry. The system
   publishes the same PBSC GBFS v2 feeds as the Austin, Honolulu and Chattanooga
   entries, so it needs no new plumbing; a registry test now holds every city's
@@ -155,6 +206,9 @@
 - Tool string length validation counts Unicode characters correctly, including characters outside the basic multilingual plane.
 
 - Director timeline seeks cross the dateline along the short longitude arc.
+
+- Keep unknown GBFS availability counts neutral instead of turning null or empty
+  values into zero bikes.
 
 - Recent Imagery continues past malformed records in full catalog pages, respects the requested record limit, and reports results as truncated when that limit drops valid records.
 
