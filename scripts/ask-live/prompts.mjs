@@ -558,4 +558,91 @@ export const PROMPTS = Object.freeze([
     prompt: 'Which bike-share vehicle is this, and where has it been?',
     start: PARIS,
   },
+  // — 2026-10-16 changes —
+  // Keyless fires: with no FIRMS_MAP_KEY the layer reads NASA's public 24 h
+  // files through the source directory.
+  {
+    id: 'fires-keyless-california',
+    prompt: 'Show active fires in California and tell me how many there are.',
+    checks: {
+      layersOn: ['local-firms'],
+      answer: /\d/,
+      answerNot: /key required|no (FIRMS )?key|not configured/i,
+    },
+  },
+  {
+    id: 'fires-keyless-satellites',
+    prompt: 'Which satellites detected the fires in view?',
+    start: { lat: -8, lon: 25, height: 4000000, pitch: -90 },
+    checks: { answer: /VIIRS|MODIS|NOAA|Terra|Aqua/i, answerNot: /key/i },
+  },
+  // Canadian fire perimeters (BC, Ontario) from the source directory.
+  {
+    id: 'perimeters-british-columbia',
+    prompt: 'Show wildfire perimeters in British Columbia.',
+    checks: {
+      layersOn: ['fire-perimeters'],
+      cameraNear: { lat: 53.7, lon: -127.6, km: 900 },
+      answerNot: /only (covers|shows) (the )?(US|United States)/i,
+    },
+  },
+  {
+    id: 'perimeters-ontario-status',
+    prompt:
+      'Which wildfires are burning in Ontario right now, and are any out of control?',
+    checks: { layersOn: ['fire-perimeters'], answer: /Ontario/i },
+  },
+  // Worldwide directory feeds stay out of "sources for this place" answers.
+  {
+    id: 'sources-london-no-worldwide',
+    prompt: 'What live data sources are there for this area?',
+    start: LONDON,
+    checks: {
+      tools: ['find_data_sources'],
+      answerNot: /active-fire|FIRMS|earthquake feed|disaster alert/i,
+    },
+  },
+  {
+    id: 'sources-hazards-topic',
+    prompt: 'What hazard data sources can the app list?',
+    checks: { tools: ['find_data_sources'], answer: /fire/i },
+  },
+  // A layer that shows nothing here names what the directory lists.
+  {
+    id: 'bikeshare-nothing-lagos',
+    prompt: 'Turn on bike share here. Is there any?',
+    start: LAGOS,
+    checks: { layersOn: ['bikeshare'], tools: ['find_data_sources'] },
+  },
+  // Scooters are the bike-share layer's shared-vehicle mode.
+  {
+    id: 'scooters-paris',
+    prompt: 'Show me shared scooters in Paris.',
+    start: PARIS,
+    checks: { layersOn: ['bikeshare'], answer: /scooter|vehicle/i },
+  },
+  // AIS type 0 ("not available") counts as unknown, not as a type.
+  {
+    id: 'ships-singapore-by-type',
+    prompt: 'Count the ships near Singapore by type.',
+    checks: { tools: ['vessels_in_area'], answerNot: /\b0 \(\d+\)|type 0\b/ },
+  },
+  // The analyst field hint lists datacenter fields whole.
+  {
+    id: 'datacenters-operators-ashburn',
+    prompt: 'Which operators run the datacenters around Ashburn, Virginia?',
+    checks: { tools: ['analyst_query'], layersOn: ['local-datacenters'] },
+  },
+  // Built-in scene with photo cards.
+  {
+    id: 'scene-hurricane-melissa',
+    prompt: 'Play the Hurricane Melissa scene.',
+    checks: { tools: ['control_scene'] },
+  },
+  // Named explicitly, Space Missions still turns on; only bulk requests skip it.
+  {
+    id: 'space-missions-named',
+    prompt: 'Open Space Missions.',
+    checks: { layersOn: ['rocket-launches'] },
+  },
 ]);
