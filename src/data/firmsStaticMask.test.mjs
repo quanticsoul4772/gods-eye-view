@@ -4,6 +4,8 @@ import { promises as fsp } from 'node:fs';
 import {
   annotateStaticSources,
   buildMaskIndex,
+  countRecurringCells,
+  recordUnflaggedDays,
   staticSourceOf,
   stripStaticSources,
 } from '../../server/providers/firmsStaticMask.js';
@@ -220,4 +222,88 @@ test('proxy: a disk cache from another mask is re-annotated with the current one
     'the old flag is gone, the new mask applied',
   );
   assert.equal((await request('/status')).body.staticFlagged, 1);
+});
+
+test('recurrence: unflagged daytime VIIRS cells per day, 7 days kept, 3+ days counted', () => {
+  const day = (date, over = {}) => fire(5, 5, { acqDate: date, ...over });
+  let days = recordUnflaggedDays({}, [
+    day('2026-10-01'),
+    day('2026-10-01', { lat: 5.001 }), // same ~400 m cell
+    day('2026-10-01', { daynight: 'N', lat: 30 }),
+    day('2026-10-01', { staticSource: 'solar', lat: 31 }),
+    day('2026-10-01', { instrument: 'MODIS', lat: 32 }),
+  ]);
+  assert.deepEqual(Object.keys(days), ['2026-10-01']);
+  assert.equal(days['2026-10-01'].length, 1, 'night, flagged and MODIS left out');
+  days = recordUnflaggedDays(days, [day('2026-10-03'), day('2026-10-03', { lat: -40 })]);
+  assert.equal(countRecurringCells(days), 0, 'two days is not enough');
+  days = recordUnflaggedDays(days, [day('2026-10-07')]);
+  assert.equal(countRecurringCells(days), 1);
+  days = recordUnflaggedDays(days, [day('2026-10-08', { lat: -40 })]);
+  assert.deepEqual(
+    Object.keys(days),
+    ['2026-10-03', '2026-10-07', '2026-10-08'],
+    'days older than 7 before the newest are dropped',
+  );
+  assert.equal(countRecurringCells(days), 0, 'the 10-01 detection aged out');
+  assert.equal(countRecurringCells(days, 2), 2);
+  assert.deepEqual(JSON.parse(JSON.stringify(days)), days, 'stored as JSON');
+  assert.deepEqual(recordUnflaggedDays({}, [day('bad')]), {});
+});
+
+test('proxy: status counts recurring unflagged cells from the stored history', async (t) => {
+  const stored = {
+    maskId: 'mask-a',
+    days: Object.fromEntries(
+      ['2026-10-14', '2026-10-15'].map((date) => [
+        date,
+        recordUnflaggedDays({}, [fire(10, 10, { acqDate: date })])[date],
+      ]),
+    ),
+  };
+  const options = keylessSetup(t);
+  const written = [];
+  t.mock.method(fsp, 'readFile', async (file) => {
+    if (String(file).endsWith('firms-recurrence.json')) return JSON.stringify(stored);
+    throw Error('no disk cache');
+  });
+  t.mock.method(fsp, 'writeFile', async (file, text) => written.push([String(file), text]));
+  const request = install(
+    firmsProxy({
+      ...options,
+      staticMask: () => ({ id: 'mask-a', index: buildMaskIndex(ROWS), escalation: {} }),
+    }),
+  );
+  let status = (await request('/status')).body;
+  assert.equal(status.unflaggedRecurringDays, 2);
+  assert.equal(status.unflaggedRecurring, 0);
+  await request(); // today's refresh: the 10,10 detection is unflagged, Moapa is not
+  status = (await request('/status')).body;
+  assert.equal(status.unflaggedRecurringDays, 3);
+  assert.equal(status.unflaggedRecurring, 1);
+  const history = written.find(([file]) => file.endsWith('firms-recurrence.json'));
+  assert.ok(history, 'the history is written next to the cache');
+  assert.equal(JSON.parse(history[1]).maskId, 'mask-a');
+});
+
+test('proxy: a history from another mask is not counted and is replaced', async (t) => {
+  const options = keylessSetup(t);
+  t.mock.method(fsp, 'readFile', async (file) => {
+    if (String(file).endsWith('firms-recurrence.json'))
+      return JSON.stringify({ maskId: 'old', days: { '2026-10-14': [1], '2026-10-15': [1] } });
+    throw Error('no disk cache');
+  });
+  const request = install(
+    firmsProxy({
+      ...options,
+      staticMask: () => ({ id: 'mask-a', index: buildMaskIndex(ROWS), escalation: {} }),
+    }),
+  );
+  let status = (await request('/status')).body;
+  assert.equal(status.unflaggedRecurring, null);
+  assert.equal(status.unflaggedRecurringDays, 0);
+  await request();
+  status = (await request('/status')).body;
+  assert.equal(status.unflaggedRecurringDays, 1, 'started over under the current mask');
+  assert.equal(status.unflaggedRecurring, 0);
 });
