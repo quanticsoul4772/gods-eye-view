@@ -363,3 +363,33 @@ test('failed responses release their body and an already-cancelled source sends 
   await assert.rejects(source({ path: 'a.json', signal: controller.signal }));
   assert.equal(requests, 1);
 });
+
+test('a photo pack is pinned to a declared anchor, like media', () => {
+  const p = project(),
+    s = p.scenes[0],
+    a = s.dataPacks[0];
+  a.format = 'photo';
+  a.placement = { anchorId: 'black-river' };
+  assert.throws(
+    () => parseSceneDocument(JSON.stringify(p)),
+    /unknown scene anchor/,
+  );
+  s.anchors = [
+    {
+      id: 'black-river',
+      title: 'Black River from the air',
+      lat: 18.0256,
+      lon: -77.851,
+      alt: 40,
+      altitudeReference: 'ellipsoid',
+    },
+  ];
+  assert.doesNotThrow(() => parseSceneDocument(JSON.stringify(p)));
+  // Ground-overlay placement belongs to `image`, not to photos.
+  a.placement = {
+    bounds: [-78, 18, -77.8, 18.1],
+    height: 40,
+    altitudeReference: 'ellipsoid',
+  };
+  assert.throws(() => parseSceneDocument(JSON.stringify(p)));
+});

@@ -29,6 +29,70 @@ function caption(viewer, pack) {
 }
 const xyz = (p) => Cesium.Cartesian3.fromDegrees(...p);
 
+const PNG_SIGNATURE = [137, 80, 78, 71, 13, 10, 26, 10];
+const MAX_PHOTO_SIDE = 4096;
+const MAX_PHOTO_PIXELS = 16 * 1024 * 1024;
+/** JPEG start-of-frame markers: they carry the image's height and width. */
+const JPEG_SOF = new Set([
+  0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf,
+]);
+
+/**
+ * A photo's pixel size from its header, before anything decodes it: a small
+ * file can declare a huge image. PNG reads IHDR; JPEG walks the marker
+ * segments to the first start-of-frame. Throws when the type, signature or
+ * size is unacceptable.
+ * @param {string} mimeType
+ * @param {Uint8Array} bytes
+ * @returns {{width: number, height: number}}
+ */
+export function photoDimensions(mimeType, bytes) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let size = null;
+  if (mimeType === 'image/png') {
+    if (
+      bytes.length < 24 ||
+      !PNG_SIGNATURE.every((v, i) => bytes[i] === v) ||
+      String.fromCharCode(...bytes.subarray(12, 16)) !== 'IHDR'
+    )
+      throw new Error('Invalid PNG header');
+    size = { width: view.getUint32(16), height: view.getUint32(20) };
+  } else if (mimeType === 'image/jpeg') {
+    if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8)
+      throw new Error('Invalid JPEG header');
+    let at = 2;
+    while (at + 4 <= bytes.length && !size) {
+      if (bytes[at] !== 0xff) throw new Error('Invalid JPEG header');
+      const marker = bytes[at + 1];
+      if (marker === 0xff) {
+        at += 1; // fill byte
+        continue;
+      }
+      if (marker === 0xd9 || marker === 0xda) break; // end / scan: no frame
+      const length = view.getUint16(at + 2);
+      if (length < 2) throw new Error('Invalid JPEG header');
+      if (JPEG_SOF.has(marker)) {
+        if (at + 9 > bytes.length) break;
+        size = {
+          height: view.getUint16(at + 5),
+          width: view.getUint16(at + 7),
+        };
+      }
+      at += 2 + length;
+    }
+    if (!size) throw new Error('Invalid JPEG header');
+  } else throw new Error('Expected a JPEG or PNG photo');
+  if (
+    !size.width ||
+    !size.height ||
+    size.width > MAX_PHOTO_SIDE ||
+    size.height > MAX_PHOTO_SIDE ||
+    size.width * size.height > MAX_PHOTO_PIXELS
+  )
+    throw new Error('Image dimensions exceed limit');
+  return size;
+}
+
 /** Create rendering adapters; data acquisition and authored placement stay independent. */
 export function createPackPresentations(viewer, targets = new Map()) {
   let panel;
@@ -47,7 +111,10 @@ export function createPackPresentations(viewer, targets = new Map()) {
       viewer.container.append(panel);
     }
     const card = caption(viewer, pack);
-    panel.append(card);
+    // Photos lead: the panel shows about one photo card before it scrolls,
+    // and a credit-only card must not push the picture out of view.
+    if (pack.format === 'photo') panel.prepend(card);
+    else panel.append(card);
     return card;
   }
   function resource(pack) {
@@ -219,6 +286,51 @@ export function createPackPresentations(viewer, targets = new Map()) {
       media.style.width = '240px';
       media.src = handle.url(new Blob([asset.bytes], { type: asset.mimeType }));
       handle.card().append(media);
+    }),
+    photo: guarded(async ({ asset, pack, anchors, signal }, handle) => {
+      photoDimensions(asset.mimeType, asset.bytes);
+      const anchor = anchors.find(
+        (item) => item.id === pack.placement.anchorId,
+      );
+      if (!anchor) throw new Error('Missing photo anchor');
+      const image = new Image();
+      image.src = handle.url(new Blob([asset.bytes], { type: asset.mimeType }));
+      const abort = () => {
+        image.src = '';
+      };
+      signal.addEventListener('abort', abort, { once: true });
+      try {
+        await image.decode();
+      } finally {
+        signal.removeEventListener('abort', abort);
+      }
+      signal.throwIfAborted();
+      // Where the photo was taken; no label (the card names it), and drawn
+      // over the 3D tiles so the ground can't bury it.
+      handle.add({
+        name: anchor.title || pack.id,
+        position: xyz([anchor.lon, anchor.lat, anchor.alt]),
+        point: {
+          pixelSize: 12,
+          color: Cesium.Color.YELLOW,
+          outlineColor: Cesium.Color.BLACK,
+          outlineWidth: 2,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+      });
+      image.alt = anchor.title || pack.id;
+      Object.assign(image.style, {
+        display: 'block',
+        width: '320px',
+        height: 'auto',
+        marginBottom: '4px',
+      });
+      const title = document.createElement('div');
+      title.textContent = anchor.title || pack.id;
+      title.style.fontWeight = '600';
+      const card = handle.card();
+      card.style.maxWidth = '340px';
+      card.prepend(image, title);
     }),
   };
 }

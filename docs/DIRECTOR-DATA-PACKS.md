@@ -63,11 +63,21 @@ this is not a new arbitrary-URL proxy.
   the media; an attribution card provides native, user-operated playback
   controls. Media never autoplays. Codec support depends on the browser. D5 does
   not synchronize media time with scene time or embed third-party players.
+- **`photo`:** a still JPEG (`image/jpeg`) or PNG (`image/png`), at most 4096
+  pixels per side and 16 megapixels, read from the file header before
+  decoding. Placement is `{ "anchorId": "photo-location" }`, like `media`. The
+  card shows the photo (320 px wide) above the anchor's `title` and the
+  attribution; a
+  marker (no label) shows where it was taken and stays visible over 3D tiles.
+  Photo cards sit at the top of the card panel, which shows about one photo
+  before it scrolls (playback cannot scroll it), so keep one photo pack per
+  shot; put a before/after pair side by side in one image.
 
 Pack attribution always includes nonempty `text` and `license`; an optional
 HTTPS `url` opens as a source link with no opener/referrer. Importing or sharing
-an asset never changes its license. D5 adds no third-party content and preserves
-all existing Nepal content and contributor notices.
+an asset never changes its license. Built-in scenes that ship third-party
+assets list them with their licenses in their asset folder's README, e.g.
+[`public/scene-assets/melissa-2025/`](../public/scene-assets/melissa-2025/README.md).
 
 Optional `byteLength` specifies the exact expected byte count; optional `sha256`
 is a lowercase hexadecimal SHA-256 digest checked before rendering. There are at

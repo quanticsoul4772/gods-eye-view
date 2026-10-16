@@ -43,7 +43,7 @@ export function validateDataPack(pack, path, anchorIds) {
   ]);
   string(pack.id, `${path}.id`);
   if (pack.version !== 1) fail(`${path}.version`, 'unsupported pack version');
-  if (!['geojson', 'image', 'media'].includes(pack.format))
+  if (!['geojson', 'image', 'media', 'photo'].includes(pack.format))
     fail(`${path}.format`, 'unsupported pack format');
   fields(pack.source, `${path}.source`, ['adapter', 'path']);
   string(pack.source.adapter, `${path}.source.adapter`);
@@ -86,11 +86,11 @@ export function validateDataPack(pack, path, anchorIds) {
     at,
     pack.format === 'image'
       ? ['bounds', 'height', 'altitudeReference']
-      : pack.format === 'media'
+      : pack.format === 'media' || pack.format === 'photo'
         ? ['anchorId']
         : ['altitudeReference'],
   );
-  if (pack.format === 'media') {
+  if (pack.format === 'media' || pack.format === 'photo') {
     if (!anchorIds.has(p.anchorId))
       fail(`${at}.anchorId`, 'unknown scene anchor');
   } else {

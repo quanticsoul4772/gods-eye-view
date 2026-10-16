@@ -12,6 +12,7 @@ const MIME = new Set([
   'application/json',
   'application/geo+json',
   'image/png',
+  'image/jpeg',
   'video/mp4',
   'video/webm',
   'audio/mpeg',

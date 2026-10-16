@@ -275,3 +275,39 @@ test('long valid source filenames still produce an importable bundle', async () 
   );
   assert.equal(parsed.assets.size, 1);
 });
+
+test('a photo pack travels in a bundle as JPEG bytes', async () => {
+  const project = fixture();
+  const scene = project.scenes[0];
+  scene.anchors = [
+    {
+      id: 'pin',
+      title: 'Here',
+      lat: 1,
+      lon: 2,
+      alt: 30,
+      altitudeReference: 'ellipsoid',
+    },
+  ];
+  scene.dataPacks[0] = {
+    ...scene.dataPacks[0],
+    id: 'photo',
+    format: 'photo',
+    source: { adapter: 'assets', path: 'test/photo.jpg' },
+    placement: { anchorId: 'pin' },
+  };
+  scene.shots[0].dataPackIds = ['photo'];
+  const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
+  const text = await createSceneBundle(
+    selectSceneDocument(project, 'one'),
+    () => ({
+      bytes: jpeg.slice(),
+      mimeType: 'image/jpeg',
+    }),
+  );
+  const parsed = await parseSceneShare(text);
+  const pack = parsed.project.scenes[0].dataPacks[0];
+  assert.equal(pack.format, 'photo');
+  assert.equal(parsed.assets.get(pack.source.path).mimeType, 'image/jpeg');
+  assert.deepEqual(parsed.assets.get(pack.source.path).bytes, jpeg);
+});

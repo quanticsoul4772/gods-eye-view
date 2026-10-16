@@ -50,12 +50,14 @@ const mimeFor = (file) =>
     json: 'application/json',
     geojson: 'application/geo+json',
     png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
     mp4: 'video/mp4',
     webm: 'video/webm',
     mp3: 'audio/mpeg',
     wav: 'audio/wav',
     ogg: 'audio/ogg',
-  }[file.name.split('.').at(-1)];
+  }[file.name.split('.').at(-1).toLowerCase()];
 
 /** Own staged imports, author drafts and share bytes separately from playback and project state. */
 export function createSceneSharing(director) {

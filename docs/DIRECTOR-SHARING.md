@@ -75,7 +75,7 @@ Export copies the document and rewrites pack references to the reserved
 relative names; URLs, traversal, duplicate or unreferenced assets, unknown fields,
 missing packs and mismatched hashes are rejected. Scene documents remain bounded
 at 5 MiB. A bundle allows 50 MiB of JSON, 64 files, 8 MiB per file and 32 MiB of
-asset bytes in total. Supported MIME types are JSON/GeoJSON, PNG, MP4/WebM video
+asset bytes in total. Supported MIME types are JSON/GeoJSON, PNG, JPEG, MP4/WebM video
 and MPEG/Ogg/WAV/WebM audio. Normal pack format and geometry checks still apply.
 There are no executable modules, request headers or credentials in the format.
 

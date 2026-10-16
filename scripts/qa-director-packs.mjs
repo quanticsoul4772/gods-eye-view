@@ -16,6 +16,16 @@ const png = await sharp({
 })
   .png()
   .toBuffer();
+const jpeg = await sharp({
+  create: {
+    width: 320,
+    height: 213,
+    channels: 3,
+    background: { r: 40, g: 120, b: 200 },
+  },
+})
+  .jpeg()
+  .toBuffer();
 const wav = Buffer.alloc(44 + 16000);
 wav.write('RIFF');
 wav.writeUInt32LE(wav.length - 8, 4);
@@ -96,7 +106,9 @@ page.on('request', (request) => {
       ? { contentType: 'image/png', body: png }
       : url.pathname.endsWith('/audio.wav')
         ? { contentType: 'audio/wav', body: wav }
-        : { status: 404, body: 'missing' };
+        : url.pathname.endsWith('/photo.jpg')
+          ? { contentType: 'image/jpeg', body: jpeg }
+          : { status: 404, body: 'missing' };
   void request.respond(reply).catch(() => {});
 });
 try {
@@ -143,6 +155,14 @@ try {
               alt: 450,
               altitudeReference: 'ellipsoid',
             },
+            {
+              id: 'photo',
+              title: 'Synthetic photo card',
+              lat: 30.266,
+              lon: -97.745,
+              alt: 450,
+              altitudeReference: 'ellipsoid',
+            },
           ],
           dataPacks: [
             manifest('outline', 'geojson', 'outline.json', {
@@ -154,6 +174,7 @@ try {
               altitudeReference: 'ellipsoid',
             }),
             manifest('media', 'media', 'audio.wav', { anchorId: 'media' }),
+            manifest('photo', 'photo', 'photo.jpg', { anchorId: 'photo' }),
             manifest('slow', 'geojson', 'slow.json', {
               altitudeReference: 'ellipsoid',
             }),
@@ -171,7 +192,7 @@ try {
             layers: {},
             dataPackIds:
               id === 'all'
-                ? ['outline', 'image', 'media']
+                ? ['outline', 'image', 'media', 'photo']
                 : id === 'empty'
                   ? []
                   : [id],
@@ -212,19 +233,21 @@ try {
         d.viewer.scene.primitives.length - window.__packPrimitiveBaseline,
       cards: document.querySelectorAll('[data-director-pack]').length,
       paused: document.querySelector('[data-director-pack] audio')?.paused,
+      photo: document.querySelector('[data-director-pack="photo"] img')
+        ?.naturalWidth,
     };
   });
   check(
-    'GeoJSON, PNG and media load only through registered sources',
-    loaded.started && loaded.state.count === 3 && requests.length === 3,
+    'GeoJSON, PNG, media and photo load only through registered sources',
+    loaded.started && loaded.state.count === 4 && requests.length === 4,
   );
   check(
     'geometry and image batches plus anchored markers render separately',
-    loaded.count === 2 && loaded.primitives === 3,
+    loaded.count === 3 && loaded.primitives === 3,
   );
   check(
-    'attribution is visible and media does not autoplay',
-    loaded.cards === 3 && loaded.paused === true,
+    'attribution is visible, media does not autoplay, the photo shows',
+    loaded.cards === 4 && loaded.paused === true && loaded.photo === 320,
   );
   await page.waitForFunction(
     () => window.__godsEyeView.mapStackController.getActiveId() === 'photoreal',
@@ -281,11 +304,11 @@ try {
       d.viewer.scene.primitives.length === window.__packPrimitiveBaseline &&
       media.paused &&
       !media.getAttribute('src') &&
-      window.__packRevoked.length === 2 &&
+      window.__packRevoked.length === 3 &&
       window.__packMaterials.length === 1 &&
       window.__packMaterials.every((material) => material.isDestroyed());
     await d.seekScene('packs', 0.1);
-    const seek = d.getDataPackState().count === 3;
+    const seek = d.getDataPackState().count === 4;
     d.stopScene();
     const stopped =
       d.getDataPackState().count === 0 &&
