@@ -248,7 +248,8 @@ export const getFirePerimeters = defineTool({
   description:
     'Mapped wildfire perimeters in an area, largest first: US (NIFC WFIGS) ' +
     'with size, containment, cause and personnel, and Canadian provincial ' +
-    'feeds (British Columbia, Ontario) with size and, for BC, stage of control.',
+    'feeds (British Columbia, Alberta, Ontario) with size and, where the ' +
+    'province reports it, stage of control.',
   inputSchema: {
     type: 'object',
     properties: { area: AREA_SCHEMA, limit: LIMIT_SCHEMA },

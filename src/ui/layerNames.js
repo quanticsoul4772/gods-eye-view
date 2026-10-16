@@ -111,6 +111,7 @@ const SOURCE_LABEL_KEYS = new Map(
     msg('Military aircraft'),
     msg('Vessels'),
     msg('CCTV + Street View fallback'),
+    msg('NIFC WFIGS + Canadian provinces'),
     msg('OpenStreetMap + optional Google Maps Places'),
     msg('GFS / ECMWF IFS · FORECAST'),
     msg('NOAA nowCOAST · OBSERVED'),

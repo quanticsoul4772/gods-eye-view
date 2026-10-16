@@ -522,7 +522,7 @@ test('legend: US containment and BC stage of control share the four colours; Ont
   );
   assert.equal(
     controls.legend[0].blurb,
-    'Colour shows reported containment (US) or stage of control (BC). Perimeters are simplified to about 100 m (US) and 20 m (Canada).',
+    'Colour shows reported containment (US) or stage of control (Canada, where the province reports it). Perimeters are simplified to about 100 m (US) and 20 m (Canada).',
   );
   h.layer.destroy();
   assert.deepEqual(
