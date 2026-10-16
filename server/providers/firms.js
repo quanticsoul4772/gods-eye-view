@@ -52,9 +52,12 @@ import { publicOnlyFetch } from './sourceDirectory.js';
  * daytime VIIRS detections on which UTC day (7 days kept, in
  * .gev-cache/firms-recurrence.json, reset when the mask changes). Status
  * reports `unflaggedRecurring`, the cells seen on 3+ of those days, and
- * `unflaggedRecurringDays`, the days recorded. A rising count means solar
- * farms or industrial sites the mask lacks: time to rebuild it. Days are
- * only recorded while the proxy is refreshing, i.e. while it is used.
+ * `unflaggedRecurringDays`, the days recorded. Solar farms or industrial
+ * sites the mask lacks raise it, but so do long fires and seasonal crop
+ * burning in one place, which dominate in fire season: a rising count is a
+ * reason to look at those cells, not proof the mask is stale. Days are only
+ * recorded while the proxy is refreshing (i.e. while it is used); days with
+ * the server off are missing.
  *
  * @param {{directory?: ?{usable: Function, ready?: Function},
  *   directoryFetch?: Function,
