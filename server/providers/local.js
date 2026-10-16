@@ -77,7 +77,7 @@ function localProviderPlugins({ realtime } = {}) {
     weatherProxy(),
     cycloneProxy(),
     mapillaryProxy(),
-    firePerimetersProxy(),
+    firePerimetersProxy({ directory, directoryFetch: publicOnlyFetch }),
     gnssIntegrityProxy(),
     keySetupEndpoint(),
   ];

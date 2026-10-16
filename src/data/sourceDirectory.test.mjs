@@ -925,7 +925,7 @@ const hazard = (over = {}) =>
     ...over,
   });
 
-test('hazards: referral only, worldwide, asked for by topic, never in a place answer', async () => {
+test('hazards: worldwide feeds never in a place answer; regional fire perimeters are', async () => {
   const { SOURCE_TOPICS, domainsOfTopic } = await import('./sourceDomains.js');
   assert.equal(
     new Set(SOURCE_TOPICS).size,
@@ -936,6 +936,7 @@ test('hazards: referral only, worldwide, asked for by topic, never in a place an
     'hazards.disasters',
     'hazards.earthquakes',
     'hazards.fires',
+    'hazards.perimeters',
   ]);
   const quakes = hazard({
     id: 'usgs-eq-1-0-week',
@@ -953,13 +954,35 @@ test('hazards: referral only, worldwide, asked for by topic, never in a place an
   });
   assert.equal(isUsableEntry(fires), true, 'the app draws active fires');
   const local = entry();
-  const everything = [hazard(), quakes, fires, local];
+  // Provincial fire perimeters are regional: a place inside BC names them.
+  const bc = hazard({
+    id: 'bc-wildfire-perimeters-current',
+    domain: 'hazards.perimeters',
+    format: 'geojson.fire-perimeters',
+    name: 'British Columbia wildfire perimeters, current season',
+    coverage: { bbox: [47.7, -139.6, 60.5, -113.5], countries: ['CA'] },
+    mapping: {
+      id: 'FIRE_NUMBER',
+      size_ha: 'FIRE_SIZE_HECTARES',
+      updated: 'TRACK_DATE',
+      status: 'FIRE_STATUS',
+      url: 'FIRE_URL',
+      region: 'CA-BC',
+    },
+  });
+  assert.equal(isUsableEntry(bc), true, 'the app draws BC perimeters');
+  const everything = [hazard(), quakes, fires, local, bc];
   // A place answer without a topic leaves every worldwide feed out, shown or
   // not, totals included: a worldwide area matches every point.
   const place = referralEntries(everything, { lat: 51.5, lon: -0.12 });
   assert.deepEqual(
     place.map((r) => r.id),
     ['bods-england'],
+  );
+  assert.deepEqual(
+    referralEntries(everything, { lat: 49.9, lon: -119.5 }).map((r) => r.id),
+    ['bc-wildfire-perimeters-current'],
+    'Kelowna: the BC feed, no worldwide ones',
   );
   // Asked for by domain, both appear anywhere on Earth.
   const asked = referralEntries(everything, {
@@ -999,6 +1022,7 @@ test('find_data_sources sends one domain as before and several as a list', async
     'hazards.disasters',
     'hazards.earthquakes',
     'hazards.fires',
+    'hazards.perimeters',
   ]);
   assert.equal(queries[1].domain, 'transit.vehicles');
 });
@@ -1031,7 +1055,7 @@ test('coverage limits come from the domain, never from a class the directory sen
   );
 });
 
-test('snapshot comparison: lost usable ids refuse a write past min(5, 10 %)', () => {
+test('snapshot comparison: lost usable ids refuse a write past min(5, 10 %); small domains may lose one', () => {
   const snap = (domain, ids) => ({
     entries: ids.map((id) => ({
       id,
@@ -1051,10 +1075,16 @@ test('snapshot comparison: lost usable ids refuse a write past min(5, 10 %)', ()
   // Five is within the allowance.
   result = compareSnapshots(before, snap('bikeshare.stations', ids.slice(5)));
   assert.equal(result.ok, true);
-  // A small domain: 10 % of 6 is 0, so losing one is refused.
+  // A small domain (under 10) may lose one: a seasonal feed turning degraded
+  // out of season must not block every refresh. Losing two is refused.
+  result = compareSnapshots(
+    snap('hazards.perimeters', ['a', 'b']),
+    snap('hazards.perimeters', ['a']),
+  );
+  assert.equal(result.ok, true);
   result = compareSnapshots(
     snap('hazards.disasters', ['a', 'b', 'c', 'd', 'e', 'f']),
-    snap('hazards.disasters', ['a', 'b', 'c', 'd', 'e']),
+    snap('hazards.disasters', ['a', 'b', 'c', 'd']),
   );
   assert.equal(result.ok, false);
   // No baseline, or a domain new in the next copy: never refused.
@@ -1087,4 +1117,22 @@ test('ready() settles once the first live load after start() has been tried', as
   assert.equal(await directory.ready(), true);
   assert.equal(directory.generatedAt(), 'b');
   directory.close();
+});
+
+test('fire perimeter mappings: property names only, required fields, a region code', async () => {
+  const { isValidPerimeterMapping } = await import('../../server/providers/sourceDirectory.js');
+  const good = { id: 'FIRE_NUMBER', size_ha: 'FIRE_SIZE_HECTARES', updated: 'TRACK_DATE', status: 'FIRE_STATUS', url: 'FIRE_URL', region: 'CA-BC' };
+  assert.equal(isValidPerimeterMapping(good), true);
+  assert.equal(isValidPerimeterMapping({ ...good, status: undefined, url: undefined }), true);
+  for (const bad of [
+    null,
+    [],
+    { ...good, id: undefined },
+    { ...good, updated: 'TRACK DATE' },
+    { ...good, size_ha: 'a.b' },
+    { ...good, region: 'British Columbia' },
+    { ...good, status: 7 },
+    Object.assign(Object.create({ id: 'FIRE_NUMBER' }), { size_ha: 'S', updated: 'U', region: 'CA-BC' }),
+  ])
+    assert.equal(isValidPerimeterMapping(bad), false, JSON.stringify(bad));
 });

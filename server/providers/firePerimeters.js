@@ -1,4 +1,9 @@
-import { normalizeFirePerimeterSnapshot } from '../../src/layers/perimeters/records.js';
+import {
+  normalizeFirePerimeterSnapshot,
+  normalizeMappedPerimeters,
+} from '../../src/layers/perimeters/records.js';
+import { PERIMETERS_DOMAIN } from '../../src/data/sourceDomains.js';
+import { publicOnlyFetch } from './sourceDirectory.js';
 import {
   readResponseJsonCapped,
   readResponseTextCapped,
@@ -45,12 +50,28 @@ const exceededTransferLimit = (payload) =>
   payload?.properties?.exceededTransferLimit === true;
 
 const MIB = 1024 * 1024;
+// Provincial feeds update every 15 min (BC) to daily (Ontario).
+const DIRECTORY_REFRESH_MS = 15 * 60_000;
+const DIRECTORY_USER_AGENT = 'gods-eye-view-fire-perimeters/1.0';
 
-/** Fixed-origin, bounded WFIGS and InciWeb routes for dev and preview. */
+/** Incident links from a provincial feed stay on that province's wildfire site. */
+const isWildfireSite = (host) =>
+  host === 'wildfiresituation.nrs.gov.bc.ca' || host.endsWith('.gov.bc.ca');
+
+/**
+ * Fixed-origin, bounded WFIGS and InciWeb routes for dev and preview, plus the
+ * source directory's provincial perimeter feeds (`hazards.perimeters`) when a
+ * directory is given. Each source keeps its own last good rows: one failing
+ * feed never blanks the others.
+ */
 export function firePerimetersProxy({
   fetchImpl = (...args) => globalThis.fetch(...args),
   now = () => Date.now(),
+  directory = null,
+  directoryFetch = publicOnlyFetch,
 } = {}) {
+  /** @type {Map<string, {at: number, rows: Array<object>, ok: boolean}>} source id → last load */
+  const sources = new Map();
   const cache = new Map();
   const publications = new Map();
   const inFlight = new Map();
@@ -82,7 +103,92 @@ export function firePerimetersProxy({
       if (!exceededTransferLimit(payload) || !payload.features.length) break;
     }
     const rows = normalizeFirePerimeterSnapshot({ features });
-    return { fetchedAt: now(), rows };
+    return rows;
+  }
+
+  /** One provincial feed: GET through the public-only fetch; a redirect fails. */
+  async function fetchDirectoryEntry(entry) {
+    const signal = AbortSignal.timeout(60_000);
+    const response = await directoryFetch(entry.access.url, {
+      signal,
+      headers: { 'User-Agent': DIRECTORY_USER_AGENT, ...entry.access.headers },
+    });
+    if (!response.ok) {
+      await response.body?.cancel?.();
+      throw new Error('upstream_unavailable');
+    }
+    const payload = await readResponseJsonCapped(response, 32 * MIB, signal);
+    if (
+      payload?.exceededTransferLimit === true ||
+      payload?.properties?.exceededTransferLimit === true
+    )
+      throw new Error('truncated_snapshot');
+    const rows = normalizeMappedPerimeters(payload, entry, {
+      allowedLinkHost: isWildfireSite,
+    });
+    if (rows === null) throw new Error('invalid_snapshot');
+    return rows;
+  }
+
+  /**
+   * Refresh every source that is due (WFIGS each call, provincial feeds every
+   * 15 min) and merge. A failed source keeps its last good rows and marks the
+   * result stale; when every source tried this round fails, throw so the
+   * caller serves the previous merged snapshot.
+   */
+  async function fetchAllPerimeters() {
+    const at = now();
+    const entries = directory ? directory.usable(PERIMETERS_DOMAIN) : [];
+    const due = [
+      { id: 'wfigs', load: fetchPerimeters, ttl: 0 },
+      ...entries.map((entry) => ({
+        id: entry.id,
+        load: () => fetchDirectoryEntry(entry),
+        ttl: Math.max(
+          DIRECTORY_REFRESH_MS,
+          (entry.access.min_interval_s || 0) * 1000,
+        ),
+      })),
+    ].filter(({ id, ttl }) => {
+      const last = sources.get(id);
+      return !last?.ok || at - last.at >= ttl;
+    });
+    const results = await Promise.allSettled(due.map(({ load }) => load()));
+    due.forEach(({ id }, index) => {
+      const result = results[index];
+      if (result.status === 'fulfilled')
+        sources.set(id, { at, rows: result.value, ok: true });
+      else {
+        console.warn(
+          `[fire-perimeters] ${id} failed:`,
+          result.reason?.message || result.reason,
+        );
+        const last = sources.get(id);
+        if (last) sources.set(id, { ...last, ok: false });
+      }
+    });
+    if (results.length && results.every((r) => r.status === 'rejected'))
+      throw new Error('upstream_unavailable');
+    // Feeds the directory no longer lists as usable are dropped.
+    const live = new Set(['wfigs', ...entries.map((e) => e.id)]);
+    for (const id of sources.keys()) if (!live.has(id)) sources.delete(id);
+    const rows = [];
+    for (const { rows: sourceRows } of sources.values())
+      for (const row of sourceRows) rows.push(row); // no spread: large seasons
+    const stale =
+      results.some((r) => r.status === 'rejected') ||
+      [...sources.values()].some((s) => !s.ok);
+    return {
+      fetchedAt: at,
+      rows,
+      ...(stale ? { stale: true } : {}),
+      sources: [...sources.entries()].map(([id, s]) => ({
+        id,
+        ok: s.ok,
+        count: s.rows.length,
+        at: s.at,
+      })),
+    };
   }
 
   async function fetchIndex() {
@@ -191,7 +297,7 @@ export function firePerimetersProxy({
     if (path === '/' || path === '') {
       key = 'perimeters';
       ttl = 300_000;
-      load = fetchPerimeters;
+      load = fetchAllPerimeters;
     } else if (path === '/inciweb/index') {
       key = 'index';
       ttl = 3_600_000;
@@ -211,7 +317,7 @@ export function firePerimetersProxy({
       json(
         200,
         key === 'perimeters' && stale ? { ...value, stale: true } : value,
-        stale,
+        stale || (key === 'perimeters' && value.stale === true),
       );
     } catch (error) {
       json(error.status === 429 ? 429 : 502, {

@@ -408,3 +408,120 @@ test('publication HTML streams are capped at 2 MiB', async () => {
   assert.equal((await request('/inciweb/publication/42')).status, 502);
   assert.equal(cancelled, true);
 });
+
+test('provincial feeds merge with WFIGS; each source fails on its own and keeps its last rows', async () => {
+  const bcEntry = {
+    id: 'bc-wildfire-perimeters-current',
+    access: {
+      url: 'https://bc.example/query',
+      headers: {},
+      min_interval_s: 300,
+    },
+    mapping: {
+      id: 'FIRE_NUMBER',
+      size_ha: 'FIRE_SIZE_HECTARES',
+      updated: 'TRACK_DATE',
+      region: 'CA-BC',
+    },
+    licence: {
+      attribution: 'BC Wildfire Service.',
+      url: 'https://www2.gov.bc.ca/licence',
+    },
+  };
+  const bcFeature = {
+    properties: { FIRE_NUMBER: 'C1', FIRE_SIZE_HECTARES: 4 },
+    geometry: feature().geometry,
+  };
+  let clock = 0;
+  let wfigsUp = true;
+  let bcUp = true;
+  const directoryCalls = [];
+  const request = install({
+    now: () => clock,
+    fetchImpl: async () => {
+      if (!wfigsUp) throw new Error('down');
+      return Response.json({ features: [feature()] });
+    },
+    directory: {
+      usable: (domain) => (domain === 'hazards.perimeters' ? [bcEntry] : []),
+    },
+    directoryFetch: async (url, init) => {
+      directoryCalls.push({ url, ua: init.headers['User-Agent'] });
+      if (!bcUp)
+        return new Response('moved', {
+          status: 302,
+          headers: { location: 'https://login.example/' },
+        });
+      return Response.json({
+        type: 'FeatureCollection',
+        features: [bcFeature],
+      });
+    },
+  });
+  let res = await request();
+  assert.equal(res.status, 200);
+  assert.deepEqual(res.body.rows.map((r) => r.stableId).sort(), [
+    'bc-wildfire-perimeters-current/C1',
+    'fire',
+  ]);
+  assert.equal(res.body.stale, undefined);
+  assert.equal(directoryCalls[0].url, 'https://bc.example/query');
+  assert.match(directoryCalls[0].ua, /gods-eye-view/);
+  // WFIGS down and BC not due (15 min): every source tried failed, so the
+  // previous merged snapshot is served stale.
+  wfigsUp = false;
+  clock = 300_000;
+  res = await request();
+  assert.equal(res.status, 200);
+  assert.equal(res.body.stale, true);
+  assert.equal(res.body.rows.length, 2);
+  // BC due and redirecting (a login page): BC keeps its last rows.
+  wfigsUp = true;
+  bcUp = false;
+  clock = 900_000;
+  res = await request();
+  assert.equal(res.status, 200);
+  assert.equal(res.body.stale, true);
+  assert.equal(res.headers['X-Data-Stale'], 'true');
+  assert.deepEqual(res.body.rows.map((r) => r.stableId).sort(), [
+    'bc-wildfire-perimeters-current/C1',
+    'fire',
+  ]);
+  assert.deepEqual(
+    res.body.sources.map(({ id, ok }) => [id, ok]),
+    [
+      ['wfigs', true],
+      ['bc-wildfire-perimeters-current', false],
+    ],
+  );
+});
+
+test('a cut-off provincial response is a failure, not a partial season', async () => {
+  const entry = {
+    id: 'ontario-fire-perimeters-in-year',
+    access: { url: 'https://on.example/query', headers: {} },
+    mapping: {
+      id: 'FIRENUMB',
+      size_ha: 'CUR_SIZE',
+      updated: 'DATE_MAPPED',
+      region: 'CA-ON',
+    },
+    licence: {},
+  };
+  const request = install({
+    fetchImpl: async () => Response.json({ features: [feature()] }),
+    directory: { usable: () => [entry] },
+    directoryFetch: async () =>
+      Response.json({
+        type: 'FeatureCollection',
+        features: [],
+        exceededTransferLimit: true,
+      }),
+  });
+  const res = await request();
+  assert.equal(res.body.stale, true);
+  assert.deepEqual(
+    res.body.rows.map((r) => r.stableId),
+    ['fire'],
+  );
+});

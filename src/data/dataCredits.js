@@ -526,6 +526,26 @@ export function gbfsSystemCredit(system) {
   };
 }
 
+/**
+ * Per-feed credit for a provincial fire-perimeter feed from the source
+ * directory (its licence's attribution statement, linking the licence),
+ * registered the first time that feed's perimeters draw.
+ * @param {{ id: string, attribution?: string|null, licenseUrl?: string|null }} feed
+ * @returns {{ key: string, html: string }}
+ */
+export function perimeterFeedCredit(feed) {
+  const credit = transitFeedCredit({
+    id: feed.id,
+    attribution: feed.attribution || feed.id,
+    license: 'licence',
+    licenseUrl: feed.licenseUrl,
+  });
+  return {
+    key: `perimeters-${feed.id}`,
+    html: credit.html.replace(/^Transit /, 'Fire perimeters '),
+  };
+}
+
 /** Registered when the Bhote Koshi event reconstruction activates. */
 export const BHOTE_KOSHI_CREDIT = {
   key: 'bhote-koshi-2026',

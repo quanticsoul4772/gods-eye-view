@@ -13,6 +13,7 @@ export const SHAREDMOBILITY_DOMAIN = 'sharedmobility.vehicles';
 export const EARTHQUAKES_DOMAIN = 'hazards.earthquakes';
 export const DISASTERS_DOMAIN = 'hazards.disasters';
 export const FIRES_DOMAIN = 'hazards.fires';
+export const PERIMETERS_DOMAIN = 'hazards.perimeters';
 
 /**
  * Largest plausible area per coverage class, [latitude, longitude] in degrees;
@@ -89,6 +90,16 @@ export const SOURCE_DOMAINS = Object.freeze([
     noun: 'active-fire feed',
     shown: true,
     coverage: 'global',
+  }),
+  // Provincial fire perimeters (BC, Ontario): drawn in the Fire Perimeters
+  // layer beside NIFC WFIGS. Regional, so place answers name them.
+  Object.freeze({
+    domain: PERIMETERS_DOMAIN,
+    format: 'geojson.fire-perimeters',
+    topic: 'hazards',
+    noun: 'fire perimeter feed',
+    shown: true,
+    coverage: 'regional',
   }),
 ]);
 

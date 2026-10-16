@@ -207,9 +207,16 @@ const layers = [
         cause: ['t'],
         behavior: ['t'],
         complexity: ['t'],
+        hectares: ['n', 'ha'],
+        status: ['t'],
+        source: ['t'],
         discoveredTime: ['ms'],
+        updatedTime: ['ms'],
+        timeMs: ['ms'],
       },
-      timeField: 'discoveredTime',
+      // Discovery time for US fires; provincial feeds give only the date a
+      // perimeter was mapped.
+      timeField: 'timeMs',
     },
   },
   {

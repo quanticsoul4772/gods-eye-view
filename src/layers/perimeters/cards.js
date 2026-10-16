@@ -10,6 +10,66 @@ export function containmentAccent(containedPct) {
   return '#8bc34a';
 }
 
+/**
+ * The legend bands: US fires by reported containment, provincial fires by
+ * their stage of control on the same four colours, and a neutral band for
+ * feeds that report neither (Ontario).
+ */
+export const PERIMETER_BANDS = Object.freeze([
+  Object.freeze({
+    key: 'uncontrolled',
+    label: 'Not contained or out of control',
+    color: '#ff3b30',
+  }),
+  Object.freeze({
+    key: 'held',
+    label: 'Under 50% contained or being held',
+    color: '#ff7a00',
+  }),
+  Object.freeze({
+    key: 'controlled',
+    label: '50–99% contained or under control',
+    color: '#ffb300',
+  }),
+  Object.freeze({
+    key: 'out',
+    label: 'Fully contained or out',
+    color: '#8bc34a',
+  }),
+  Object.freeze({
+    key: 'unreported',
+    label: 'Status not reported',
+    color: '#9aa4ad',
+  }),
+]);
+
+const STATUS_BAND = Object.freeze({
+  'Out of Control': 'uncontrolled',
+  'Being Held': 'held',
+  'Under Control': 'controlled',
+  Out: 'out',
+});
+
+/** The band (key, label, colour) one perimeter row is drawn and counted in. */
+export function perimeterBand(row) {
+  let key;
+  if (Number.isFinite(row?.containedPct)) {
+    const pct = row.containedPct;
+    key =
+      pct <= 0
+        ? 'uncontrolled'
+        : pct < 50
+          ? 'held'
+          : pct < 100
+            ? 'controlled'
+            : 'out';
+  } else if (row?.status && STATUS_BAND[row.status])
+    key = STATUS_BAND[row.status];
+  else
+    key = row?.source && row.source !== 'wfigs' ? 'unreported' : 'uncontrolled';
+  return PERIMETER_BANDS.find((band) => band.key === key);
+}
+
 /** Shoelace area (degree², sign dropped) — relative sizes only. */
 function ringArea(ring) {
   let sum = 0;
@@ -78,6 +138,13 @@ function titleCase(name) {
     .replace(/\b[a-z]/g, (letter) => letter.toUpperCase());
 }
 
+/** Day-granular age for dates mapped by the day (provincial feeds). */
+function formatDays(deltaMs) {
+  if (!Number.isFinite(deltaMs) || deltaMs < 0) return null;
+  const days = Math.floor(deltaMs / 86400000);
+  return days < 1 ? 'today' : `${days}d ago`;
+}
+
 function formatAge(deltaMs) {
   if (!Number.isFinite(deltaMs) || deltaMs < 0) return null;
   const hours = Math.floor(deltaMs / 3600000);
@@ -91,10 +158,17 @@ function formatAge(deltaMs) {
  * `position` (Cartesian) separately — this model stays JSON-safe for tests.
  * @param {Object} row - Normalized perimeter row (see records.js).
  * @param {number} nowMs - Current epoch milliseconds.
- * @param {{link: ?string}} [extras] - Optional InciWeb page for this incident.
+ * @param {{link: ?string, linkLabel?: string}} [extras] - Optional incident
+ *   page (InciWeb, or a provincial wildfire page) and the name it is shown by.
  * @returns {Object} World-overlay entry without `position`.
  */
-export function buildIncidentCard(row, nowMs, { link = null } = {}) {
+export function buildIncidentCard(
+  row,
+  nowMs,
+  { link = null, linkLabel = 'InciWeb' } = {},
+) {
+  if (row.source && row.source !== 'wfigs')
+    return buildProvincialCard(row, nowMs, { link, linkLabel });
   const facts = [];
   if (Number.isFinite(row.acres))
     facts.push(`${Math.round(row.acres).toLocaleString('en-US')} ac`);
@@ -134,7 +208,7 @@ export function buildIncidentCard(row, nowMs, { link = null } = {}) {
   if (situation.length) details.push(situation.join(' · '));
   if (response.length) details.push(response.join(' · '));
   if (ages.length) details.push(ages.join(' · '));
-  if (link) details.push('InciWeb ↗ · click card to open');
+  if (link) details.push(`${linkLabel} ↗ · click card to open`);
 
   const title = `FIRE · ${row.name || 'Unnamed incident'}`;
   return {
@@ -145,10 +219,51 @@ export function buildIncidentCard(row, nowMs, { link = null } = {}) {
     // Only a linked card is clickable — the overlay host registers hit
     // rectangles solely for interactive entries.
     interactive: Boolean(link),
-    ...(link ? { accessibilityLabel: `Open ${title} on InciWeb` } : undefined),
+    ...(link
+      ? { accessibilityLabel: `Open ${title} on ${linkLabel}` }
+      : undefined),
     title,
     details,
-    accent: containmentAccent(row.containedPct),
+    accent: perimeterBand(row).color,
+    priority: Number.MAX_SAFE_INTEGER,
+    gapPx: 15,
+    verticalOnly: true,
+    placement: 'above',
+  };
+}
+
+/**
+ * A provincial perimeter's card: hectares, stage of control (when the feed
+ * reports one), the province and how long ago it was mapped. The feeds are
+ * published for reference only, and the card says so.
+ */
+function buildProvincialCard(row, nowMs, { link, linkLabel }) {
+  const facts = [];
+  if (Number.isFinite(row.hectares))
+    facts.push(
+      `${row.hectares < 10 ? Math.round(row.hectares * 10) / 10 : Math.round(row.hectares).toLocaleString('en-US')} ha`,
+    );
+  facts.push(row.status || 'status not reported');
+  if (row.state) facts.push(row.state);
+  const details = [facts.join(' · ')];
+  const mapped = formatDays(nowMs - row.updatedTime);
+  details.push(
+    row.updatedTime != null && mapped
+      ? `mapped ${mapped} · reference only`
+      : 'reference only',
+  );
+  if (link) details.push(`${linkLabel} ↗ · click card to open`);
+  const title = `FIRE · ${row.name || 'Unnamed incident'}`;
+  return {
+    id: `fire-perimeter-card:${row.stableId}`,
+    selected: true,
+    interactive: Boolean(link),
+    ...(link
+      ? { accessibilityLabel: `Open ${title} on ${linkLabel}` }
+      : undefined),
+    title,
+    details,
+    accent: perimeterBand(row).color,
     priority: Number.MAX_SAFE_INTEGER,
     gapPx: 15,
     verticalOnly: true,
