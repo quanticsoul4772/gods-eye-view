@@ -96,6 +96,13 @@ export function parseFirmsCsv(text) {
   const iAcqTime = col.get('acq_time');
   const iSatellite = col.get('satellite');
   const iInstrument = col.get('instrument');
+  // NASA's public 24 h files have no `instrument` column; their brightness
+  // column says which instrument wrote them.
+  const inferredInstrument = col.has('bright_ti4')
+    ? 'VIIRS'
+    : col.has('brightness')
+      ? 'MODIS'
+      : '';
 
   const records = [];
   for (let i = headerIndex + 1; i < lines.length; i += 1) {
@@ -130,7 +137,10 @@ export function parseFirmsCsv(text) {
       acqDate: cell(parts, iAcqDate),
       acqTime: cell(parts, iAcqTime), // NOT zero-padded — kept verbatim
       satellite: cell(parts, iSatellite),
-      instrument: cell(parts, iInstrument),
+      instrument:
+        iInstrument === undefined
+          ? inferredInstrument
+          : cell(parts, iInstrument),
     });
   }
   return records;

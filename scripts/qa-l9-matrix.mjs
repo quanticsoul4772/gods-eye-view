@@ -808,16 +808,16 @@ check({
     const n = r.json?.count ?? r.json?.fires?.length ?? 0;
     return n > 0
       ? pass(`${n} fires, stale=${r.json?.stale}, sources=${(r.json?.sources || []).length}`)
-      : fail('0 fires from a keyed FIRMS proxy');
+      : fail('0 fires from a FIRMS proxy that has a source (key or public files)');
   },
 });
 
 check({
-  id: 'B7', group: 'B', desc: 'FIRMS without a key fails HONESTLY (503 no_key, never a healthy-empty)',
+  id: 'B7', group: 'B', desc: 'FIRMS with no key and no public files fails HONESTLY (503 no_key, never a healthy-empty)',
   run: async () => {
     const guard = keyGuard('FIRMS', env.keys.FIRMS);
     if (guard) return guard;
-    if (env.keys.FIRMS === true) return skip('server HAS a FIRMS key — the keyless path needs an unkeyed server', 'N/A');
+    if (env.keys.FIRMS === true) return skip('server has fires (a FIRMS key or NASA\'s public files) — this check needs a server with neither', 'N/A');
     const r = await jget('/api/firms');
     return r.status === 503 && r.json?.error === 'no_key'
       ? pass('503 {"error":"no_key"}')
@@ -1068,7 +1068,7 @@ const BROWSER_CHECKS = [
   ['C6', 'Earthquakes layer populates'],
   ['C7', 'CCTV layer populates and its frame loop is healthy'],
   ['C8', 'Vessels: live rows when keyed, honest UNAVAILABLE when not'],
-  ['C9', 'Fires: live cells when keyed, honest KEY REQUIRED when not'],
+  ['C9', 'Fires: live cells with a key or public files, honest KEY REQUIRED with neither'],
   ['C10', 'Traffic: LIVE mode when keyed, clearly-labelled SIMULATION when not'],
   ['C11', 'Bundled layers render: datacenters, dams, submarine cables, installations'],
   ['C12', 'Attribution lightbox lists a credit for every enabled layer'],
@@ -1589,7 +1589,7 @@ async function runBrowserGroup(record) {
         ? pass('keyless and honest: getStats().error === "KEY REQUIRED"')
         : fail(`keyless but error=${s.error} count=${s.count} — expected "KEY REQUIRED"`);
     }
-    return s.count > 0 ? pass(`${s.count} fires, cells=${s.cells}`) : fail(`keyed but 0 fires (error=${s.error || ''})`);
+    return s.count > 0 ? pass(`${s.count} fires, cells=${s.cells}`) : fail(`has a source but 0 fires (error=${s.error || ''})`);
   });
 
   await step('C10', async () => {
@@ -2069,6 +2069,12 @@ async function preflight() {
     return r.json.hasKey;
   };
   env.keys.FIRMS = await statusKey('/api/firms/status');
+  // Without a key FIRMS reads NASA's public 24 h files when the source
+  // directory lists them: fires are expected then, exactly as when keyed.
+  if (env.keys.FIRMS === false) {
+    const firms = await jget('/api/firms/status').catch(() => null);
+    if (firms?.json?.keyless === true) env.keys.FIRMS = true;
+  }
   env.keys.TOMTOM = await statusKey('/api/tomtom/status');
   try {
     const ais = await jget('/api/vessels');

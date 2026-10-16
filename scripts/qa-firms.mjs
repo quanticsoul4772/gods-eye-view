@@ -240,8 +240,8 @@ async function main() {
   }
 
   const status = await fetch(`${APP_URL}/api/firms/status`).then((r) => r.json()).catch(() => null);
-  if (!FIXTURES && !status?.hasKey) {
-    console.error('\x1b[31mServer has no FIRMS key — run against the keyed dev server (:4420).\x1b[0m');
+  if (!FIXTURES && !status?.hasKey && !status?.keyless) {
+    console.error('\x1b[31mServer has neither a FIRMS key nor NASA\'s public fire files — run against a server that has one.\x1b[0m');
     process.exitCode = 2;
     return;
   }

@@ -169,6 +169,8 @@ Context:
   three VIIRS NRT sources (trailing 24 h, 30 min cache, serve-stale-on-failure) and the
   bundled snapshot was deleted. Requires a free server-side `FIRMS_MAP_KEY`; without it
   the layer row reads "Needs FIRMS_MAP_KEY — add it in Provider Settings".
+  Since 2026-10-16 a keyless server reads NASA's public 24 h files instead (source
+  directory domain `hazards.fires`); the key message shows only when those are unavailable.
 
 ---
 

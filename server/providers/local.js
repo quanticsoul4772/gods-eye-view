@@ -40,8 +40,8 @@ import { windProxy } from './wind.js';
  * `realtime` configures the voice session token endpoint.
  */
 function localProviderPlugins({ realtime } = {}) {
-  // The keyless source directory feeds the transit and GBFS proxies and the
-  // referral route; directory feeds connect to public addresses only.
+  // The keyless source directory feeds the transit, GBFS and keyless FIRMS
+  // proxies and the referral route; directory feeds connect to public addresses only.
   // GEV_SOURCE_DIRECTORY_URL points at another copy (an https or file: URL),
   // e.g. a local build of the directory.
   const directory = createSourceDirectory({
@@ -52,7 +52,7 @@ function localProviderPlugins({ realtime } = {}) {
     openSkyProxy(),
     celestrakProxy(),
     tomtomProxy(),
-    firmsProxy(),
+    firmsProxy({ directory }),
     rocketLaunchesProxy(),
     terrainHeightsProxy(),
     terrainMeshProxy(),

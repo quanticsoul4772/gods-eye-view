@@ -1,5 +1,11 @@
 # Changelog
 
+- Active Fires works without a `FIRMS_MAP_KEY`: the server reads NASA's public
+  24 h fire files (MODIS, VIIRS NOAA-20 and NOAA-21) that the source directory
+  lists as `hazards.fires`, with the same 30 min cache. MODIS detections from
+  those files are labelled MODIS and TERRA/AQUA. Worldwide directory domains
+  are left out of "sources for this place" answers. With a key, nothing changes.
+
 - On Windows, `npm run doctor` and the Pinokio install no longer print Node's
   DEP0190 warning ("Passing args to a child process with shell option true can
   lead to security vulnerabilities"): npm.cmd's fixed subcommand is now part of

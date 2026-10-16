@@ -260,6 +260,86 @@ test('FIRMS retains a large successful source during partial failure and filters
   assert.equal(stale.count, 0);
 });
 
+test("FIRMS without a key reads the directory's public files, never the keyed API, and keeps modes apart", async (t) => {
+  isolate(t, { FIRMS_MAP_KEY: '' });
+  const now = Date.UTC(2026, 9, 16, 12);
+  t.mock.method(Date, 'now', () => now);
+  const modis =
+    'latitude,longitude,brightness,scan,track,acq_date,acq_time,satellite,confidence,version,bright_t31,frp,daynight\n' +
+    '37.39,138.58,308.3,2,1.38,2026-10-16,1000,T,51,6.1NRT,290.3,20.4,D\n' +
+    '37.40,138.59,308.3,2,1.38,2026-10-14,1000,T,51,6.1NRT,290.3,20.4,D\n';
+  const viirs =
+    'latitude,longitude,bright_ti4,scan,track,acq_date,acq_time,satellite,confidence,version,bright_ti5,frp,daynight\n' +
+    '17.93,34.04,311.1,0.61,0.54,2026-10-16,0900,N20,nominal,2.0NRT,298.8,1.7,N\n';
+  const entry = (id, file) => ({
+    id,
+    access: { url: `https://firms.example.test/${file}` },
+  });
+  let usable = [];
+  let ready = false;
+  const directory = {
+    usable: (domain) => (domain === 'hazards.fires' ? usable : []),
+    ready: async () => ready,
+  };
+  const fetched = [];
+  const directoryFetch = async (url, init) => {
+    fetched.push(url);
+    assert.ok(init.signal, 'every keyless fetch has a timeout');
+    if (url.endsWith('modis.csv')) return new Response(modis);
+    if (url.endsWith('moved.csv'))
+      return new Response('', { status: 302, headers: { location: '/x' } });
+    return new Response(viirs);
+  };
+  t.mock.method(globalThis, 'fetch', async () => {
+    throw new Error('the keyed API is never called without a key');
+  });
+  const request = install(firmsProxy({ directory, directoryFetch }));
+
+  // No usable entry: the old keyless answer, nothing fetched.
+  assert.deepEqual(json(await request()), { error: 'no_key' });
+  assert.equal(json(await request('/status')).keyless, false);
+  assert.equal(fetched.length, 0);
+
+  ready = true;
+  usable = [
+    entry('firms-modis-24h', 'modis.csv'),
+    entry('firms-viirs-noaa20-24h', 'viirs.csv'),
+    entry('firms-viirs-noaa21-24h', 'moved.csv'),
+  ];
+  const first = json(await request());
+  // The 2026-10-14 MODIS row is outside the trailing 24 h.
+  assert.equal(first.count, 2);
+  assert.deepEqual(
+    first.sources.map((s) => [s.source, s.ok]),
+    [
+      ['firms-modis-24h', true],
+      ['firms-viirs-noaa20-24h', true],
+      ['firms-viirs-noaa21-24h', false],
+    ],
+    'a redirect is a failed source',
+  );
+  const byInstrument = Object.fromEntries(
+    first.fires.map((f) => [f.instrument, f.satellite]),
+  );
+  assert.deepEqual(byInstrument, { MODIS: 'T', VIIRS: 'N20' });
+  assert.equal(fetched.length, 3);
+  assert.equal(json(await request()).count, 2, 'served from cache');
+  assert.equal(fetched.length, 3);
+  const status = json(await request('/status'));
+  assert.equal(status.hasKey, false);
+  assert.equal(status.keyless, true);
+  assert.equal(status.count, 2);
+
+  // A key switches modes: the keyless cache is not served as keyed data.
+  process.env.FIRMS_MAP_KEY = 'fixture-key';
+  t.mock.method(
+    globalThis,
+    'fetch',
+    async () => new Response('offline', { status: 503 }),
+  );
+  assert.equal((await request()).status, 502);
+});
+
 test('GBFS keeps host/path/method guards, response caps and distinct information/status cache headers', async (t) => {
   let calls = 0;
   t.mock.method(globalThis, 'fetch', async (raw) => {

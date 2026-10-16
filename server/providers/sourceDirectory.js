@@ -501,6 +501,8 @@ export function createSourceDirectory({
   let live = false;
   let cache = new Map();
   let timer = null;
+  /** The first live load once start() has run (settles true or false). */
+  let firstLoad = null;
   let usable = current.entries.filter(isUsableEntry);
   // Hourly refreshes would repeat the same warning all day: say each once.
   let lastWarning = null;
@@ -538,7 +540,7 @@ export function createSourceDirectory({
   return {
     refresh,
     start() {
-      refresh();
+      firstLoad = refresh();
       timer = setInterval(refresh, refreshMs);
       timer.unref?.();
     },
@@ -556,6 +558,10 @@ export function createSourceDirectory({
     },
     generatedAt() {
       return current.generated_at || null;
+    },
+    /** Settles when the first live load after start() has been tried. */
+    ready() {
+      return firstLoad || Promise.resolve(live);
     },
   };
 }

@@ -185,7 +185,7 @@ export function buildCapabilitySummary(
       ? 'available'
       : 'off until an OpenAI key is added, or a Codex ChatGPT sign-in is selected in Provider Settings (experimental)',
     vessels: configured('AISSTREAM_API_KEY') ? 'live AISStream feed' : 'off until an AISStream key is added',
-    fires: configured('FIRMS_MAP_KEY') ? 'live NASA FIRMS feed' : 'off until a FIRMS key is added',
+    fires: configured('FIRMS_MAP_KEY') ? 'live NASA FIRMS feed' : "NASA's public 24 h fire files (a FIRMS key adds the keyed feed)",
     traffic: configured('TOMTOM_API_KEY') ? 'live TomTom flow' : 'built-in traffic simulation',
     missions: configured('LL2_API_TOKEN')
       ? 'Launch Library 2 token allowance'

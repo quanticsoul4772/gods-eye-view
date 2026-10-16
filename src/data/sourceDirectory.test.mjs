@@ -935,6 +935,7 @@ test('hazards: referral only, worldwide, asked for by topic, never in a place an
   assert.deepEqual(domainsOfTopic('hazards').sort(), [
     'hazards.disasters',
     'hazards.earthquakes',
+    'hazards.fires',
   ]);
   const quakes = hazard({
     id: 'usgs-eq-1-0-week',
@@ -943,10 +944,18 @@ test('hazards: referral only, worldwide, asked for by topic, never in a place an
     name: 'USGS M1.0+ earthquakes, past week',
   });
   assert.equal(isUsableEntry(hazard()), false, 'the app draws neither');
+  // Active fires are worldwide too, but shown: the app draws them.
+  const fires = hazard({
+    id: 'firms-viirs-noaa20-24h',
+    domain: 'hazards.fires',
+    format: 'csv.firms-active-fire',
+    name: 'NASA FIRMS VIIRS NOAA-20, past 24 h',
+  });
+  assert.equal(isUsableEntry(fires), true, 'the app draws active fires');
   const local = entry();
-  const everything = [hazard(), quakes, local];
-  // A place answer without a topic leaves worldwide reference feeds out,
-  // totals included.
+  const everything = [hazard(), quakes, fires, local];
+  // A place answer without a topic leaves every worldwide feed out, shown or
+  // not, totals included: a worldwide area matches every point.
   const place = referralEntries(everything, { lat: 51.5, lon: -0.12 });
   assert.deepEqual(
     place.map((r) => r.id),
@@ -989,6 +998,7 @@ test('find_data_sources sends one domain as before and several as a list', async
   assert.deepEqual(queries[0].domains.sort(), [
     'hazards.disasters',
     'hazards.earthquakes',
+    'hazards.fires',
   ]);
   assert.equal(queries[1].domain, 'transit.vehicles');
 });
@@ -1057,4 +1067,24 @@ test('snapshot comparison: lost usable ids refuse a write past min(5, 10 %)', ()
     result.domains.find((d) => d.domain === 'cameras.stills').gained,
     ['c1'],
   );
+});
+
+test('ready() settles once the first live load after start() has been tried', async () => {
+  const directory = createSourceDirectory({
+    snapshot: { generated_at: 'a', entries: [entry()] },
+    fetchImpl: async () =>
+      new Response(JSON.stringify({ generated_at: 'b', entries: [entry()] }), {
+        headers: { etag: '"1"' },
+      }),
+    refreshMs: 3_600_000,
+  });
+  assert.equal(
+    await directory.ready(),
+    false,
+    'not started: the snapshot only',
+  );
+  directory.start();
+  assert.equal(await directory.ready(), true);
+  assert.equal(directory.generatedAt(), 'b');
+  directory.close();
 });

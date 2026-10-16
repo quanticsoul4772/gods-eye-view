@@ -2,7 +2,9 @@ import path from 'node:path';
 import { promises as fsp } from 'node:fs';
 
 import { filterTrailing24h, parseFirmsCsv } from '../../src/data/firmsCsv.js';
+import { FIRES_DOMAIN } from '../../src/data/sourceDomains.js';
 import { readResponseTextCapped } from './common/http.js';
+import { publicOnlyFetch } from './sourceDirectory.js';
 
 /**
  * NASA FIRMS live active-fire proxy with a memory + disk cache.
@@ -22,12 +24,22 @@ import { readResponseTextCapped } from './common/http.js';
  *   GET /api/firms        → {fetchedAt, stale, ttlMs, sources, count, fires}
  *   GET /api/firms/status → {hasKey, lastFetch, count, stale, ttlMs, transactions}
  *
- * Keyless (no FIRMS_MAP_KEY): /api/firms → 503 {error:'no_key'}; status →
- * {hasKey:false}. Upstream is never touched without a key.
+ * Keyless (no FIRMS_MAP_KEY): the source directory's usable `hazards.fires`
+ * entries (NASA's public 24 h CSVs, MODIS + VIIRS NOAA-20/21) are fetched
+ * instead, through `directoryFetch` (public addresses only, redirects
+ * returned as failures), with the same cache, single-flight and stale rules;
+ * status says {hasKey:false, keyless:true}. With neither a key nor a usable
+ * entry: /api/firms → 503 {error:'no_key'} and nothing is fetched. A cache
+ * entry remembers which mode filled it and is never served to the other.
  *
+ * @param {{directory?: ?{usable: Function, ready?: Function},
+ *   directoryFetch?: Function}} [options]
  * @returns {import('vite').Plugin}
  */
-export function firmsProxy() {
+export function firmsProxy({
+  directory = null,
+  directoryFetch = publicOnlyFetch,
+} = {}) {
   const TTL_MS = 30 * 60_000;
   const STATUS_TTL_MS = 5 * 60_000;
   const SOURCES = [
@@ -45,11 +57,14 @@ export function firmsProxy() {
   const CACHE_DIR = path.join(process.cwd(), '.gev-cache');
   const CACHE_PATH = path.join(CACHE_DIR, 'firms.json');
 
-  /** @type {?{at: number, sources: Array<object>, fires: Array<object>}} */
+  /** How long a keyless request waits for the directory's first live load. */
+  const DIRECTORY_WAIT_MS = 15_000;
+
+  /** @type {?{at: number, mode: 'keyed'|'keyless', sources: Array<object>, fires: Array<object>}} */
   let mem = null;
   let diskChecked = false;
-  /** @type {?Promise<?{at: number, sources: Array<object>, fires: Array<object>}>} single-flight refresh */
-  let inflight = null;
+  /** Single-flight refresh per mode: a keyed request never gets keyless data. */
+  const inflight = { keyed: null, keyless: null };
   /** @type {?{at: number, transactions: ?{used: number, limit: number}}} mapkey_status cache */
   let statusCache = null;
   /** @type {?Promise<?{used: number, limit: number}>} */
@@ -67,7 +82,11 @@ export function firmsProxy() {
         Array.isArray(parsed?.sources) &&
         Array.isArray(parsed?.fires)
       ) {
-        mem = parsed;
+        // Caches written before keyless mode were all keyed.
+        mem = {
+          ...parsed,
+          mode: parsed.mode === 'keyless' ? 'keyless' : 'keyed',
+        };
       }
     } catch {
       /* no disk cache yet */
@@ -127,6 +146,65 @@ export function firmsProxy() {
       }
     }
     if (!sources.some((s) => s.ok)) throw new Error('all FIRMS sources failed');
+    return { at: now, sources, fires };
+  }
+
+  /** The directory's usable keyless fire entries, after its first live load. */
+  async function keylessEntries() {
+    if (!directory) return [];
+    if (typeof directory.ready === 'function') {
+      let timer;
+      await Promise.race([
+        directory.ready(),
+        new Promise((resolve) => {
+          timer = setTimeout(resolve, DIRECTORY_WAIT_MS);
+          timer.unref?.();
+        }),
+      ]);
+      clearTimeout(timer);
+    }
+    return directory.usable(FIRES_DOMAIN);
+  }
+
+  /**
+   * Fetch + parse one keyless directory entry. A redirect is a failure
+   * (directoryFetch returns it unfollowed, and it is not ok).
+   */
+  async function fetchKeyless(entry) {
+    const signal = AbortSignal.timeout(60_000);
+    const res = await directoryFetch(entry.access.url, { signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const records = parseFirmsCsv(
+      await readResponseTextCapped(res, FIRMS_MAX_RESPONSE_BYTES, signal),
+    );
+    if (records === null) throw new Error('non-CSV upstream response');
+    return records;
+  }
+
+  /**
+   * Keyless counterpart of refreshUpstream, with the same partial-success
+   * rule, one entry at a time. Each file holds the previous UTC day plus
+   * today, so the trailing-24 h trim is what keeps it a 24 h layer.
+   */
+  async function refreshKeyless(entries) {
+    const now = Date.now();
+    const sources = [];
+    const fires = [];
+    for (const entry of entries) {
+      try {
+        const records = filterTrailing24h(await fetchKeyless(entry), now);
+        for (const record of records) fires.push(record); // no spread: see refreshUpstream
+        sources.push({ source: entry.id, count: records.length, ok: true });
+      } catch (err) {
+        console.warn(
+          `[firms-proxy] ${entry.id} fetch failed:`,
+          err?.message || err,
+        );
+        sources.push({ source: entry.id, count: 0, ok: false });
+      }
+    }
+    if (!sources.some((s) => s.ok))
+      throw new Error('all keyless FIRMS sources failed');
     return { at: now, sources, fires };
   }
 
@@ -198,13 +276,19 @@ export function firmsProxy() {
         const key = mapKey();
         await readDiskOnce();
 
+        const mode = key ? 'keyed' : 'keyless';
+        const entries = key ? [] : await keylessEntries();
+        const cached = mem?.mode === mode ? mem : null;
+
         if (subPath === '/status') {
           if (!key) {
+            const known = entries.length > 0 && cached;
             sendJson(200, {
               hasKey: false,
-              lastFetch: null,
-              count: null,
-              stale: false,
+              keyless: entries.length > 0,
+              lastFetch: known ? cached.at : null,
+              count: known ? cached.fires.length : null,
+              stale: known ? Date.now() - cached.at >= TTL_MS : false,
               ttlMs: TTL_MS,
               transactions: null,
             });
@@ -213,21 +297,21 @@ export function firmsProxy() {
           const transactions = await getTransactions(key);
           sendJson(200, {
             hasKey: true,
-            lastFetch: mem ? mem.at : null,
-            count: mem ? mem.fires.length : null,
-            stale: mem ? Date.now() - mem.at >= TTL_MS : false,
+            lastFetch: cached ? cached.at : null,
+            count: cached ? cached.fires.length : null,
+            stale: cached ? Date.now() - cached.at >= TTL_MS : false,
             ttlMs: TTL_MS,
             transactions,
           });
           return;
         }
 
-        if (!key) {
+        if (!key && !entries.length) {
           sendJson(503, { error: 'no_key' });
           return;
         }
 
-        const entry = mem;
+        const entry = cached;
         if (entry && Date.now() - entry.at < TTL_MS) {
           sendJson(200, buildPayload(entry, false));
           return;
@@ -235,9 +319,12 @@ export function firmsProxy() {
         // Stale or missing → refresh, single-flight (concurrent requests
         // share one upstream pass). Capture the promise locally BEFORE
         // awaiting: the .finally() nulls `inflight` the moment it settles.
-        if (!inflight) {
-          inflight = refreshUpstream(key)
-            .then(async (fresh) => {
+        if (!inflight[mode]) {
+          inflight[mode] = (
+            key ? refreshUpstream(key) : refreshKeyless(entries)
+          )
+            .then(async (refreshed) => {
+              const fresh = { ...refreshed, mode };
               mem = fresh;
               await writeDisk(fresh);
               return fresh;
@@ -249,10 +336,10 @@ export function firmsProxy() {
               return null;
             })
             .finally(() => {
-              inflight = null;
+              inflight[mode] = null;
             });
         }
-        const pending = inflight;
+        const pending = inflight[mode];
         const fresh = await pending;
         if (fresh) {
           sendJson(200, buildPayload(fresh, false));

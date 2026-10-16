@@ -27,7 +27,7 @@ export function createFirmsState({ services, config }) {
 
   layerState._loading = false;
 
-  /** True when the proxy answered 503 {error:'no_key'} — FIRMS_MAP_KEY unset. */
+  /** True when the proxy answered 503 {error:'no_key'}: no FIRMS_MAP_KEY and no usable keyless source. */
 
   layerState._keyRequired = false;
 

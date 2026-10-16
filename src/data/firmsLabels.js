@@ -39,7 +39,7 @@ export function accentForSeverity(stopName) {
   return ACCENT_RGB[stopName] || ACCENT_RGB.yellow;
 }
 
-/** Raw FIRMS satellite code → short display name (N = Suomi NPP). */
+/** Raw FIRMS satellite code → short display name (N = Suomi NPP, T/A = Terra/Aqua). */
 export function satelliteShortName(satellite) {
   const s = String(satellite || '')
     .trim()
@@ -47,5 +47,7 @@ export function satelliteShortName(satellite) {
   if (s === 'N20' || s === 'NOAA-20') return 'N20';
   if (s === 'N21' || s === 'NOAA-21') return 'N21';
   if (s === 'N' || s === 'NPP' || s === 'SUOMI NPP') return 'SNPP';
+  if (s === 'T') return 'TERRA';
+  if (s === 'A') return 'AQUA';
   return s ? s.slice(0, 6) : '';
 }

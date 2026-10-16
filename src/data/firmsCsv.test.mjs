@@ -67,6 +67,23 @@ test('MODIS schema maps fields and preserves numeric confidence raw', () => {
   assert.equal(record.confidence, '78');
 });
 
+test('public 24 h files have no instrument column: the brightness column names it', () => {
+  const [viirs] = parseFirmsCsv(
+    'latitude,longitude,bright_ti4,scan,track,acq_date,acq_time,satellite,confidence,version,bright_ti5,frp,daynight\n' +
+      '17.93,34.04,311.1,0.61,0.54,2026-10-16,0001,N20,nominal,2.0NRT,298.8,1.7,N\n',
+  );
+  assert.equal(viirs.instrument, 'VIIRS');
+  assert.equal(viirs.satellite, 'N20');
+  assert.equal(viirs.confidence, 'nominal');
+  const [modis] = parseFirmsCsv(
+    'latitude,longitude,brightness,scan,track,acq_date,acq_time,satellite,confidence,version,bright_t31,frp,daynight\n' +
+      '37.39,138.58,308.3,2,1.38,2026-10-16,0016,T,51,6.1NRT,290.3,20.4,D\n',
+  );
+  assert.equal(modis.instrument, 'MODIS');
+  assert.equal(modis.satellite, 'T');
+  assert.equal(modis.brightnessTi5, 290.3);
+});
+
 test('acquisitionMsUtc: "1006" = 10:06 UTC', () => {
   assert.equal(
     acquisitionMsUtc('2026-07-16', '1006'),

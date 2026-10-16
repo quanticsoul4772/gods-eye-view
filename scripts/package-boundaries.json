@@ -148,7 +148,14 @@
       "server/providers/firms.js",
       "server/providers/common/http.js",
       "src/sources/httpBody.js",
-      "src/data/firmsCsv.js"
+      "src/data/firmsCsv.js",
+      "server/providers/sourceDirectory.js",
+      "server/providers/radio/transport.js",
+      "server/providers/radio/stations.js",
+      "src/sources/radioBrowser.js",
+      "src/data/radioCountry.js",
+      "src/data/sourceDomains.js",
+      "src/data/geoCircle.js"
     ],
     "external": []
   },

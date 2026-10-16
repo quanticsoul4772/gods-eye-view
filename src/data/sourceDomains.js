@@ -12,6 +12,7 @@ export const CAMERAS_DOMAIN = 'cameras.stills';
 export const SHAREDMOBILITY_DOMAIN = 'sharedmobility.vehicles';
 export const EARTHQUAKES_DOMAIN = 'hazards.earthquakes';
 export const DISASTERS_DOMAIN = 'hazards.disasters';
+export const FIRES_DOMAIN = 'hazards.fires';
 
 /**
  * Largest plausible area per coverage class, [latitude, longitude] in degrees;
@@ -61,7 +62,7 @@ export const SOURCE_DOMAINS = Object.freeze([
     coverage: 'regional',
     note: 'duplicates the built-in CCTV packs',
   }),
-  // Referral only, worldwide: named when asked for hazards, never for a place.
+  // Worldwide domains are named when asked for hazards, never for a place.
   Object.freeze({
     domain: EARTHQUAKES_DOMAIN,
     format: 'geojson.earthquakes',
@@ -79,6 +80,15 @@ export const SOURCE_DOMAINS = Object.freeze([
     shown: false,
     coverage: 'global',
     note: "listed for reference; the app doesn't draw it",
+  }),
+  // NASA FIRMS's public 24 h files: the Active Fires layer's keyless source.
+  Object.freeze({
+    domain: FIRES_DOMAIN,
+    format: 'csv.firms-active-fire',
+    topic: 'hazards',
+    noun: 'active-fire feed',
+    shown: true,
+    coverage: 'global',
   }),
 ]);
 
@@ -110,11 +120,12 @@ export const noteOfDomain = (domain) => rowOf(domain)?.note || null;
 export const coverageClassOfDomain = (domain) =>
   rowOf(domain)?.coverage || 'regional';
 
-/** Worldwide and referral-only: left out of place answers unless asked for. */
-export const isWorldwideReference = (domain) => {
-  const known = rowOf(domain);
-  return Boolean(known && !known.shown && known.coverage === 'global');
-};
+/**
+ * Worldwide: left out of place answers unless asked for, shown or not. A
+ * worldwide entry's area matches every point, so it would top every answer.
+ */
+export const isWorldwideReference = (domain) =>
+  rowOf(domain)?.coverage === 'global';
 
 /** `find_data_sources` topics, each once. */
 export const SOURCE_TOPICS = Object.freeze([

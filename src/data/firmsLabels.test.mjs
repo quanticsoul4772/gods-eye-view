@@ -19,6 +19,11 @@ test('FIRMS satellite names retain the three VIIRS abbreviations', () => {
   assert.equal(satelliteShortName('N20'), 'N20');
   assert.equal(satelliteShortName('N21'), 'N21');
   assert.equal(satelliteShortName('N'), 'SNPP');
+  // NASA's public MODIS files say T / A; the keyed API says Terra / Aqua.
+  assert.equal(satelliteShortName('T'), 'TERRA');
+  assert.equal(satelliteShortName('Terra'), 'TERRA');
+  assert.equal(satelliteShortName('A'), 'AQUA');
+  assert.equal(satelliteShortName('Aqua'), 'AQUA');
   assert.equal(satelliteShortName('TERRA-X9'), 'TERRA-');
   assert.equal(satelliteShortName(''), '');
 });

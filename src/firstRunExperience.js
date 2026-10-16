@@ -105,7 +105,8 @@ export const FIRST_RUN_MISSIONS = Object.freeze({
     // for the FULLY CONFIGURED experience (owner ruling, 2026-08-23): the tile
     // promises both, so it turns on both, and the subcopy in index.html says so.
     //
-    // Keyless, FIRMS is honest where it counts — its own layer row reads
+    // Keyless, FIRMS normally reads NASA's public 24 h files. When those are
+    // unavailable too it is honest where it counts — its own layer row reads
     // "UNAVAILABLE · NASA FIRMS · LIVE · KEY REQUIRED", and the quakes half of
     // the tile still delivers in full. What is NOT honest is the GLOBAL status
     // chip, which has no key-required terminal state and folds that row into
