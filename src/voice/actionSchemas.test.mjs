@@ -40,9 +40,11 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // consolidated tool wording (each policy stated once); model-facing tools
     // omit top-level anyOf (OpenAI rejects it). Contacts list routing preserves
     // requested radius and center authority in descriptions only.
-    // Street Level adds its toggle enum values and generated alias hint.
-    // Bike share's shared-vehicle aliases and fields extend the manifest hints.
-    '83f146cab487e1fa446032ab63e4b66c821be399a940e5f53137bdb8c47d607d',
+    // Street Level and GNSS extend the manifest; tracked and analyst aircraft describe broadcasts.
+    // Air quality (ECCC AQHI) extends the manifest.
+    // Bike share's shared-vehicle aliases and fields extend the manifest hints,
+    // and analyst filters spell out units and time fields.
+    '53534a1da0e8ca2673252981d073bec494da2a8961f10370217d85c024d83df9',
   );
 });
 

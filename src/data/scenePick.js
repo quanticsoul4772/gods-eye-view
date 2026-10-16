@@ -91,3 +91,47 @@ export function pickRenderedSurface(scene, camera, position) {
   }
   return isPickedWorldPosition(target) ? target : null;
 }
+
+/**
+ * The world position under a screen point: the rendered surface (see
+ * pickRenderedSurface), else the ellipsoid; null over the sky.
+ *
+ * @param {object} viewer A Cesium viewer.
+ * @param {{x: number, y: number}} screenPosition
+ * @returns {{x: number, y: number, z: number}|null} A Cartesian3.
+ */
+export function pickGroundPosition(viewer, screenPosition) {
+  // Ray first: these are click-time picks, right after the click's own
+  // scene.pick, when a depth read lands off the ground.
+  let position = pickRenderedSurface(
+    viewer?.scene,
+    viewer?.camera,
+    screenPosition,
+  );
+  if (
+    !isPickedWorldPosition(position) &&
+    typeof viewer?.camera?.pickEllipsoid === 'function'
+  ) {
+    try {
+      position = viewer.camera.pickEllipsoid(screenPosition);
+    } catch {
+      position = null;
+    }
+  }
+  return isPickedWorldPosition(position) ? position : null;
+}
+
+/**
+ * Whether a `scene.pick()` result is the map itself: nothing, or 3D tile
+ * content (which has no id).
+ *
+ * @param {object|null|undefined} picked
+ * @returns {boolean}
+ */
+export function isSurfacePick(picked) {
+  if (!picked) return true;
+  if (picked.id !== undefined) return false;
+  return (
+    picked.content !== undefined || picked.primitive?.isCesium3DTileset === true
+  );
+}

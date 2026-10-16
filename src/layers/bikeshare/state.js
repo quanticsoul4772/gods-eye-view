@@ -1,3 +1,5 @@
+import { CITY_BY_ID } from './registry.js';
+
 export function createState({ services }) {
   const { setOverlayEntries, setOverlaySourceVisible, clearOverlaySource } =
     services.overlays;
@@ -45,6 +47,9 @@ export function createState({ services }) {
 
   /** Whether the server's directory systems have loaded this enable. */
 
+  // Cities this layer can load: the static registry, plus systems the server
+  // adds from the keyless source directory once they are fetched on enable.
+  layerState._cities = new Map(CITY_BY_ID);
   layerState._systemsReady = false;
 
   /** Monotonic generation counter; incremented on each proximity check to cancel stale work. */
@@ -107,9 +112,17 @@ export function createState({ services }) {
 
   layerState._loadingOps = 0;
 
-  /** Most recent error message string, or null. */
+  /**
+   * @type {Set<string>} City ids whose most recent fetch failed.
+   *
+   * Per city rather than one layer-wide flag: feeds are fetched independently,
+   * so a retired operator must not mark a layer that other cities are still
+   * populating as failed. Entries are dropped when their city leaves range.
+   * The layer reports failure only when these cost it everything it had to
+   * draw, and degraded otherwise — see `getStats()` in controls.js.
+   */
 
-  layerState._error = null;
+  layerState._failedCityIds = new Set();
 
   /** Whether the MAX_TOTAL_POINTS cap warning has already been logged. */
 

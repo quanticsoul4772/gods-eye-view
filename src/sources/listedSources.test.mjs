@@ -221,7 +221,7 @@ test('bike-share status names listed sources where no system is in range', () =>
     _count: 0,
     _lastUpdate: null,
     _loading: false,
-    _error: null,
+    _failedCityIds: new Set(),
     _altitudeGateEnabled: true,
     _systemsReady: true,
     _activeCityIds: new Set(),

@@ -102,7 +102,9 @@ function sum(values) {
 
 /** Format an epoch millisecond time as ISO 8601, or null. */
 export function isoTime(ms) {
-  return Number.isFinite(ms) ? new Date(ms).toISOString() : null;
+  if (!Number.isFinite(ms)) return null;
+  const date = new Date(ms);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : null;
 }
 
 /** "1 earthquake", "3 earthquakes". */

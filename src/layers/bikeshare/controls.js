@@ -58,7 +58,7 @@ export function createControls({ state: layerState, services, parts, source }) {
         parts.viewport.deactivateAllCities();
         layerState._cityRuntime.clear();
         layerState._count = 0;
-        layerState._error = null;
+        layerState._failedCityIds.clear();
       }
       if (layerState._pointCollection)
         layerState._pointCollection.show = modeHasStations(layerState._mode);
@@ -148,7 +148,7 @@ export function createControls({ state: layerState, services, parts, source }) {
 
     /**
      * Return current layer statistics for the UI status display.
-     * @returns {{ count: number, lastUpdate: number|null, loading: boolean, loadingLabel?: string, error?: string }}
+     * @returns {{ count: number, lastUpdate: number|null, loading: boolean, loadingLabel?: string, error?: string, degraded?: boolean, stale?: boolean }}
      */
     getStats() {
       const mode = layerState._mode;
@@ -179,10 +179,30 @@ export function createControls({ state: layerState, services, parts, source }) {
             ? `syncing ${feeds} feed${feeds === 1 ? '' : 's'}...`
             : 'scanning nearby systems...';
       }
-      // Each part reports its own failure; in Both, a vehicle failure only
-      // counts once no vehicles are drawn at all.
+      // Stations: a failed city is only the layer's failure when it left
+      // nothing on the map. While other cities (or, in Both, vehicles) still
+      // render, the partial failure reads DEGRADED; when every in-range city
+      // failed and only previously drawn points remain, they read STALE.
+      let stationError = null;
+      if (withStations && layerState._failedCityIds.size > 0) {
+        const nothingDrawn =
+          layerState._stationRenderMap.size === 0 &&
+          (mode === 'stations' || layerState._vehicleCount === 0);
+        if (nothingDrawn) {
+          stationError = 'GBFS fetch error';
+        } else {
+          stats.degraded = true;
+          const allFailed = Array.from(layerState._activeCityIds).every(
+            (cityId) => layerState._failedCityIds.has(cityId),
+          );
+          if (allFailed && layerState._stationRenderMap.size > 0)
+            stats.stale = true;
+        }
+      }
+      // Vehicles: in Both, a vehicle failure only counts once no vehicles are
+      // drawn at all.
       const error =
-        (withStations && layerState._error) ||
+        stationError ||
         (withVehicles &&
           layerState._vehicleError &&
           (mode === 'vehicles' || layerState._vehicleCount === 0) &&

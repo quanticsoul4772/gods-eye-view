@@ -293,7 +293,7 @@ test('a vehicle feed failure is its own error, never the stations error', async 
   } finally {
     warn.mock.restore();
   }
-  assert.equal(app.state._error, null);
+  assert.equal(app.state._failedCityIds.size, 0);
   assert.equal(app.state._vehicleError, 'Shared vehicle feed error');
   app.state._mode = 'vehicles';
   assert.equal(app.controls.getStats().error, 'Shared vehicle feed error');
@@ -430,10 +430,10 @@ test('Vehicles → Stations inside the station hysteresis band keeps the station
 
 test('leaving stations drops their old error with them', async () => {
   const app = harness({ mode: 'stations' });
-  app.state._error = 'GBFS fetch error';
+  app.state._failedCityIds.add('city');
   app.controls.setParams({ mode: 'vehicles' });
   await flush();
-  assert.equal(app.state._error, null);
+  assert.equal(app.state._failedCityIds.size, 0);
   app.controls.setParams({ mode: 'stations' });
   await flush();
   assert.equal(app.controls.getStats().error, undefined);

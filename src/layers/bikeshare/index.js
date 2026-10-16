@@ -1,4 +1,3 @@
-import { CITY_BY_ID } from './registry.js';
 import { createIngestion } from './ingestion.js';
 import { createModel } from './model.js';
 import { createViewport } from './viewport.js';
@@ -17,9 +16,6 @@ export function createBikeshareLayer({ services, source }) {
     throw new TypeError('A bikeshare source is required');
   const state = createState({ services });
   const parts = {};
-  // Cities this layer can load: the static registry, plus systems the server
-  // adds from the keyless source directory once they are fetched on enable.
-  state._cities = new Map(CITY_BY_ID);
   const context = { state, services, parts, source };
   parts.ingestion = createIngestion(context);
   parts.model = createModel(context);

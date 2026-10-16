@@ -617,27 +617,11 @@ export function createDirectionsLayer({ services, source }) {
   }
 
   function pickGround(screenPosition) {
-    // Picked right after this click's own scene.pick, so ray first: a depth
-    // read here lands off the ground (see pickRenderedSurface).
-    let cartesian = services.scenePick.pickRenderedSurface(
-      _viewer?.scene,
-      _viewer?.camera,
+    const cartesian = services.scenePick.pickGroundPosition(
+      _viewer,
       screenPosition,
     );
-    if (
-      !services.scenePick.isPickedWorldPosition(cartesian) &&
-      typeof _viewer?.camera?.pickEllipsoid === 'function'
-    ) {
-      try {
-        cartesian = _viewer.camera.pickEllipsoid(
-          screenPosition,
-          Cesium.Ellipsoid.WGS84,
-        );
-      } catch {
-        cartesian = null;
-      }
-    }
-    if (!services.scenePick.isPickedWorldPosition(cartesian)) return null;
+    if (!cartesian) return null;
     const carto = Cesium.Cartographic.fromCartesian(cartesian);
     if (!carto) return null;
     return {

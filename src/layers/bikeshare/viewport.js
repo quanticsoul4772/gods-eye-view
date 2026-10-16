@@ -6,6 +6,7 @@ import {
   CAMERA_DEBOUNCE_MS,
 } from './policy.js';
 import { modeHasStations } from './vehicles.js';
+import { CITY_BY_ID } from './registry.js';
 
 export function createViewport({ state: layerState, services, parts, source }) {
   const { governorRequestRender } = services.render;
@@ -83,14 +84,15 @@ export function createViewport({ state: layerState, services, parts, source }) {
    * Compares haversine distance from the camera center to each system's center
    * against its load radius (at least `baseKm`).
    * @param {{ lat: number, lon: number }} center - Camera center in degrees.
-   * @param {Map<string, Object>} [systems] - Station cities by default.
+   * @param {Map<string, Object>} [systems] - Station cities by default (the
+   *   static registry until the layer's own city map exists).
    * @param {number} [baseKm] - Smallest load radius.
    * @returns {Set<string>} Set of ids currently within load range.
    */
 
   function computeInRangeCities(
     center,
-    systems = layerState._cities,
+    systems = layerState._cities ?? CITY_BY_ID,
     baseKm = CITY_RANGE_BASE_KM,
   ) {
     const active = new Set();
@@ -128,6 +130,9 @@ export function createViewport({ state: layerState, services, parts, source }) {
     const cityIds = Array.from(layerState._activeCityIds);
     for (const cityId of cityIds) deactivateCity(cityId);
     layerState._activeCityIds.clear();
+    // A failure belongs to a city in range; none are once everything is off.
+    layerState._failedCityIds.clear();
+    layerState._count = 0;
   }
 
   /**
@@ -174,11 +179,19 @@ export function createViewport({ state: layerState, services, parts, source }) {
         return;
       parts.rendering.applyStatusToPoints(cityId, statusMap);
       layerState._lastUpdate = Date.now();
-      layerState._error = null;
+      layerState._failedCityIds.delete(cityId);
     } catch (error) {
       if (error?.name === 'AbortError') return;
+      // A rejection from superseded work must not mark (or tear down) a city
+      // that a newer proximity check or re-enable now owns.
+      if (
+        !layerState._enabled ||
+        !layerState._activeCityIds.has(cityId) ||
+        generation !== layerState._proximityGeneration
+      )
+        return;
       console.warn(`[Data:Bikeshare] ${cityId} activate error:`, error);
-      layerState._error = 'GBFS fetch error';
+      layerState._failedCityIds.add(cityId);
       deactivateCity(cityId);
       layerState._activeCityIds.delete(cityId);
     } finally {
@@ -218,6 +231,10 @@ export function createViewport({ state: layerState, services, parts, source }) {
       if (!nextActive.has(cityId)) {
         deactivateCity(cityId);
       }
+    }
+    // A failure never outlives its city's range.
+    for (const cityId of layerState._failedCityIds) {
+      if (!nextActive.has(cityId)) layerState._failedCityIds.delete(cityId);
     }
 
     layerState._activeCityIds = nextActive;
