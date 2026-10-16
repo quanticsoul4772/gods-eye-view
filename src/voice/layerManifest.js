@@ -560,16 +560,17 @@ export function voiceQueryFieldHint() {
         names.every((name) => prior.names.includes(name)),
       );
       printed.push({ id: entry.id, names });
-      if (parent) {
-        const minus = parent.names.filter((name) => !names.includes(name));
-        return `${entry.id}: as ${parent.id}${minus.length ? ` minus ${minus.join(',')}` : ''}`;
-      }
       const fields = Object.entries(entry.query.fields)
         .map(([name, spec]) =>
           spec.unit && !UNIT_SUFFIX.test(name) ? `${name}(${spec.unit})` : name,
         )
         .join(',');
-      return `${entry.id}: ${fields}`;
+      const plain = `${entry.id}: ${fields}`;
+      if (!parent) return plain;
+      const minus = parent.names.filter((name) => !names.includes(name));
+      const relative = `${entry.id}: as ${parent.id}${minus.length ? ` minus ${minus.join(',')}` : ''}`;
+      // The relative form only pays when it is shorter than the plain list.
+      return relative.length < plain.length ? relative : plain;
     })
     .join('; ');
 }

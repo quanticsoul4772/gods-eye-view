@@ -679,10 +679,11 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   // Air quality (ECCC AQHI) extends the manifest.
   // Bike share's shared-vehicle aliases and fields extend the manifest hints,
   // and analyst filters spell out units and time fields.
-  assert.equal(block.length, 30757, 'serialized tool schema length drifted');
+  // A derived field list prints whole when that is shorter than "as X minus".
+  assert.equal(block.length, 30691, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    'ce6c1a6242a628172fb15545ad60cc358aa372750aae304b517dfe7f90737d2e',
+    'de009740ce6b7499cc11fcb0a712f626eef448e7047fd0a9ddb2eb5a151db406',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
   const instructions = fs.readFileSync(new URL('../server/providers/openai/instructions.js', import.meta.url), 'utf8');

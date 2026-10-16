@@ -36,7 +36,7 @@ export const ACTION_DESCRIPTIONS = {
         },
         headingDeg: {
           description:
-            'Compass direction the camera faces on arrival: 0 N, 90 E, 180 S, 270 W ("from the south" = 0, "looking west" = 270). Omit for default framing.',
+            'Arrival camera facing in compass degrees (0 N, 90 E; "from the south" = 0, "looking west" = 270). Omit for default.',
           $position: 3,
         },
         waitForArrival: {

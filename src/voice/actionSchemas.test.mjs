@@ -44,7 +44,8 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // Air quality (ECCC AQHI) extends the manifest.
     // Bike share's shared-vehicle aliases and fields extend the manifest hints,
     // and analyst filters spell out units and time fields.
-    '53534a1da0e8ca2673252981d073bec494da2a8961f10370217d85c024d83df9',
+    // A derived field list prints whole when that is shorter than "as X minus".
+    '20c67996226debe6cf0b901847689d74f9d31e3b21336628e0af8384a06ee9b0',
   );
 });
 
