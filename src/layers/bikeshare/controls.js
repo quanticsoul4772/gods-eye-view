@@ -1,3 +1,4 @@
+import { msg, t, tn } from '../../i18n/index.js';
 import {
   BIKESHARE_MODES,
   STATUS_POLL_MS,
@@ -7,13 +8,20 @@ import { listedSourcesText } from '../../sources/sourceDirectory.js';
 import { modeHasStations, modeHasVehicles } from './vehicles.js';
 import { sharedVehicleLabel } from './selection.js';
 
+// English data; the chips translate them when drawn.
 const MODE_CHIPS = Object.freeze({
-  stations: { label: 'Stations', title: 'Docking stations and their bikes' },
-  vehicles: {
-    label: 'Vehicles',
-    title: 'Free-floating bikes, scooters and other shared vehicles',
+  stations: {
+    label: msg('Stations'),
+    title: msg('Docking stations and their bikes'),
   },
-  both: { label: 'Both', title: 'Stations and free-floating vehicles' },
+  vehicles: {
+    label: msg('Vehicles'),
+    title: msg('Free-floating bikes, scooters and other shared vehicles'),
+  },
+  both: {
+    label: msg('Both'),
+    title: msg('Stations and free-floating vehicles'),
+  },
 });
 
 const compact = (n) =>
@@ -72,8 +80,8 @@ export function createControls({ state: layerState, services, parts, source }) {
       return {
         chips: BIKESHARE_MODES.map((mode) => ({
           id: `mode-${mode}`,
-          label: MODE_CHIPS[mode].label,
-          title: MODE_CHIPS[mode].title,
+          label: t(MODE_CHIPS[mode].label),
+          title: t(MODE_CHIPS[mode].title),
           active: layerState._mode === mode,
           params: { mode },
         })),
@@ -176,8 +184,8 @@ export function createControls({ state: layerState, services, parts, source }) {
           (withVehicles ? layerState._activeVehicleIds.size : 0);
         stats.loadingLabel =
           feeds > 0
-            ? `syncing ${feeds} feed${feeds === 1 ? '' : 's'}...`
-            : 'scanning nearby systems...';
+            ? tn(feeds, 'syncing {count} feed...', 'syncing {count} feeds...')
+            : t('scanning nearby systems...');
       }
       // Stations: a failed city is only the layer's failure when it left
       // nothing on the map. While other cities (or, in Both, vehicles) still
@@ -189,7 +197,7 @@ export function createControls({ state: layerState, services, parts, source }) {
           layerState._stationRenderMap.size === 0 &&
           (mode === 'stations' || layerState._vehicleCount === 0);
         if (nothingDrawn) {
-          stationError = 'GBFS fetch error';
+          stationError = msg('GBFS fetch error');
         } else {
           stats.degraded = true;
           const allFailed = Array.from(layerState._activeCityIds).every(
@@ -223,7 +231,9 @@ export function createControls({ state: layerState, services, parts, source }) {
         layerState._activeVehicleIds.size === 0;
       if (mode === 'vehicles' && !layerState._vehicleGate) {
         stats.status = 'zoom-in';
-        stats.statusMessage = `Fly below ${Math.round(VEHICLE_ACTIVATION_ALTITUDE_M / 1000)} km for shared vehicles`;
+        stats.statusMessage = t('Fly below {km} km for shared vehicles', {
+          km: Math.round(VEHICLE_ACTIVATION_ALTITUDE_M / 1000),
+        });
       } else if (
         mode === 'vehicles'
           ? vehiclesEmpty
@@ -233,8 +243,8 @@ export function createControls({ state: layerState, services, parts, source }) {
         stats.status = 'empty';
         stats.statusMessage =
           mode === 'vehicles'
-            ? 'No shared vehicles here'
-            : `No system here${listedSourcesText(
+            ? t('No shared vehicles here')
+            : `${t('No system here')}${listedSourcesText(
                 source.listed?.count(
                   layerState._center?.lat,
                   layerState._center?.lon,

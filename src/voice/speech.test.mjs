@@ -461,7 +461,7 @@ test('labels are bounded and cleaned before they are spoken', () => {
   );
   assert.equal(
     planStepLabel('fly_to_location', { latitude: 33.66, longitude: -95.56 }),
-    'Fly to coordinates',
+    'Fly to Location',
   );
   assert.equal(
     planStepLabel('track_entity', { query: 'SWA169' }),
@@ -469,7 +469,7 @@ test('labels are bounded and cleaned before they are spoken', () => {
   );
   assert.equal(
     planStepLabel('analyst_query', { layers: ['flights'] }),
-    'Search Flights',
+    'Search Live Flights',
   );
   assert.equal(planStepLabel('next_iss_pass', {}), 'Next ISS pass');
   assert.equal(

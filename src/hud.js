@@ -16,8 +16,9 @@ import { applicationServices } from './services/application.js';
 
 import * as Cesium from 'cesium';
 import { forward as toMGRS } from 'mgrs';
-import { CITY_POIS } from './locations.js';
+import { CITY_POIS } from './cityPois.js';
 import { composeLocalityTag } from './hudLocality.js';
+import { hudQuantity, LOCALIZED_LOCALITY } from './hudLocalityFormat.js';
 import {
   aisIdleText,
   bandForStyle,
@@ -38,7 +39,7 @@ import { getBasemapLabelContext } from './voice/gevActions.js';
 import {
   hudSummaryMatchesProvenance,
   hudSummaryLayerContext,
-  hudTelemetryProvenanceTag,
+  hudTelemetryProvenance,
   isHudSummaryUnconfigured,
 } from './hudSummaryResponse.js';
 import {
@@ -46,6 +47,8 @@ import {
   DEFAULT_HUD_LAYOUT,
   normalizeHudLayout,
 } from './hudLayouts.js';
+import { formatNumber, msg, t } from './i18n/index.js';
+import { localizeLayerName } from './ui/layerPanel.js';
 
 /** Color palettes keyed by shader mode; applied as CSS custom properties. */
 const HUD_COLORS = {
@@ -70,6 +73,79 @@ const HUD_COLORS = {
     border: 'rgba(0, 255, 255, 0.15)',
   },
 };
+
+/**
+ * Mode names per style: the same English as STYLE_STATUS_LABELS
+ * (ui/visualPresets.js), so both translate alike.
+ */
+const MODE_LABELS = Object.freeze({
+  normal: msg('NORMAL'),
+  retro: msg('CRT'),
+  surveillance: msg('NVG'),
+  thermal: msg('FLIR'),
+  anime: msg('ANIME'),
+  noir: msg('NOIR'),
+  snow: msg('SNOW'),
+});
+
+/** Region ids from _regionLabel() and the name shown for each. */
+const REGION_LABELS = Object.freeze({
+  ARCTIC: msg('ARCTIC'),
+  ANTARCTIC: msg('ANTARCTIC'),
+  'NORTH AMERICA': msg('NORTH AMERICA'),
+  'SOUTH AMERICA': msg('SOUTH AMERICA'),
+  EUROPE: msg('EUROPE'),
+  AFRICA: msg('AFRICA'),
+  ASIA: msg('ASIA'),
+  OCEANIA: msg('OCEANIA'),
+  'NORTHERN OCEANIC GRID': msg('NORTHERN OCEANIC GRID'),
+  'SOUTHERN OCEANIC GRID': msg('SOUTHERN OCEANIC GRID'),
+});
+
+/** Feed-state ids from hudTelemetryProvenance() and the word shown for each. */
+const FEED_STATE_LABELS = Object.freeze({
+  loading: msg('LOADING'),
+  degraded: msg('DEGRADED'),
+  stale: msg('STALE'),
+  partial: msg('PARTIAL'),
+  fallback: msg('FALLBACK'),
+  unavailable: msg('UNAVAILABLE'),
+});
+
+/**
+ * The summary's feed-state suffix in the active language, e.g.
+ * `UNAVAILABLE: LIVE AIS VESSELS`. State ids and layer names stay English in
+ * layer data; only this line translates them.
+ */
+function localizedProvenanceTag(provenance) {
+  if (!provenance) return null;
+  const state = FEED_STATE_LABELS[provenance.state]
+    ? t(FEED_STATE_LABELS[provenance.state])
+    : provenance.state.toUpperCase();
+  if (!provenance.names.length) return state;
+  return t('{state} {layers}', {
+    state,
+    layers: provenance.names
+      .map((name) => localizeLayerName(name).toUpperCase())
+      .join('/'),
+  });
+}
+
+/** The name shown for a _viewBand() id. */
+function viewBandLabel(band) {
+  switch (band) {
+    case 'STREET':
+      return t('STREET', { context: 'view band' });
+    case 'CITY':
+      return t('CITY', { context: 'view band' });
+    case 'METRO':
+      return t('METRO', { context: 'view band' });
+    case 'REGIONAL':
+      return t('REGIONAL', { context: 'view band' });
+    default:
+      return t('GLOBAL', { context: 'view band' });
+  }
+}
 
 /** Shader modes that automatically show the HUD overlay. */
 const MILITARY_STYLES = new Set(['retro', 'surveillance', 'thermal']);
@@ -101,6 +177,13 @@ const NEARBY_POINTS = Object.values(CITY_POIS).flatMap((city) =>
  * rolling semantic summary line. All values derive from the live camera
  * position and update on independent timer cadences.
  */
+/** A view-window side for the summary line, in the active language's units. */
+function hudSpan(meters) {
+  return meters < 1000
+    ? hudQuantity(Math.round(meters), 'm')
+    : hudQuantity(meters / 1000, 'km', meters < 100_000 ? 1 : 0);
+}
+
 export class IntelHUD {
   /**
    * @param {Cesium.Viewer} viewer - The Cesium Viewer instance used for
@@ -196,22 +279,23 @@ export class IntelHUD {
     this._el = document.getElementById('intel-hud');
     if (!this._el) return;
 
+    // i18n-ignore: sensor codes and a classification banner; the rest uses t()
     this._el.innerHTML = `
       <div class="hud-sonar" aria-hidden="true"></div>
 
       <div class="hud-corner hud-top-left">
         <div class="hud-content">
-          <div class="hud-mode" id="hud-mode">NORMAL</div>
+          <div class="hud-mode" id="hud-mode">${t(MODE_LABELS.normal)}</div>
           <div class="hud-summary-wrap">
-            <div class="hud-summary-label">SUMMARY</div>
-            <div class="hud-summary" id="hud-summary">Awaiting telemetry...</div>
+            <div class="hud-summary-label">${t('SUMMARY')}</div>
+            <div class="hud-summary" id="hud-summary">${t('Awaiting telemetry...')}</div>
           </div>
         </div>
       </div>
 
       <div class="hud-corner hud-top-right">
         <div class="hud-content" style="text-align:right">
-          <div class="hud-rec"><span id="hud-rec-dot" style="visibility: hidden">●</span> <span id="hud-rec-label" style="visibility: hidden">REC</span>  <span id="hud-timestamp">2026-01-01 00:00:00Z</span></div>
+          <div class="hud-rec"><span id="hud-rec-dot" style="visibility: hidden">●</span> <span id="hud-rec-label" style="visibility: hidden">${t('REC')}</span>  <span id="hud-timestamp">2026-01-01 00:00:00Z</span></div>
           <div class="hud-orbital" id="hud-orient">HDG ---°  RNG --</div>
         </div>
       </div>
@@ -228,7 +312,7 @@ export class IntelHUD {
           <div id="hud-gsd">GSD: --m  NIIRS: --</div>
           <div id="hud-alt">ALT: --m   SUN: --° EL</div>
           <div><span id="hud-ona">ONA: --°</span>   <span id="hud-band">BAND: PAN</span></div>
-          <div id="hud-ais-vessel" class="hud-ais-vessel">AIS: --</div>
+          <div id="hud-ais-vessel" class="hud-ais-vessel">${t('AIS: --')}</div>
         </div>
       </div>
 
@@ -355,9 +439,11 @@ export class IntelHUD {
       const formatted = this._formatMGRS(mgrsStr);
       mgrsLabel = formatted;
       const el = document.getElementById('hud-mgrs');
+      // i18n-ignore: sensor codes
       if (el) el.textContent = `MGRS: ${formatted}`;
     } catch {
       const el = document.getElementById('hud-mgrs');
+      // i18n-ignore: sensor codes
       if (el) el.textContent = 'MGRS: ---';
     }
 
@@ -366,6 +452,7 @@ export class IntelHUD {
     if (llEl) llEl.textContent = `${latDMS} ${lonDMS}`;
     const bottomEl = document.getElementById('hud-bottom-line');
     if (bottomEl) {
+      // i18n-ignore: sensor codes
       bottomEl.textContent = `MGRS: ${mgrsLabel}  LAT: ${latDMS}  LON: ${lonDMS}`;
     }
 
@@ -384,6 +471,7 @@ export class IntelHUD {
     const gsdEl = document.getElementById('hud-gsd');
     if (gsdEl)
       gsdEl.textContent =
+        // i18n-ignore: sensor codes
         gsd === null
           ? 'GSD: --m  NIIRS: --'
           : `GSD: ${gsd.toFixed(2)}m  NIIRS: ${niirsFromGsd(gsd).toFixed(1)}`;
@@ -398,11 +486,13 @@ export class IntelHUD {
     const altMslM = ellipsoidalToMslDisplayM(altM, geoidN);
     const sunEl = sunElevationDeg(target ?? camera.positionWC);
     if (altEl)
+      // i18n-ignore: sensor codes
       altEl.textContent = `ALT: ${Math.round(altMslM)}m   SUN: ${sunEl.toFixed(1)}° EL`;
 
     // Heading and slant range to the view centre.
     const orientEl = document.getElementById('hud-orient');
     if (orientEl)
+      // i18n-ignore: sensor codes
       orientEl.textContent = `HDG ${String(headingDeg(camera.heading)).padStart(3, '0')}°  RNG ${formatRange(rangeM)}`;
 
     // AIS: a selected vessel's card owns this line (layers/vessels/cards.js);
@@ -410,7 +500,7 @@ export class IntelHUD {
     const aisEl = document.getElementById('hud-ais-vessel');
     if (
       aisEl &&
-      (aisEl.textContent === 'AIS: --' ||
+      (aisEl.textContent === t('AIS: --') ||
         aisEl.textContent === this._aisIdleShown)
     ) {
       const vessels = this._dataManager?.layers?.get?.('ais-live-vessels');
@@ -424,6 +514,7 @@ export class IntelHUD {
 
     // Off-nadir angle (ONA): 0 at nadir, rising toward the horizon.
     const onaEl = document.getElementById('hud-ona');
+    // i18n-ignore: sensor codes
     if (onaEl) onaEl.textContent = `ONA: ${ona.toFixed(1)}°`;
 
     // `altM` stays the raw ellipsoidal camera height the sensor model reads
@@ -598,10 +689,10 @@ export class IntelHUD {
    */
   _composeSummary() {
     const m = this._latestMetrics;
-    if (!m) return 'Awaiting telemetry...';
+    if (!m) return t('Awaiting telemetry...');
 
     const modeEl = document.getElementById('hud-mode');
-    const modeLabel = modeEl?.textContent || 'NORMAL';
+    const modeLabel = modeEl?.textContent || t(MODE_LABELS.normal);
     const region = this._regionLabel(m.latDeg, m.lonDeg);
     const nearest = this._nearestKnownPoint(m.latDeg, m.lonDeg);
     const band = this._viewBand(m.altM);
@@ -612,20 +703,41 @@ export class IntelHUD {
     // together, so they must never disagree. The view band above deliberately
     // keeps the ellipsoidal height: its thresholds were tuned against it.
     const altDisplayM = Number.isFinite(m.altMslM) ? m.altMslM : m.altM;
+    // Display only: the AI summary request carries its own context, so this
+    // line is built in the active language.
     const altTag =
       altDisplayM >= 1000
-        ? `${(altDisplayM / 1000).toFixed(1)}KM`
-        : `${Math.round(altDisplayM)}M`;
+        ? hudQuantity(altDisplayM / 1000, 'km', 1)
+        : hudQuantity(Math.round(altDisplayM), 'm');
     const winTag = m.windowM
-      ? `${formatRange(m.windowM.width).toUpperCase()}x${formatRange(m.windowM.height).toUpperCase()}`
-      : 'N/A';
+      ? `${hudSpan(m.windowM.width)}x${hudSpan(m.windowM.height)}`
+      : t('N/A');
     // NEAR the nearest catalogued POI at metro range; otherwise the lat/lon sector.
-    const localityTag = composeLocalityTag(nearest, m.latDeg, m.lonDeg);
-
-    const provenance = hudTelemetryProvenanceTag(
-      this._dataManager?.getAll?.() || [],
+    const localityTag = composeLocalityTag(
+      nearest,
+      m.latDeg,
+      m.lonDeg,
+      LOCALIZED_LOCALITY,
     );
-    const line = `${modeLabel} ${band} ${localityTag} | ${region} | ALT ${altTag} | WINDOW ${winTag} | SUN ${m.sunEl.toFixed(0)}° | ONA ${m.ona.toFixed(0)}° | ${localTag}`;
+
+    const provenance = localizedProvenanceTag(
+      hudTelemetryProvenance(this._dataManager?.getAll?.() || []),
+    );
+    // ALT, SUN and ONA are sensor codes, as in the corner readouts.
+    const line = t(
+      '{mode} {band} {locality} | {region} | ALT {alt} | WINDOW {window} | SUN {sun}° | ONA {ona}° | {zone}',
+      {
+        mode: modeLabel,
+        band: viewBandLabel(band),
+        locality: localityTag,
+        region: REGION_LABELS[region] ? t(REGION_LABELS[region]) : region,
+        alt: altTag,
+        window: winTag,
+        sun: formatNumber(Math.round(m.sunEl)),
+        ona: formatNumber(Math.round(m.ona)),
+        zone: localTag,
+      },
+    );
     return provenance ? `${line} | ${provenance}` : line;
   }
 
@@ -850,10 +962,12 @@ export class IntelHUD {
     // Update mode label
     const modeEl = document.getElementById('hud-mode');
     if (modeEl) {
-      const modeNames = { surveillance: 'NVG', thermal: 'FLIR', retro: 'CRT' };
-      modeEl.textContent = modeNames[styleName] || styleName.toUpperCase();
+      modeEl.textContent = MODE_LABELS[styleName]
+        ? t(MODE_LABELS[styleName])
+        : styleName.toUpperCase();
     }
     const bandEl = document.getElementById('hud-band');
+    // i18n-ignore: sensor codes
     if (bandEl) bandEl.textContent = `BAND: ${bandForStyle(styleName)}`;
     // Update color scheme
     const colors = HUD_COLORS[styleName] || HUD_COLORS._default;

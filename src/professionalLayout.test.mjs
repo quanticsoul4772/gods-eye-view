@@ -19,7 +19,7 @@ test('Professional is the default layout', () => {
   assert.ok(HUD_LAYOUTS.includes('professional'));
   assert.match(
     read('./ui/templates/display-controls.html'),
-    /<option value="professional">Professional<\/option>/,
+    /<option value="professional"[^>]*>Professional<\/option>/,
   );
 });
 

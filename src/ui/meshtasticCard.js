@@ -1,3 +1,4 @@
+import { t } from '../i18n/index.js';
 import { serialSupported } from '../meshtastic/session.js';
 import { describeNode } from '../layers/localMeshtastic/index.js';
 
@@ -46,9 +47,10 @@ export function installMeshtasticCard({
   const root = documentRef.createElement('section');
   root.id = 'meshtastic-card';
   root.hidden = true;
-  root.setAttribute('aria-label', 'Local Meshtastic radio');
+  root.setAttribute('aria-label', t('Local Meshtastic radio'));
   const header = documentRef.createElement('header');
   const title = documentRef.createElement('strong');
+  // i18n-ignore: product name
   title.textContent = 'MESHTASTIC';
   const button = documentRef.createElement('button');
   button.type = 'button';
@@ -66,11 +68,12 @@ export function installMeshtasticCard({
   let current = { state: 'idle', nodes: [], known: 0 };
   const render = () => {
     const connected = ['syncing', 'live'].includes(current.state);
-    button.textContent = connected ? 'Disconnect' : 'Connect';
+    button.textContent = connected ? t('Disconnect') : t('Connect');
     button.disabled = !supported || current.state === 'connecting';
     if (!supported) {
-      text.textContent =
-        'This browser cannot open serial devices. Use desktop Chrome or Edge.';
+      text.textContent = t(
+        'This browser cannot open serial devices. Use desktop Chrome or Edge.',
+      );
       return;
     }
     let message = STATE_TEXT[current.state] || '';

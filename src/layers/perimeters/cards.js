@@ -1,4 +1,5 @@
 /** Card model for one selected fire-perimeter incident. Pure — no Cesium types. */
+import { formatNumber, msg, t, tn } from '../../i18n/index.js';
 
 export const PERIMETER_OVERLAY_SOURCE_ID = 'fire-perimeters';
 
@@ -18,27 +19,27 @@ export function containmentAccent(containedPct) {
 export const PERIMETER_BANDS = Object.freeze([
   Object.freeze({
     key: 'uncontrolled',
-    label: 'Not contained or out of control',
+    label: msg('Not contained or out of control'),
     color: '#ff3b30',
   }),
   Object.freeze({
     key: 'held',
-    label: 'Under 50% contained or being held',
+    label: msg('Under 50% contained or being held'),
     color: '#ff7a00',
   }),
   Object.freeze({
     key: 'controlled',
-    label: '50–99% contained or under control',
+    label: msg('50–99% contained or under control'),
     color: '#ffb300',
   }),
   Object.freeze({
     key: 'out',
-    label: 'Fully contained or out',
+    label: msg('Fully contained or out'),
     color: '#8bc34a',
   }),
   Object.freeze({
     key: 'unreported',
-    label: 'Status not reported',
+    label: msg('Status not reported'),
     color: '#9aa4ad',
   }),
 ]);
@@ -110,25 +111,70 @@ export function perimeterAnchorDegrees(polygons) {
   return { lon: lon / count, lat: lat / count };
 }
 
-/** Compact USD, e.g. $85K / $4.2M / $1.3B. Null under $1,000. */
+/**
+ * Compact USD in the UI language: en "$85K / $4.2M / $1.3B", ru "4,2 млн $",
+ * es "4,2 M$". Null under $1,000.
+ */
 function formatCost(dollars) {
   if (!Number.isFinite(dollars) || dollars < 1000) return null;
-  const units = [
-    [1e3, 'K'],
-    [1e6, 'M'],
-    [1e9, 'B'],
-  ];
+  const units = [1e3, 1e6, 1e9];
   let index = 0;
   for (let i = units.length - 1; i >= 0; i--) {
-    if (dollars >= units[i][0]) {
+    if (dollars >= units[i]) {
       index = i;
       break;
     }
   }
   // 999,500 must promote to $1M, never render as $1000K.
-  if (dollars >= units[index][0] * 999.5 && index < units.length - 1) index++;
-  const value = dollars / units[index][0];
-  return `$${value >= 10 ? Math.round(value) : Math.round(value * 10) / 10}${units[index][1]}`;
+  if (dollars >= units[index] * 999.5 && index < units.length - 1) index++;
+  const value = dollars / units[index];
+  const amount = formatNumber(
+    value >= 10 ? Math.round(value) : Math.round(value * 10) / 10,
+  );
+  if (index === 0) return t('${amount}K', { amount });
+  if (index === 1) return t('${amount}M', { amount });
+  return t('${amount}B', { amount });
+}
+
+/** WFIGS attr_FireCause values in the UI language; others as sent. */
+function causeLabel(cause) {
+  switch (cause) {
+    case 'Human':
+      return t('Human', { context: 'fire cause' });
+    case 'Natural':
+      return t('Natural', { context: 'fire cause' });
+    case 'Undetermined':
+      return t('Undetermined', { context: 'fire cause' });
+    case 'Unknown':
+      return t('Unknown', { context: 'fire cause' });
+    default:
+      return cause;
+  }
+}
+
+/** WFIGS attr_FireBehaviorGeneral values in the UI language; others as sent. */
+function behaviorLabel(behavior) {
+  switch (behavior) {
+    case 'Minimal':
+      return t('Minimal', { context: 'fire behavior' });
+    case 'Moderate':
+      return t('Moderate', { context: 'fire behavior' });
+    case 'Active':
+      return t('Active', { context: 'fire behavior' });
+    case 'Extreme':
+      return t('Extreme', { context: 'fire behavior' });
+    default:
+      return behavior;
+  }
+}
+
+/**
+ * WFIGS attr_IncidentComplexityLevel ("Type 1 Incident" … "Type 5 Incident")
+ * in the UI language; other values as sent.
+ */
+function complexityLabel(complexity) {
+  const match = /^Type ([1-5]) Incident$/.exec(complexity);
+  return match ? t('Type {level} Incident', { level: match[1] }) : complexity;
 }
 
 /** WFIGS complex names arrive ALL-CAPS; render them in title case. */
@@ -142,15 +188,22 @@ function titleCase(name) {
 function formatDays(deltaMs) {
   if (!Number.isFinite(deltaMs) || deltaMs < 0) return null;
   const days = Math.floor(deltaMs / 86400000);
-  return days < 1 ? 'today' : `${days}d ago`;
+  return days < 1
+    ? t('mapped today')
+    : t('mapped {count}d ago', { count: days });
 }
 
+/** Compact age, "5m" / "3h" / "2d", in the UI language ("3 h", "3 ч"). */
 function formatAge(deltaMs) {
   if (!Number.isFinite(deltaMs) || deltaMs < 0) return null;
   const hours = Math.floor(deltaMs / 3600000);
-  if (hours < 1) return `${Math.max(1, Math.floor(deltaMs / 60000))}m`;
-  if (hours < 24) return `${hours}h`;
-  return `${Math.floor(hours / 24)}d`;
+  if (hours < 1)
+    return t('{count}m', {
+      context: 'age',
+      count: Math.max(1, Math.floor(deltaMs / 60000)),
+    });
+  if (hours < 24) return t('{count}h', { context: 'age', count: hours });
+  return t('{count}d', { context: 'age', count: Math.floor(hours / 24) });
 }
 
 /**
@@ -169,48 +222,66 @@ export function buildIncidentCard(
 ) {
   if (row.source && row.source !== 'wfigs')
     return buildProvincialCard(row, nowMs, { link, linkLabel });
+  // The row keeps WFIGS values as sent (AI tools read them); the card translates
+  // the known cause, behavior and complexity values and the wording around them.
   const facts = [];
-  if (Number.isFinite(row.acres))
-    facts.push(`${Math.round(row.acres).toLocaleString('en-US')} ac`);
+  if (Number.isFinite(row.acres)) {
+    const acres = Math.round(row.acres);
+    facts.push(
+      tn(acres, '{acres} ac', '{acres} ac', { acres: formatNumber(acres) }),
+    );
+  }
   facts.push(
     Number.isFinite(row.containedPct)
-      ? `${Math.round(row.containedPct)}% contained`
-      : 'containment unknown',
+      ? t('{percent}% contained', { percent: Math.round(row.containedPct) })
+      : t('containment unknown'),
   );
   if (row.state) facts.push(row.state);
   else if (row.category) facts.push(row.category);
 
   const situation = [];
-  if (row.cause) situation.push(`${row.cause} cause`);
-  if (row.behavior) situation.push(row.behavior);
-  if (row.complexity) situation.push(row.complexity);
+  if (row.cause)
+    situation.push(t('{cause} cause', { cause: causeLabel(row.cause) }));
+  if (row.behavior) situation.push(behaviorLabel(row.behavior));
+  if (row.complexity) situation.push(complexityLabel(row.complexity));
 
   const response = [];
-  if (Number.isFinite(row.personnel))
+  if (Number.isFinite(row.personnel)) {
+    const personnel = Math.round(row.personnel);
     response.push(
-      `${Math.round(row.personnel).toLocaleString('en-US')} personnel`,
+      tn(personnel, '{personnel} personnel', '{personnel} personnel', {
+        personnel: formatNumber(personnel),
+      }),
     );
-  if (row.county) response.push(`${row.county} County`);
+  }
+  if (row.county) response.push(t('{county} County', { county: row.county }));
   if (Number.isFinite(row.costToDate)) {
     const cost = formatCost(row.costToDate);
-    if (cost) response.push(`${cost} to date`);
+    if (cost) response.push(t('{cost} to date', { cost }));
   }
 
   const ages = [];
   const discovered = formatAge(nowMs - row.discoveredTime);
   if (row.discoveredTime != null && discovered)
-    ages.push(`discovered ${discovered} ago`);
+    ages.push(t('discovered {age} ago', { age: discovered }));
   const updated = formatAge(nowMs - row.updatedTime);
-  if (row.updatedTime != null && updated) ages.push(`updated ${updated} ago`);
+  if (row.updatedTime != null && updated)
+    ages.push(t('updated {age} ago', { age: updated }));
 
   const details = [facts.join(' · ')];
-  if (row.complexName) details.push(`part of ${titleCase(row.complexName)}`);
+  if (row.complexName)
+    details.push(
+      t('part of {complex}', { complex: titleCase(row.complexName) }),
+    );
   if (situation.length) details.push(situation.join(' · '));
   if (response.length) details.push(response.join(' · '));
   if (ages.length) details.push(ages.join(' · '));
-  if (link) details.push(`${linkLabel} ↗ · click card to open`);
+  if (link)
+    details.push(t('{site} ↗ · click card to open', { site: linkLabel }));
 
-  const title = `FIRE · ${row.name || 'Unnamed incident'}`;
+  const title = t('FIRE · {name}', {
+    name: row.name || t('Unnamed incident'),
+  });
   return {
     id: `fire-perimeter-card:${row.stableId}`,
     // `selected` picks the paint lane and collision protection; an explicit
@@ -220,7 +291,12 @@ export function buildIncidentCard(
     // rectangles solely for interactive entries.
     interactive: Boolean(link),
     ...(link
-      ? { accessibilityLabel: `Open ${title} on ${linkLabel}` }
+      ? {
+          accessibilityLabel: t('Open {title} on {site}', {
+            title,
+            site: linkLabel,
+          }),
+        }
       : undefined),
     title,
     details,
@@ -233,33 +309,64 @@ export function buildIncidentCard(
 }
 
 /**
+ * A provincial stage of control in the UI language. The values are the feed's
+ * own (records.js PERIMETER_STATUSES) and stay as data; only the card
+ * translates them.
+ */
+function statusLabel(status) {
+  switch (status) {
+    case 'Out of Control':
+      return t('Out of Control', { context: 'fire status' });
+    case 'Being Held':
+      return t('Being Held', { context: 'fire status' });
+    case 'Under Control':
+      return t('Under Control', { context: 'fire status' });
+    case 'Out':
+      return t('Out', { context: 'fire status' });
+    default:
+      return status || t('status not reported');
+  }
+}
+
+/**
  * A provincial perimeter's card: hectares, stage of control (when the feed
  * reports one), the province and how long ago it was mapped. The feeds are
  * published for reference only, and the card says so.
  */
 function buildProvincialCard(row, nowMs, { link, linkLabel }) {
   const facts = [];
-  if (Number.isFinite(row.hectares))
-    facts.push(
-      `${row.hectares < 10 ? Math.round(row.hectares * 10) / 10 : Math.round(row.hectares).toLocaleString('en-US')} ha`,
-    );
-  facts.push(row.status || 'status not reported');
+  if (Number.isFinite(row.hectares)) {
+    const hectares =
+      row.hectares < 10
+        ? Math.round(row.hectares * 10) / 10
+        : Math.round(row.hectares);
+    facts.push(t('{hectares} ha', { hectares: formatNumber(hectares) }));
+  }
+  facts.push(statusLabel(row.status));
   if (row.state) facts.push(row.state);
   const details = [facts.join(' · ')];
   const mapped = formatDays(nowMs - row.updatedTime);
   details.push(
     row.updatedTime != null && mapped
-      ? `mapped ${mapped} · reference only`
-      : 'reference only',
+      ? `${mapped} · ${t('reference only')}`
+      : t('reference only'),
   );
-  if (link) details.push(`${linkLabel} ↗ · click card to open`);
-  const title = `FIRE · ${row.name || 'Unnamed incident'}`;
+  if (link)
+    details.push(t('{site} ↗ · click card to open', { site: linkLabel }));
+  const title = t('FIRE · {name}', {
+    name: row.name || t('Unnamed incident'),
+  });
   return {
     id: `fire-perimeter-card:${row.stableId}`,
     selected: true,
     interactive: Boolean(link),
     ...(link
-      ? { accessibilityLabel: `Open ${title} on ${linkLabel}` }
+      ? {
+          accessibilityLabel: t('Open {title} on {site}', {
+            title,
+            site: linkLabel,
+          }),
+        }
       : undefined),
     title,
     details,

@@ -1,3 +1,4 @@
+import { t } from '../i18n/index.js';
 import * as Cesium from 'cesium';
 
 const ASK_URL = '/api/claude/ask';
@@ -370,27 +371,27 @@ export function installAskClaude({
     id: 'gev-ask-button',
     type: 'button',
     textContent: '⌨',
-    title: 'Type to Claude (/)',
+    title: t('Type to Claude (/)'),
   });
-  typeButton.setAttribute('aria-label', 'Type to Claude');
+  typeButton.setAttribute('aria-label', t('Type to Claude'));
   typeButton.setAttribute('aria-expanded', 'false');
   typeButton.setAttribute('aria-controls', 'gev-ask-composer');
   const composer = make('form', { id: 'gev-ask-composer', hidden: true });
-  composer.setAttribute('aria-label', 'Type to Claude');
+  composer.setAttribute('aria-label', t('Type to Claude'));
   const input = make('input', {
     type: 'text',
     maxLength: 500,
-    placeholder: 'Ask Claude, or tell it what to do',
+    placeholder: t('Ask Claude, or tell it what to do'),
   });
-  input.setAttribute('aria-label', 'Message for Claude');
+  input.setAttribute('aria-label', t('Message for Claude'));
   const send = make('button', { type: 'submit', textContent: 'SEND' });
   const newChat = make('button', {
     type: 'button',
     className: 'gev-ask-new',
     textContent: '↺',
-    title: 'New chat — forget this conversation',
+    title: t('New chat — forget this conversation'),
   });
-  newChat.setAttribute('aria-label', 'New chat');
+  newChat.setAttribute('aria-label', t('New chat'));
   const status = make('div', { className: 'gev-ask-status' });
   status.setAttribute('aria-live', 'polite');
   const statusText = make('span');
@@ -412,9 +413,9 @@ export function installAskClaude({
   const cockpitInput = make('input', {
     type: 'text',
     maxLength: 500,
-    placeholder: 'Ask Claude (Esc cancels or closes)',
+    placeholder: t('Ask Claude (Esc cancels or closes)'),
   });
-  cockpitInput.setAttribute('aria-label', 'Message for Claude');
+  cockpitInput.setAttribute('aria-label', t('Message for Claude'));
   const popup = make('div', { className: 'gev-ask-popup', hidden: true });
   popup.setAttribute('aria-live', 'polite');
   cockpitBox.append(cockpitInput, popup);
@@ -464,7 +465,9 @@ export function installAskClaude({
     '#gev-voice-card-assistant .gev-voice-card-who',
   );
   const setLabels = (typed) => {
-    if (kicker) kicker.textContent = typed ? 'CLAUDE' : 'VOICE';
+    // i18n-ignore: speaker names (Claude, GEV)
+    if (kicker) kicker.textContent = typed ? 'CLAUDE' : t('VOICE');
+    // i18n-ignore: speaker names (Claude, GEV)
     if (assistantWho) assistantWho.textContent = typed ? 'CLAUDE' : 'GEV';
     if (typed) control.dataset.typed = '';
     else delete control.dataset.typed;
@@ -590,7 +593,7 @@ export function installAskClaude({
     const { preview, more } = cockpitPreview(popupFull);
     popup.textContent = preview;
     popup.dataset.more = String(more);
-    popup.title = more ? 'Click to show the whole answer' : '';
+    popup.title = more ? t('Click to show the whole answer') : '';
     popup.hidden = !preview;
     clearTimeout(popupTimer);
     if (preview)

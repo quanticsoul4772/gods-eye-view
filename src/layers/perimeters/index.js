@@ -12,6 +12,7 @@ import {
   inciwebNodeId,
   isCurrentPublication,
 } from './inciweb.js';
+import { msg, t } from '../../i18n/index.js';
 export { normalizeFirePerimeterSnapshot } from './records.js';
 export { createWfigsPerimeterSource } from './source.js';
 export * from './cards.js';
@@ -154,7 +155,7 @@ export function createFirePerimetersLayer({
     let linkLabel = 'InciWeb';
     if (row.link) {
       _selectedLink = row.link;
-      linkLabel = row.state === 'CA-BC' ? 'BC Wildfire' : 'Incident page';
+      linkLabel = row.state === 'CA-BC' ? t('BC Wildfire') : t('Incident page');
     } else if (/^US-/.test(row.state || '')) {
       const candidate = findInciwebLink(_inciwebIndex, row);
       if (candidate && !_linkVerdicts.has(candidate))
@@ -398,7 +399,7 @@ export function createFirePerimetersLayer({
         if (request.signal.aborted || _request !== request || !_enabled)
           return false;
         console.warn('[Data:FirePerimeters] Fetch error:', e);
-        _lastError = e?.message || 'Perimeter source unavailable';
+        _lastError = e?.message || msg('Perimeter source unavailable');
         return false;
       } finally {
         if (_request === request) _request = null;
@@ -457,13 +458,14 @@ export function createFirePerimetersLayer({
       return {
         chips: [],
         legend: PERIMETER_BANDS.map(({ label, color, key }, index) => ({
-          label,
+          label: t(label),
           color,
           count: counts.get(key) || 0,
           ...(index === 0
             ? {
-                blurb:
+                blurb: t(
                   'Colour shows reported containment (US) or stage of control (BC). Perimeters are simplified to about 100 m (US) and 20 m (Canada).',
+                ),
               }
             : {}),
         })),

@@ -5,7 +5,7 @@ import {
   HUD_SUMMARY_INSTRUCTIONS,
   HUD_SUMMARY_UNCONFIGURED_CODE,
   hudSummaryLayerContext,
-  hudTelemetryProvenanceTag,
+  hudTelemetryProvenance,
   isHudSummaryUnconfigured,
   keylessHudSummaryResponse,
 } from './hudSummaryResponse.js';
@@ -190,12 +190,12 @@ test('HUD summary context and telemetry tag carry chip-identical feed-state', ()
   assert.deepEqual(context.enabledLayerLabels, ['Live Flights']);
   assert.equal(context.enabledLayers[0].feedState, 'stale');
   assert.equal(context.feedProvenance.overall, 'stale');
+  assert.deepEqual(hudTelemetryProvenance(layers, { now }), {
+    state: 'stale',
+    names: ['Live Flights'],
+  });
   assert.equal(
-    hudTelemetryProvenanceTag(layers, { now }),
-    'STALE LIVE FLIGHTS',
-  );
-  assert.equal(
-    hudTelemetryProvenanceTag(
+    hudTelemetryProvenance(
       [
         {
           id: 'flights',

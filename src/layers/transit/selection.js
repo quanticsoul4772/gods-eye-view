@@ -7,6 +7,7 @@ import {
   createTransitSelectedOverlayEntry,
 } from './policy.js';
 import { isPointerFree } from '../../data/inputOwnership.js';
+import { t } from '../../i18n/index.js';
 
 /**
  * Click-to-select one vehicle and a card that follows it.
@@ -58,6 +59,7 @@ export function createSelection({ state, services, parts }) {
       now,
       entry.fetchedAt,
       entry,
+      t,
     );
     // The TEXT is what the throttle is for, and it is republished only when
     // it has changed: the anchor is live through its getter, so re-sending

@@ -1,3 +1,4 @@
+import { t, tn } from './i18n/index.js';
 import * as Cesium from 'cesium';
 
 /**
@@ -112,7 +113,11 @@ export function formatRange(rangeM) {
  * @returns {string}
  */
 export function aisIdleText({ enabled, count }) {
-  if (!enabled) return 'AIS: --';
-  if (!count) return 'AIS: no vessels in feed';
-  return `AIS: ${count} vessels · click one`;
+  if (!enabled) return t('AIS: --');
+  if (!count) return t('AIS: no vessels in feed');
+  return tn(
+    count,
+    'AIS: {count} vessel · click one',
+    'AIS: {count} vessels · click one',
+  );
 }
