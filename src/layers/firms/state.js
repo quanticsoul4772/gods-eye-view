@@ -51,9 +51,13 @@ export function createFirmsState({ services, config }) {
 
   layerState._firesByFrp = [];
 
-  /** Hide detections at known solar farms and industrial sites (not escalated). */
+  /**
+   * Hide detections at known solar farms and industrial sites (not
+   * escalated). Off by default: they are drawn grey, so a small real fire
+   * next to a site stays visible.
+   */
 
-  layerState._hideStatic = true;
+  layerState._hideStatic = false;
 
   /** The proxy annotated this snapshot (a mask was available). */
 

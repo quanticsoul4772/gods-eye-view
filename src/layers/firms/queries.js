@@ -83,15 +83,20 @@ export function createQueries({
           age: components.model.formatAgoMinutes(now - layerState._lastUpdate),
         });
       }
-      const hiddenStatic = layerState._hideStatic ? layerState._staticCount : 0;
+      const staticCount = layerState._staticCount;
+      const hiddenStatic = layerState._hideStatic ? staticCount : 0;
       return {
         count: layerState._count,
-        // English data for the assistant: what `count` leaves out.
-        ...(hiddenStatic
-          ? {
-              hiddenStatic,
-              countOf: `fire detections, excluding ${hiddenStatic} at known solar farms or industrial sites (likely not fires)`,
-            }
+        // English data for the assistant: what `count` includes or leaves out.
+        ...(staticCount
+          ? hiddenStatic
+            ? {
+                hiddenStatic,
+                countOf: `fire detections, excluding ${hiddenStatic} at known solar farms or industrial sites (likely not fires)`,
+              }
+            : {
+                countOf: `fire detections, including ${staticCount} shown grey at known solar farms or industrial sites (likely not fires)`,
+              }
           : {}),
         cells: layerState._cellCount,
         lastUpdate: layerState._lastUpdate,
@@ -231,8 +236,8 @@ export function createQueries({
             active: !layerState._hideStatic,
             title: tn(
               n,
-              '{count} detection at a known solar farm (daytime sun glint) or industrial site such as a kiln, steel works or gas flare. Usually not a wildfire, so hidden. Turn on to show it in grey. Site maps: solar to 2024, industrial to 2021.',
-              '{count} detections at known solar farms (daytime sun glint) and industrial sites such as kilns, steel works and gas flares. Usually not wildfires, so hidden. Turn on to show them in grey. Site maps: solar to 2024, industrial to 2021.',
+              '{count} detection at a known solar farm (daytime sun glint) or industrial site such as a kiln, steel works or gas flare. Usually not a wildfire, so it is shown in grey. Turn off to hide it. Site maps: solar to 2024, industrial to 2021.',
+              '{count} detections at known solar farms (daytime sun glint) and industrial sites such as kilns, steel works and gas flares. Usually not wildfires, so they are shown in grey. Turn off to hide them. Site maps: solar to 2024, industrial to 2021.',
               { count },
             ),
             params: { hideStatic: !layerState._hideStatic },

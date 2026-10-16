@@ -15,6 +15,11 @@ import { acquisitionMsUtc } from '../../src/data/firmsCsv.js';
  * industrial: unusually strong, or many pixels in one pass). Clients hide
  * flagged, non-escalated detections by default.
  *
+ * VIIRS only: MODIS's 1 km pixels (up to 2 × 4.8 km at the swath edge) land
+ * too far from the source for the 1 km buffer, and in the 2025 replay its
+ * escalation rate failed at every buffer measured, so MODIS detections are
+ * left unannotated.
+ *
  * Pack format: `{format: 1, cellDeg, escalation: {...}, rows}`, rows being
  * `[kind, west, south, east, north, siteId]` (a buffered box) or
  * `[kind, cellKey, siteId]` (one buffered cell of an irregular site, keyed
@@ -141,6 +146,7 @@ export function annotateStaticSources(fires, index, escalation = {}) {
   const industrialPasses = new Map();
   let flagged = 0;
   for (const fire of fires) {
+    if (fire.instrument === 'MODIS') continue;
     const match = staticSourceOf(
       index,
       fire.lat,

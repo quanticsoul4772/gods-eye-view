@@ -102,6 +102,12 @@ test('annotation: matches only; solar seen again 45 min later and strong industr
     flagged: 4,
     escalated: 4,
   });
+  const modis = fire(36.357, -114.91, { instrument: 'MODIS', satellite: 'T' });
+  assert.deepEqual(annotateStaticSources([modis], index), {
+    flagged: 0,
+    escalated: 0,
+  });
+  assert.equal('staticSource' in modis, false, 'MODIS is never annotated');
   assert.deepEqual(annotateStaticSources([fire(36.357, -114.91)], null), {
     flagged: 0,
     escalated: 0,

@@ -124,13 +124,13 @@ async function loadedLayer(t, payload) {
   });
   layer.init(viewer);
   // Restoring a share link calls setParams before data or enable: accepted.
-  assert.equal(layer.setParams({ hideStatic: true }), true);
+  assert.equal(layer.setParams({ hideStatic: false }), true);
   await layer.enable(viewer);
   t.after(() => layer.destroy(viewer));
   return layer;
 }
 
-test('layer: static sources hidden by default, chip shows them, one rule for the assistant', async (t) => {
+test('layer: static sources shown grey by default, chip hides them, one rule for the assistant', async (t) => {
   const payload = {
     fetchedAt: Date.now(),
     maskAvailable: true,
@@ -143,15 +143,15 @@ test('layer: static sources hidden by default, chip shows them, one rule for the
     ],
   };
   const layer = await loadedLayer(t, payload);
-  assert.deepEqual(layer.getParams(), { hideStatic: true });
+  assert.deepEqual(layer.getParams(), { hideStatic: false });
   let stats = layer.getStats();
-  assert.equal(stats.count, 2, 'the escalated and the plain detection');
-  assert.equal(stats.hiddenStatic, 3);
-  assert.match(stats.countOf, /excluding 3 at known solar farms or industrial sites/);
+  assert.equal(stats.count, 5, 'drawn grey, not hidden');
+  assert.equal(stats.hiddenStatic, undefined);
+  assert.match(stats.countOf, /including 3 shown grey at known solar farms or industrial sites/);
   const [chip] = layer.getRowControls().chips;
   assert.equal(chip.label, 'SOLAR & INDUSTRIAL · 3');
-  assert.equal(chip.active, false);
-  assert.deepEqual(chip.params, { hideStatic: false });
+  assert.equal(chip.active, true);
+  assert.deepEqual(chip.params, { hideStatic: true });
   // The biggest "fire" is never a likely static source, whatever the chip shows.
   assert.equal(layer.getStrongestFire().frp, 300);
   assert.deepEqual(
@@ -159,11 +159,12 @@ test('layer: static sources hidden by default, chip shows them, one rule for the
     [300, 12],
   );
 
-  assert.equal(layer.setParams({ hideStatic: false }), true);
+  assert.equal(layer.setParams({ hideStatic: true }), true);
   stats = layer.getStats();
-  assert.equal(stats.count, 5);
-  assert.equal(stats.hiddenStatic, undefined);
-  assert.equal(layer.getRowControls().chips[0].active, true);
+  assert.equal(stats.count, 2, 'the escalated and the plain detection');
+  assert.equal(stats.hiddenStatic, 3);
+  assert.match(stats.countOf, /excluding 3 at known solar farms or industrial sites/);
+  assert.equal(layer.getRowControls().chips[0].active, false);
   assert.equal(layer.getStrongestFire().frp, 300);
   assert.deepEqual(
     layer.getAnalystRecords().map((r) => r.frp),
@@ -193,6 +194,8 @@ test('layer: when every detection is a hidden static source the count is 0, noth
     maskAvailable: true,
     fires: [recentRecord({ staticSource: 'solar' })],
   });
+  assert.equal(layer.getStats().count, 1, 'shown grey by default');
+  layer.setParams({ hideStatic: true });
   assert.equal(layer.getStats().count, 0);
   assert.equal(layer.getStrongestFire(), null);
   assert.equal(layer.getRowControls().chips.length, 1);

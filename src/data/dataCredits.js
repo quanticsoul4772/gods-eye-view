@@ -393,7 +393,12 @@ export const DATA_CREDITS = [
       'Active fires: NASA FIRMS — we acknowledge the use of data and/or imagery ' +
       'from NASA’s Fire Information for Resource Management System ' +
       '(<a href="https://earthdata.nasa.gov/firms" target="_blank" rel="noopener">earthdata.nasa.gov/firms</a>), ' +
-      'part of NASA’s Earth Observing System Data and Information System (EOSDIS)',
+      'part of NASA’s Earth Observing System Data and Information System (EOSDIS). ' +
+      'Solar farms and industrial heat sources marked using Song &amp; Feng (2026), ' +
+      '<a href="https://doi.org/10.5281/zenodo.18794231" target="_blank" rel="noopener">Global Facility-Level Solar PV Inventory</a>, ' +
+      'and Ma (2024), ' +
+      '<a href="https://doi.org/10.5281/zenodo.10570342" target="_blank" rel="noopener">Global remote industrial heat sources V3.0</a> ' +
+      '(both CC BY 4.0; converted to 1 km boxes)',
   },
   {
     key: 'drivebc-cctv',
