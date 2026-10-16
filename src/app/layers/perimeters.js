@@ -7,8 +7,12 @@ import {
 import * as picking from '../../data/pickRegistry.js';
 import * as overlays from '../../overlays/worldOverlay.js';
 import { isPointerFree } from '../../data/inputOwnership.js';
+import {
+  perimeterFeedCredit,
+  registerDynamicCredit,
+} from '../../data/dataCredits.js';
 
-/** Wire WFIGS fire perimeters into the application catalog. */
+/** Wire fire perimeters (WFIGS and provincial feeds) into the application catalog. */
 export function createApplicationFirePerimeters(options) {
   return createFirePerimetersLayer({
     overlayHost: {
@@ -24,6 +28,7 @@ export function createApplicationFirePerimeters(options) {
       new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas),
     picking,
     pointer: { isPointerFree },
+    credits: { registerDynamicCredit, perimeterFeedCredit },
     ...options,
   });
 }

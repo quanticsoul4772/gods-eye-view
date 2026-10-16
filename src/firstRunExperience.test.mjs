@@ -680,10 +680,11 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   // Bike share's shared-vehicle aliases and fields extend the manifest hints,
   // and analyst filters spell out units and time fields.
   // A derived field list prints whole when that is shorter than "as X minus".
-  assert.equal(block.length, 30691, 'serialized tool schema length drifted');
+  // Fire perimeters add provincial fields (hectares, status, source, times).
+  assert.equal(block.length, 30737, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    'de009740ce6b7499cc11fcb0a712f626eef448e7047fd0a9ddb2eb5a151db406',
+    '339fce40ef32d732e2dfa7c6e31c649fb9480465d0f775e8ac8a030f1ec44871',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
   const instructions = fs.readFileSync(new URL('../server/providers/openai/instructions.js', import.meta.url), 'utf8');

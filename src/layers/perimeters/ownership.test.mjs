@@ -475,15 +475,32 @@ test('unchanged snapshots retain entity identity even if source ordering changes
   h.layer.destroy();
 });
 
-test('containment legend uses the existing thresholds, colours and incident counts', async () => {
+test('legend: US containment and BC stage of control share the four colours; Ontario is neutral', async () => {
   const values = [null, -1, 0, 0.5, 49.9, 50, 99.9, 100, 101];
+  const provincial = (stableId, status) => ({
+    ...row,
+    stableId,
+    containedPct: null,
+    status,
+    source:
+      status === undefined
+        ? 'ontario-fire-perimeters-in-year'
+        : 'bc-wildfire-perimeters-current',
+  });
   const h = harness({
-    getSnapshot: async () =>
-      values.map((containedPct, index) => ({
+    getSnapshot: async () => [
+      ...values.map((containedPct, index) => ({
         ...row,
         stableId: String(index),
         containedPct,
       })),
+      provincial('bc/1', 'Out of Control'),
+      provincial('bc/2', 'Being Held'),
+      provincial('bc/3', 'Under Control'),
+      provincial('bc/4', 'Out'),
+      provincial('bc/5', null),
+      provincial('on/1', undefined),
+    ],
   });
   await h.layer.update();
   const controls = h.layer.getRowControls();
@@ -491,10 +508,11 @@ test('containment legend uses the existing thresholds, colours and incident coun
   assert.deepEqual(
     controls.legend.map(({ color, count }) => [color, count]),
     [
-      ['#ff3b30', 3],
-      ['#ff7a00', 2],
-      ['#ffb300', 2],
-      ['#8bc34a', 2],
+      ['#ff3b30', 4],
+      ['#ff7a00', 3],
+      ['#ffb300', 3],
+      ['#8bc34a', 3],
+      ['#9aa4ad', 2],
     ],
   );
   assert.ok(
@@ -504,12 +522,12 @@ test('containment legend uses the existing thresholds, colours and incident coun
   );
   assert.equal(
     controls.legend[0].blurb,
-    'Colour shows reported containment. Perimeters are simplified to about 100 m.',
+    'Colour shows reported containment (US) or stage of control (BC). Perimeters are simplified to about 100 m (US) and 20 m (Canada).',
   );
   h.layer.destroy();
   assert.deepEqual(
     h.layer.getRowControls().legend.map(({ count }) => count),
-    [0, 0, 0, 0],
+    [0, 0, 0, 0, 0],
   );
 });
 
@@ -552,3 +570,87 @@ for (const action of ['disable', 'destroy', 'selection']) {
     if (action !== 'destroy') h.layer.destroy();
   });
 }
+
+test('a provincial perimeter is clickable and opens its BC Wildfire page without asking InciWeb', async () => {
+  const bcRow = {
+    ...row,
+    stableId: 'bc-wildfire-perimeters-current/C40127',
+    name: 'C40127',
+    acres: 11.4,
+    hectares: 4.6,
+    containedPct: null,
+    state: 'CA-BC',
+    status: 'Being Held',
+    link: 'https://wildfiresituation.nrs.gov.bc.ca/incidents?fireYear=2026&incidentNumber=C40127',
+    source: 'bc-wildfire-perimeters-current',
+    discoveredTime: null,
+  };
+  let cardShown = false;
+  const h = harness(
+    { getSnapshot: async () => [bcRow] },
+    {
+      pick: () => ({ id: `fire-perimeter:${bcRow.stableId}:0` }),
+      cardHit: () =>
+        cardShown ? { entryId: `fire-perimeter-card:${bcRow.stableId}` } : null,
+      inciwebIndex: [
+        {
+          title: 'C40127',
+          tau: 'US-CA',
+          link: 'https://inciweb.wildfire.gov/incident-information/x',
+        },
+      ],
+    },
+  );
+  await h.layer.update();
+  h.clicks.handler({ position: { x: 1, y: 1 } });
+  const [card] = h.overlay.entries.get('fire-perimeters') || [];
+  assert.ok(card, 'the Canadian id resolves to its row');
+  assert.equal(card.title, 'FIRE · C40127');
+  assert.equal(card.details[0], '4.6 ha · Being Held · CA-BC');
+  assert.match(card.details[1], /reference only/);
+  assert.equal(card.details[2], 'BC Wildfire ↗ · click card to open');
+  assert.equal(card.accent, '#ff7a00');
+  cardShown = true;
+  h.clicks.handler({ position: { x: 1, y: 1 } });
+  assert.deepEqual(h.opened, [bcRow.link]);
+  h.layer.destroy();
+});
+
+test('credits: a provincial feed registers its licence credit when it draws; WFIGS does not', async () => {
+  const registered = [];
+  const viewer = {
+    scene: { pick: () => null },
+    dataSources: { add() {}, remove() {} },
+  };
+  const layer = createFirePerimetersLayer({
+    source: {
+      getSnapshot: async () => [
+        {
+          ...row,
+          stableId: 'ontario-fire-perimeters-in-year/NIP009',
+          source: 'ontario-fire-perimeters-in-year',
+          containedPct: null,
+          attribution: 'Ontario Ministry of Natural Resources.',
+          licenceUrl:
+            'https://www.ontario.ca/page/open-government-licence-ontario',
+        },
+        row,
+      ],
+    },
+    credits: {
+      registerDynamicCredit: (v, credit) => registered.push(credit),
+      perimeterFeedCredit: (feed) => ({
+        key: `perimeters-${feed.id}`,
+        html: feed.attribution,
+      }),
+    },
+  });
+  layer.init(viewer);
+  layer.enable(viewer);
+  await layer.update();
+  assert.deepEqual(
+    registered.map((c) => c.key),
+    ['perimeters-ontario-fire-perimeters-in-year'],
+  );
+  layer.destroy();
+});

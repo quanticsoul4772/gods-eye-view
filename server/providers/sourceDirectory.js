@@ -231,10 +231,39 @@ export function isPlausibleCoverage(bbox, domain) {
   );
 }
 
+const MAPPED_FIELD = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
+
+/**
+ * A fire-perimeter entry's `mapping`: property names the app reads features
+ * through (never prototype keys), and the region code it shows.
+ */
+export function isValidPerimeterMapping(mapping) {
+  if (!mapping || typeof mapping !== 'object' || Array.isArray(mapping))
+    return false;
+  const field = (key, required) => {
+    const value = Object.hasOwn(mapping, key) ? mapping[key] : undefined;
+    return value === undefined
+      ? !required
+      : typeof value === 'string' && MAPPED_FIELD.test(value);
+  };
+  return (
+    field('id', true) &&
+    field('size_ha', true) &&
+    field('updated', true) &&
+    field('status', false) &&
+    field('url', false) &&
+    Object.hasOwn(mapping, 'region') &&
+    typeof mapping.region === 'string' &&
+    /^[A-Z]{2}-[A-Z0-9]{1,3}$/.test(mapping.region)
+  );
+}
+
 /** Whether the app may fetch and display an entry. */
 export function isUsableEntry(entry) {
   const headers = entry?.access?.headers;
   return (
+    (entry?.format !== 'geojson.fire-perimeters' ||
+      isValidPerimeterMapping(entry.mapping)) &&
     ID_PATTERN.test(entry?.id || '') &&
     entry.health?.status === 'verified' &&
     entry.licence?.display === true &&
@@ -461,7 +490,10 @@ export function compareSnapshots(previous, next) {
     const now = after.get(domain) || new Set();
     const lost = [...was].filter((id) => !now.has(id)).sort();
     const gained = [...now].filter((id) => !was.has(id)).sort();
-    const allowed = Math.min(5, Math.floor(was.size * 0.1));
+    // Small seasonal domains (fire perimeters, active fires) may lose one
+    // entry: out of season a feed turns degraded, which must not block
+    // every domain's snapshot refresh.
+    const allowed = was.size < 10 ? 1 : Math.min(5, Math.floor(was.size * 0.1));
     domains.push({
       domain,
       before: was.size,

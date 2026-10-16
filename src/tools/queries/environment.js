@@ -246,8 +246,9 @@ export const getFirePerimeters = defineTool({
   name: 'get_fire_perimeters',
   title: 'Wildfire perimeters',
   description:
-    'Mapped wildfire perimeters from the US WFIGS service in an area, ' +
-    'largest first, with size, containment, cause and personnel.',
+    'Mapped wildfire perimeters in an area, largest first: US (NIFC WFIGS) ' +
+    'with size, containment, cause and personnel, and Canadian provincial ' +
+    'feeds (British Columbia, Ontario) with size and, for BC, stage of control.',
   inputSchema: {
     type: 'object',
     properties: { area: AREA_SCHEMA, limit: LIMIT_SCHEMA },
@@ -265,7 +266,10 @@ export const getFirePerimeters = defineTool({
         id: fire.stableId,
         name: fire.name,
         acres: round(fire.acres, 0),
+        hectares: round(fire.hectares, 1),
         contained_pct: fire.containedPct,
+        status: fire.status ?? null,
+        source: fire.source ?? 'wfigs',
         state: fire.state,
         county: fire.county,
         category: fire.category,

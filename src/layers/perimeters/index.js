@@ -1,7 +1,9 @@
 import * as Cesium from 'cesium';
 import {
+  PERIMETER_BANDS,
   PERIMETER_OVERLAY_SOURCE_ID,
   perimeterAnchorDegrees,
+  perimeterBand,
   buildIncidentCard,
   containmentAccent,
 } from './cards.js';
@@ -44,6 +46,7 @@ export function createFirePerimetersLayer({
   inciwebSource = null,
   inciwebPublications = null,
   openExternal = null,
+  credits = null,
 } = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('Fire perimeters require a snapshot source');
@@ -147,12 +150,23 @@ export function createFirePerimetersLayer({
       );
       return;
     }
-    const candidate = findInciwebLink(_inciwebIndex, row);
-    if (candidate && !_linkVerdicts.has(candidate)) verifyLink(candidate, row);
-    _selectedLink =
-      candidate && _linkVerdicts.get(candidate) === true ? candidate : null;
+    // Provincial feeds carry their own incident page; InciWeb is US-only.
+    let linkLabel = 'InciWeb';
+    if (row.link) {
+      _selectedLink = row.link;
+      linkLabel = row.state === 'CA-BC' ? 'BC Wildfire' : 'Incident page';
+    } else if (/^US-/.test(row.state || '')) {
+      const candidate = findInciwebLink(_inciwebIndex, row);
+      if (candidate && !_linkVerdicts.has(candidate))
+        verifyLink(candidate, row);
+      _selectedLink =
+        candidate && _linkVerdicts.get(candidate) === true ? candidate : null;
+    } else _selectedLink = null;
     const card = {
-      ...buildIncidentCard(row, Date.now(), { link: _selectedLink }),
+      ...buildIncidentCard(row, Date.now(), {
+        link: _selectedLink,
+        linkLabel,
+      }),
       position: Cesium.Cartesian3.fromDegrees(row.anchor.lon, row.anchor.lat),
     };
     if (!openExternal) card.interactive = false;
@@ -246,7 +260,7 @@ export function createFirePerimetersLayer({
     id: 'fire-perimeters',
     name: 'Fire Perimeters',
     icon: '🔥',
-    source: 'NIFC WFIGS',
+    source: 'NIFC WFIGS + BC + Ontario',
     updateInterval: 300000,
 
     init(viewer) {
@@ -306,7 +320,19 @@ export function createFirePerimetersLayer({
         const nextEntities = [];
         _rowById.clear();
         for (const row of rows) {
-          const color = containmentColor(row.containedPct);
+          const color = Cesium.Color.fromCssColorString(
+            perimeterBand(row).color,
+          );
+          // Provincial feeds: credit each one the first time it draws.
+          if (row.source && row.source !== 'wfigs' && credits && _viewer)
+            credits.registerDynamicCredit(
+              _viewer,
+              credits.perimeterFeedCredit({
+                id: row.source,
+                attribution: row.attribution,
+                licenseUrl: row.licenceUrl,
+              }),
+            );
           for (const [index, rings] of row.polygons.entries()) {
             const [outer, ...holes] = rings;
             const outerPositions = ringPositions(outer);
@@ -401,10 +427,12 @@ export function createFirePerimetersLayer({
       const result = [];
       for (const row of _rowById.values()) {
         if (result.length >= limit) break;
-        const { anchor, stableId, ...facts } = row;
+        const { anchor, stableId, attribution, licenceUrl, link, ...facts } =
+          row;
         result.push({
           id: stableId,
           ...facts,
+          timeMs: facts.discoveredTime ?? facts.updatedTime,
           lat: anchor.lat,
           lon: anchor.lon,
         });
@@ -413,23 +441,21 @@ export function createFirePerimetersLayer({
     },
 
     getRowControls() {
-      const bands = [
-        { label: 'Not contained or unknown', color: containmentAccent(0) },
-        { label: 'Under 50% contained', color: containmentAccent(1) },
-        { label: '50–99% contained', color: containmentAccent(50) },
-        { label: 'Fully contained', color: containmentAccent(100) },
-      ];
+      const counts = new Map();
+      for (const row of _rowById.values()) {
+        const { key } = perimeterBand(row);
+        counts.set(key, (counts.get(key) || 0) + 1);
+      }
       return {
         chips: [],
-        legend: bands.map((band, index) => ({
-          ...band,
-          count: [..._rowById.values()].filter(
-            (row) => containmentAccent(row.containedPct) === band.color,
-          ).length,
+        legend: PERIMETER_BANDS.map(({ label, color, key }, index) => ({
+          label,
+          color,
+          count: counts.get(key) || 0,
           ...(index === 0
             ? {
                 blurb:
-                  'Colour shows reported containment. Perimeters are simplified to about 100 m.',
+                  'Colour shows reported containment (US) or stage of control (BC). Perimeters are simplified to about 100 m (US) and 20 m (Canada).',
               }
             : {}),
         })),

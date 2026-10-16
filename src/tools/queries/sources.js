@@ -49,7 +49,7 @@ export const findDataSources = defineTool({
   description:
     'Keyless live data sources (public transit vehicle positions, bike-share ' +
     'stations, free-floating shared bikes and scooters, traffic camera lists; ' +
-    'worldwide earthquake and disaster-alert feeds with topic hazards) that cover a place, from the self-maintaining source ' +
+    'worldwide earthquake, disaster-alert and active-fire feeds and provincial fire perimeter feeds with topic hazards) that cover a place, from the self-maintaining source ' +
     "directory: which ones God's Eye View can show now and which exist but " +
     'are not shown. Use when another tool or layer has no data for a place.',
   inputSchema: {
