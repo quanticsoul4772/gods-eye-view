@@ -150,6 +150,7 @@
     "exports": ["./server/providers/firms"],
     "modules": [
       "server/providers/firms.js",
+      "server/providers/firmsStaticMask.js",
       "server/providers/common/http.js",
       "src/sources/httpBody.js",
       "src/data/firmsCsv.js",

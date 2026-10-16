@@ -1,5 +1,5 @@
-import { fireDetectionKey } from '../../data/firmsLabels.js';
-import { t } from '../../i18n/index.js';
+import { fireDetectionKey, isMutedStatic } from '../../data/firmsLabels.js';
+import { formatNumber, t, tn } from '../../i18n/index.js';
 import { REFRESH_INTERVAL_MS } from './policy.js';
 
 export function createQueries({
@@ -69,7 +69,7 @@ export function createQueries({
         : t('STALE');
       let loadingLabel = '';
       if (layerState._loading) {
-        loadingLabel = layerState._fires.length
+        loadingLabel = layerState._allFires.length
           ? t('refreshing...')
           : t('loading...');
       } else if (layerState._keyRequired) {
@@ -83,8 +83,21 @@ export function createQueries({
           age: components.model.formatAgoMinutes(now - layerState._lastUpdate),
         });
       }
+      const staticCount = layerState._staticCount;
+      const hiddenStatic = layerState._hideStatic ? staticCount : 0;
       return {
         count: layerState._count,
+        // English data for the assistant: what `count` includes or leaves out.
+        ...(staticCount
+          ? hiddenStatic
+            ? {
+                hiddenStatic,
+                countOf: `fire detections, excluding ${hiddenStatic} at known solar farms or industrial sites (likely not fires)`,
+              }
+            : {
+                countOf: `fire detections, including ${staticCount} shown grey at known solar farms or industrial sites (likely not fires)`,
+              }
+          : {}),
         cells: layerState._cellCount,
         lastUpdate: layerState._lastUpdate,
         loading: layerState._loading,
@@ -109,9 +122,10 @@ export function createQueries({
      * @returns {{latitude: number, longitude: number, frp: number, label: string}|null}
      */
     getStrongestFire() {
-      const strongest = layerState._firesByFrp.length
-        ? layerState._firesByFrp[0]
-        : null;
+      // Never a likely static source, whatever the chip shows: the biggest
+      // "fire" is otherwise often a steel works or a gas flare.
+      const strongest =
+        layerState._allFiresByFrp.find((fire) => !isMutedStatic(fire)) || null;
       if (!strongest) return null;
       return {
         latitude: strongest.lat,
@@ -161,22 +175,83 @@ export function createQueries({
      * @returns {Array<Object>} See mapAnalystRecord for the record shape.
      */
     getAnalystRecords(maxCount = 2000) {
-      if (!layerState._enabled || !layerState._firesByFrp.length) return [];
+      if (!layerState._enabled || !layerState._allFiresByFrp.length) return [];
       const limit = Number.isFinite(maxCount)
         ? Math.max(1, Math.floor(maxCount))
         : 2000;
       const result = [];
-      for (const fire of layerState._firesByFrp) {
+      // One rule for every assistant path, whatever the chip shows: likely
+      // static sources are left out (getStats().countOf says how many).
+      for (const fire of layerState._allFiresByFrp) {
+        if (isMutedStatic(fire)) continue;
         result.push(components.model.mapAnalystRecord(fire));
         if (result.length >= limit) break;
       }
       return result;
     },
 
+    /** The one persisted option: hide likely static sources (default true). */
+    getParams() {
+      return { hideStatic: layerState._hideStatic };
+    },
+
+    /**
+     * Apply `{hideStatic}`. Works before any data or viewer exists (boot
+     * restore); re-derives the drawn set, deselects a detection that becomes
+     * hidden (a user deselect, not an eviction), and redraws when enabled.
+     */
+    setParams(params) {
+      if (!params || typeof params !== 'object') return false;
+      if (typeof params.hideStatic !== 'boolean') return true;
+      if (params.hideStatic === layerState._hideStatic) return true;
+      layerState._hideStatic = params.hideStatic;
+      components.ingestion.applyStaticFilter();
+      if (layerState._hideStatic && isMutedStatic(layerState._selectedFire))
+        components.selection.clearFireSelection();
+      layerState._currentLodIndex = -1;
+      if (layerState._enabled) components.rendering.renderCurrentLod(true);
+      return true;
+    },
+
+    /** Data-panel chip: show or hide detections at known solar/industrial sites. */
+    getRowControls() {
+      const n = layerState._staticCount;
+      if (!layerState._maskAvailable || !n) return { chips: [] };
+      const count =
+        n >= 1000
+          ? `${formatNumber(n / 1000, { minimumFractionDigits: 1, maximumFractionDigits: 1, useGrouping: false })}K`
+          : String(n);
+      return {
+        chips: [
+          {
+            id: 'static',
+            label: tn(
+              n,
+              'SOLAR & INDUSTRIAL · {count}',
+              'SOLAR & INDUSTRIAL · {count}',
+              {
+                count,
+              },
+            ),
+            active: !layerState._hideStatic,
+            title: tn(
+              n,
+              '{count} detection at a known solar farm (daytime sun glint) or industrial site such as a kiln, steel works or gas flare. Usually not a wildfire, so it is shown in grey. Turn off to hide it. Site maps: solar to 2024, industrial to 2021.',
+              '{count} detections at known solar farms (daytime sun glint) and industrial sites such as kilns, steel works and gas flares. Usually not wildfires, so they are shown in grey. Turn off to hide them. Site maps: solar to 2024, industrial to 2021.',
+              { count },
+            ),
+            params: { hideStatic: !layerState._hideStatic },
+          },
+        ],
+      };
+    },
+
     /** Test seam that binds the production click path and indexes. */
     _bindInteractionForTest(viewer, fires = []) {
       layerState._viewer = viewer;
       layerState._enabled = true;
+      layerState._allFires = fires;
+      layerState._allFiresByFrp = [...fires];
       layerState._fires = fires;
       layerState._firesByFrp = [...fires];
       layerState._pickIndexById.clear();

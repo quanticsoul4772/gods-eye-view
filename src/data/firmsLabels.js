@@ -28,7 +28,17 @@ const ACCENT_RGB = Object.freeze({
   red: '224, 82, 82',
   orange: '240, 178, 62',
   yellow: '244, 227, 108',
+  grey: '170, 176, 184',
 });
+
+/**
+ * A detection at a known solar farm or industrial site that does not look
+ * like a real fire there (not escalated): hidden by default, grey when shown.
+ * @param {?Object} fire
+ */
+export function isMutedStatic(fire) {
+  return Boolean(fire?.staticSource) && fire.escalated !== true;
+}
 
 /**
  * Severity stop name → "r, g, b" accent string (defaults to yellow).

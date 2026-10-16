@@ -261,7 +261,7 @@ and the development server's internal routes. See SECURITY.md.
 | Tool                  | Reads         | Returns                                                       |
 | --------------------- | ------------- | ------------------------------------------------------------- |
 | `get_earthquakes`     | `earthquakes` | USGS M2.5+ events in the last 24 hours, strongest first        |
-| `get_active_fires`    | `fires`       | NASA FIRMS detections in an area, highest radiative power first |
+| `get_active_fires`    | `fires`       | NASA FIRMS detections in an area, highest radiative power first; detections at known solar farms and industrial sites are left out (and counted) unless `include_static` |
 | `get_recent_launches` | `launches`    | Launch Library 2 launches in the last 30 days, newest first    |
 | `aircraft_in_area`    | `aircraft`    | Aircraft in an area, nearest first; `military: true` reads the `military` feed; `group_by` and `stats` count and summarize every match |
 | `find_aircraft`       | `aircraft`    | Aircraft anywhere by callsign, ICAO address or registration    |

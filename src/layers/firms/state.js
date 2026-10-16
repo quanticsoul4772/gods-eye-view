@@ -39,9 +39,33 @@ export function createFirmsState({ services, config }) {
 
   layerState._error = null;
 
+  /** Every loaded detection, and the same FRP-sorted (static sources included). */
+
+  layerState._allFires = [];
+
+  layerState._allFiresByFrp = [];
+
+  /** The detections drawn and queried: `_allFires` minus hidden static sources. */
+
   layerState._fires = [];
 
   layerState._firesByFrp = [];
+
+  /**
+   * Hide detections at known solar farms and industrial sites (not
+   * escalated). Off by default: they are drawn grey, so a small real fire
+   * next to a site stays visible.
+   */
+
+  layerState._hideStatic = false;
+
+  /** The proxy annotated this snapshot (a mask was available). */
+
+  layerState._maskAvailable = false;
+
+  /** Flagged, non-escalated detections in the loaded snapshot. */
+
+  layerState._staticCount = 0;
 
   layerState._count = 0;
 

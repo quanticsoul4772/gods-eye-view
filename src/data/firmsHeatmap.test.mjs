@@ -27,7 +27,12 @@ test('firms analyst record: full record maps every contract field', () => {
     satellite: 'N21',
     sensor: 'VIIRS',
     acqTime: 1_753_600_000_000,
+    staticSource: null,
+    escalated: false,
   });
+  const kiln = mapAnalystRecord({ ...FULL_FIRE, staticSource: 'industrial', escalated: true });
+  assert.equal(kiln.staticSource, 'industrial');
+  assert.equal(kiln.escalated, true);
 });
 
 test('firms analyst record: id matches the layer pick-id convention (5-digit pad)', () => {

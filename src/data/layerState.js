@@ -436,6 +436,10 @@ const OPTION_GROUPS = Object.freeze({
     ),
     booleanOption('viirs', 'v', false),
   ]),
+  // Hide detections at known solar farms and industrial sites (likely not
+  // fires). Off by default (drawn grey); a link from before this option has
+  // no token and decodes to that default.
+  'local-firms': Object.freeze([booleanOption('hideStatic', 's', false)]),
   'street-level': Object.freeze([
     // Preserve the published Mapillary token; custom switches use stable IDs.
     booleanOption('mapillary', 'm', true),
@@ -653,7 +657,12 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     token: 'd',
     disposition: 'enabled-only',
   }),
-  Object.freeze({ id: 'local-firms', token: 'w', disposition: 'enabled-only' }),
+  Object.freeze({
+    id: 'local-firms',
+    token: 'w',
+    disposition: 'enabled+options',
+    optionOwner: 'local-firms',
+  }),
   Object.freeze({
     id: 'military',
     token: 'm',

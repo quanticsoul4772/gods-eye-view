@@ -181,6 +181,8 @@ const layers = [
         satellite: ['t'],
         sensor: ['t'],
         acqTime: ['ms'],
+        staticSource: ['t'],
+        escalated: ['f'],
       },
       timeField: 'acqTime',
       window: 'last 24 h',

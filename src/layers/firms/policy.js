@@ -95,3 +95,9 @@ export const DETECTION_COLOR_STOPS = [
   { name: 'orange', color: Cesium.Color.ORANGE },
   { name: 'yellow', color: Cesium.Color.YELLOW },
 ];
+
+/** Likely static sources (solar glint, industrial heat), when shown. */
+export const STATIC_COLOR_STOP = {
+  name: 'grey',
+  color: Cesium.Color.LIGHTGRAY,
+};

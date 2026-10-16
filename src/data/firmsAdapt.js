@@ -41,6 +41,13 @@ export function adaptFirmsRecords(records) {
       acqMs: parseAcquisitionMs(record.acqDate, record.acqTime, acqCache),
       sensor: normalizeSensor(record.instrument),
       satellite: typeof record.satellite === 'string' ? record.satellite : '',
+      // Server annotation (server/providers/firmsStaticMask.js): a known solar
+      // farm or industrial site, and whether it still looks like a real fire.
+      staticSource:
+        record.staticSource === 'solar' || record.staticSource === 'industrial'
+          ? record.staticSource
+          : null,
+      escalated: record.escalated === true,
       contextEntity: null,
       position: null,
     });

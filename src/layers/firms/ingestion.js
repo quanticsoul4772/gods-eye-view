@@ -1,5 +1,5 @@
 import { adaptFirmsRecords } from '../../data/firmsAdapt.js';
-import { fireDetectionKey } from '../../data/firmsLabels.js';
+import { fireDetectionKey, isMutedStatic } from '../../data/firmsLabels.js';
 import { msg } from '../../i18n/index.js';
 
 export function createIngestion({
@@ -40,12 +40,12 @@ export function createIngestion({
       layerState._stale = Boolean(payload?.stale);
       const previousSelection = layerState._selectedFire;
       layerState._selectedFire = null;
-      layerState._fires = adaptFirmsRecords(payload?.fires);
-      layerState._cellCacheByGrid.clear(); // aggregation is per-dataset — new fires, new cells
-      layerState._firesByFrp = [...layerState._fires].sort(
+      layerState._allFires = adaptFirmsRecords(payload?.fires);
+      layerState._allFiresByFrp = [...layerState._allFires].sort(
         (a, b) => b.frp - a.frp,
       );
-      layerState._count = layerState._fires.length;
+      layerState._maskAvailable = payload?.maskAvailable === true;
+      applyStaticFilter(); // also clears the per-dataset cell aggregation
       // Data age, not response age: a stale proxy payload truthfully reads old.
       layerState._lastUpdate = Number.isFinite(payload?.fetchedAt)
         ? payload.fetchedAt
@@ -84,6 +84,28 @@ export function createIngestion({
   }
 
   /**
+   * Derive the drawn/queried set from every loaded detection: likely static
+   * sources (known solar farms by day, industrial sites; not escalated) are
+   * left out while `_hideStatic` is on. O(n) filters of the presorted lists.
+   */
+
+  function applyStaticFilter() {
+    let staticCount = 0;
+    for (const fire of layerState._allFires)
+      if (isMutedStatic(fire)) staticCount++;
+    layerState._staticCount = staticCount;
+    const hide = layerState._hideStatic && staticCount > 0;
+    layerState._fires = hide
+      ? layerState._allFires.filter((fire) => !isMutedStatic(fire))
+      : layerState._allFires;
+    layerState._firesByFrp = hide
+      ? layerState._allFiresByFrp.filter((fire) => !isMutedStatic(fire))
+      : layerState._allFiresByFrp;
+    layerState._count = layerState._fires.length;
+    layerState._cellCacheByGrid.clear(); // aggregation follows the drawn set
+  }
+
+  /**
    * Find the record in the freshly-loaded set matching a previous selection.
    * Identity is the detection itself (lat/lon/acquisition time) — indices
    * are regenerated every fetch, so object/index identity cannot be used.
@@ -109,5 +131,5 @@ export function createIngestion({
     },
   };
 
-  return { loadHeatmap, findMatchingFire, methods };
+  return { loadHeatmap, findMatchingFire, applyStaticFilter, methods };
 }
