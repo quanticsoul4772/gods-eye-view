@@ -186,6 +186,80 @@ export function annotateStaticSources(fires, index, escalation = {}) {
   return { flagged, escalated };
 }
 
+/** Grid of the unflagged-recurrence signal: 0.004°, about 400 m. */
+const RECURRENCE_DEG = 0.004;
+const RECURRENCE_LON_CELLS = Math.round(360 / RECURRENCE_DEG);
+/** UTC days of history kept for the recurrence signal. */
+export const RECURRENCE_KEEP_DAYS = 7;
+/** A cell with unflagged daytime detections on this many days counts. */
+export const RECURRENCE_MIN_DAYS = 3;
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Add the cells of unflagged daytime VIIRS detections to a per-day history
+ * and drop days older than `keepDays` before the newest. The history is
+ * `{[utcDate]: cellId[]}` (sorted integer ids on a ~400 m grid), so it can
+ * be stored as JSON. Run it after annotateStaticSources.
+ * @param {Record<string, number[]>} days
+ * @param {Array<object>} fires
+ * @returns {Record<string, number[]>} a new history
+ */
+export function recordUnflaggedDays(
+  days,
+  fires,
+  keepDays = RECURRENCE_KEEP_DAYS,
+) {
+  const byDate = new Map(
+    Object.entries(days || {}).map(([date, ids]) => [date, new Set(ids)]),
+  );
+  for (const fire of Array.isArray(fires) ? fires : []) {
+    if (
+      fire.instrument === 'MODIS' ||
+      fire.daynight === 'N' ||
+      fire.staticSource
+    )
+      continue;
+    if (!Number.isFinite(fire.lat) || !Number.isFinite(fire.lon)) continue;
+    if (!ISO_DATE.test(fire.acqDate)) continue;
+    const lonIndex = Math.min(
+      lonIndexOf(fire.lon, RECURRENCE_DEG),
+      RECURRENCE_LON_CELLS - 1,
+    );
+    const id =
+      latIndexOf(fire.lat, RECURRENCE_DEG) * RECURRENCE_LON_CELLS + lonIndex;
+    const ids = byDate.get(fire.acqDate);
+    if (ids) ids.add(id);
+    else byDate.set(fire.acqDate, new Set([id]));
+  }
+  const dates = [...byDate.keys()].sort();
+  if (!dates.length) return {};
+  const cutoff = new Date(
+    Date.parse(`${dates.at(-1)}T00:00:00Z`) - (keepDays - 1) * 86_400_000,
+  )
+    .toISOString()
+    .slice(0, 10);
+  return Object.fromEntries(
+    dates
+      .filter((date) => date >= cutoff)
+      .map((date) => [date, [...byDate.get(date)].sort((a, b) => a - b)]),
+  );
+}
+
+/**
+ * Cells with unflagged daytime detections on at least `minDays` days of the
+ * history: the sign of a solar farm or industrial site the mask lacks (or a
+ * fire that burned that long in one place).
+ * @param {Record<string, number[]>} days
+ */
+export function countRecurringCells(days, minDays = RECURRENCE_MIN_DAYS) {
+  const seen = new Map();
+  for (const ids of Object.values(days || {}))
+    for (const id of ids) seen.set(id, (seen.get(id) || 0) + 1);
+  let count = 0;
+  for (const n of seen.values()) if (n >= minDays) count++;
+  return count;
+}
+
 /**
  * Load a mask pack from disk. Returns null (and warns once, from the caller)
  * when it is missing or malformed: no mask means no annotation, never an error.
