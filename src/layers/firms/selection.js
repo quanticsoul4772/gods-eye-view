@@ -206,6 +206,12 @@ export function createSelection({
             ? components.model.formatAge(Date.now() - fire.acqMs)
             : 'unknown',
         sensor: fire.sensor || 'unknown',
+        ...(fire.staticSource
+          ? {
+              staticSource: fire.staticSource,
+              escalated: fire.escalated === true,
+            }
+          : {}),
       },
     });
     return recordId;

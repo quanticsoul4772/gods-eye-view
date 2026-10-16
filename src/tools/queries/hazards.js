@@ -69,10 +69,21 @@ export const getActiveFires = defineTool({
   title: 'Active fires',
   description:
     'Satellite fire detections from NASA FIRMS in the last 24 hours within an ' +
-    'area, most intense (fire radiative power) first.',
+    'area, most intense (fire radiative power) first. Detections at known solar ' +
+    'farms and industrial sites are excluded unless include_static is true; set ' +
+    'it when the user asks about a specific plant, refinery or factory, or asks ' +
+    'for all detections.',
   inputSchema: {
     type: 'object',
-    properties: { area: AREA_SCHEMA, limit: LIMIT_SCHEMA },
+    properties: {
+      area: AREA_SCHEMA,
+      limit: LIMIT_SCHEMA,
+      include_static: {
+        type: 'boolean',
+        description:
+          'Also return detections at known solar farms (daytime sun glint) and industrial heat sources.',
+      },
+    },
     required: ['area'],
     additionalProperties: false,
   },
@@ -85,9 +96,19 @@ export const getActiveFires = defineTool({
         'unavailable',
         'Fire detections need a NASA FIRMS key configured for this server',
       );
-    const fires = snapshot.fires
-      .filter((fire) => areaContains(area, fire))
-      .sort((a, b) => (b.frp ?? 0) - (a.frp ?? 0));
+    const inArea = snapshot.fires.filter((fire) => areaContains(area, fire));
+    // Known solar farms (daytime glint) and industrial heat sources are
+    // usually not fires; escalated ones still look like real fires.
+    const likelyStatic = (fire) =>
+      Boolean(fire.staticSource) && fire.escalated !== true;
+    const excluded = args.include_static
+      ? []
+      : inArea.filter((fire) => likelyStatic(fire));
+    const fires = (
+      args.include_static
+        ? inArea
+        : inArea.filter((fire) => !likelyStatic(fire))
+    ).sort((a, b) => (b.frp ?? 0) - (a.frp ?? 0));
     const result = capRows(fires, args.limit);
     // The proxy serves its last good snapshot when a refresh fails, and marks
     // satellites whose download failed.
@@ -99,15 +120,34 @@ export const getActiveFires = defineTool({
       ...(stale ? ['data may be stale'] : []),
       ...(missing.length ? [`no data from ${missing.join(', ')}`] : []),
     ];
+    const solarExcluded = excluded.filter(
+      (f) => f.staticSource === 'solar',
+    ).length;
+    const staticSentence = !excluded.length
+      ? ''
+      : fires.length
+        ? ` ${countNoun(excluded.length, 'more detection')} ${excluded.length === 1 ? 'was' : 'were'} at known solar farms or industrial sites and ${excluded.length === 1 ? 'is' : 'are'} probably not fires (left out).`
+        : ` ${countNoun(excluded.length, 'detection')} ${excluded.length === 1 ? 'was' : 'were'} at ${
+            solarExcluded === excluded.length
+              ? 'a known solar farm in daytime, a common sun-glint false alarm'
+              : 'known solar farms or industrial sites, which are usually not fires'
+          } (left out).`;
+    const lead = fires.length
+      ? `${countNoun(fires.length, 'fire detection')} in ${area.label} in the last 24 hours`
+      : excluded.length
+        ? `No likely fire detections in ${area.label} in the last 24 hours`
+        : `${countNoun(fires.length, 'fire detection')} in ${area.label} in the last 24 hours`;
     return {
       summary:
-        `${countNoun(fires.length, 'fire detection')} in ${area.label} in the last 24 hours` +
-        (notes.length ? ` (${notes.join('; ')}).` : '.'),
+        lead +
+        (notes.length ? ` (${notes.join('; ')}).` : '.') +
+        staticSentence,
       data: {
         view: suggestView(services, { area, layers: ['local-firms'] }),
         stale,
         missing_sources: missing,
         fetched_at: isoTime(snapshot.fetchedAt),
+        ...(excluded.length ? { excluded_static: excluded.length } : {}),
         ...result,
         rows: result.rows.map((fire) => ({
           lat: fire.lat,
@@ -118,6 +158,15 @@ export const getActiveFires = defineTool({
             [fire.acqDate, fire.acqTime].filter(Boolean).join(' ') || null,
           satellite: fire.satellite ?? null,
           day_night: fire.daynight ?? null,
+          ...(fire.staticSource
+            ? {
+                static_source:
+                  fire.staticSource === 'solar'
+                    ? 'solar_glint'
+                    : 'industrial_site',
+                escalated: fire.escalated === true,
+              }
+            : {}),
         })),
       },
     };

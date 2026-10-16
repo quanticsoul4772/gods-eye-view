@@ -200,3 +200,73 @@ test('every core tool is a read-only query with a unique name', () => {
     assert.ok(tool.requires.length > 0, tool.name);
   }
 });
+
+test('fires leave out likely static sources and say so; include_static and escalated keep them', async () => {
+  const at = {
+    acqDate: '2026-10-15',
+    acqTime: '2027',
+    satellite: 'N21',
+    daynight: 'D',
+  };
+  const snapshot = {
+    fires: [
+      { lat: 24, lon: 121, frp: 690, staticSource: 'solar', ...at },
+      { lat: 24.1, lon: 121, frp: 413, staticSource: 'solar', ...at },
+      {
+        lat: 24.2,
+        lon: 121,
+        frp: 300,
+        staticSource: 'industrial',
+        escalated: true,
+        ...at,
+      },
+      { lat: 24.3, lon: 121, frp: 12, ...at },
+    ],
+  };
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: { fires: fires(snapshot), places: taiwan },
+  });
+  const result = await catalog.call('get_active_fires', {
+    area: { place: 'Taiwan' },
+  });
+  assert.equal(
+    result.summary,
+    '2 fire detections in Taiwan in the last 24 hours. 2 more detections were at known solar farms or industrial sites and are probably not fires (left out).',
+  );
+  assert.equal(result.data.excluded_static, 2);
+  assert.deepEqual(
+    result.data.rows.map((row) => [
+      row.frp_mw,
+      row.static_source ?? null,
+      row.escalated ?? null,
+    ]),
+    [
+      [300, 'industrial_site', true],
+      [12, null, null],
+    ],
+  );
+  const all = await catalog.call('get_active_fires', {
+    area: { place: 'Taiwan' },
+    include_static: true,
+  });
+  assert.equal(all.data.rows.length, 4);
+  assert.equal(all.data.excluded_static, undefined);
+  assert.equal(all.data.rows[0].static_source, 'solar_glint');
+
+  // Only glint in the area: no likely fires, and the answer says why.
+  const onlyGlint = composeCatalog({
+    tools: coreTools,
+    services: {
+      fires: fires({ fires: snapshot.fires.slice(0, 2) }),
+      places: taiwan,
+    },
+  });
+  const glint = await onlyGlint.call('get_active_fires', {
+    area: { place: 'Taiwan' },
+  });
+  assert.equal(
+    glint.summary,
+    'No likely fire detections in Taiwan in the last 24 hours. 2 detections were at a known solar farm in daytime, a common sun-glint false alarm (left out).',
+  );
+});

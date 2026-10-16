@@ -2951,5 +2951,25 @@
   "3D tile detail": "Detalle de mosaicos 3D",
   "Standard": "Estándar",
   "Fast centre": "Centro rápido",
-  "Local Meshtastic": "Meshtastic local"
+  "Local Meshtastic": "Meshtastic local",
+  "SOLAR FARM · seen again later, may be a real fire": "PARQUE SOLAR · visto de nuevo más tarde, puede ser un incendio real",
+  "SOLAR FARM · likely sun glint": "PARQUE SOLAR · probable reflejo solar",
+  "INDUSTRIAL SITE · unusually strong, may be a real fire": "SITIO INDUSTRIAL · inusualmente intenso, puede ser un incendio real",
+  "INDUSTRIAL SITE · kiln, furnace or flare": "SITIO INDUSTRIAL · horno, alto horno o antorcha",
+  "HEAT · {frp} MW": "CALOR · {frp} MW",
+  "{count} AT SOLAR/INDUSTRIAL SITES": {
+    "one": "{count} EN SITIO SOLAR/INDUSTRIAL",
+    "many": "{count} EN SITIOS SOLARES/INDUSTRIALES",
+    "other": "{count} EN SITIOS SOLARES/INDUSTRIALES"
+  },
+  "SOLAR & INDUSTRIAL · {count}": {
+    "one": "SOLAR E INDUSTRIAL · {count}",
+    "many": "SOLAR E INDUSTRIAL · {count}",
+    "other": "SOLAR E INDUSTRIAL · {count}"
+  },
+  "{count} detections at known solar farms (daytime sun glint) and industrial sites such as kilns, steel works and gas flares. Usually not wildfires, so hidden. Turn on to show them in grey. Site maps: solar to 2024, industrial to 2021.": {
+    "one": "{count} detección en un parque solar conocido (reflejo solar diurno) o en un sitio industrial como un horno, una acería o una antorcha de gas. Normalmente no es un incendio forestal, por eso está oculta. Actívalo para mostrarla en gris. Mapas de sitios: solares hasta 2024, industriales hasta 2021.",
+    "many": "{count} detecciones en parques solares conocidos (reflejo solar diurno) y sitios industriales como hornos, acerías y antorchas de gas. Normalmente no son incendios forestales, por eso están ocultas. Actívalo para mostrarlas en gris. Mapas de sitios: solares hasta 2024, industriales hasta 2021.",
+    "other": "{count} detecciones en parques solares conocidos (reflejo solar diurno) y sitios industriales como hornos, acerías y antorchas de gas. Normalmente no son incendios forestales, por eso están ocultas. Actívalo para mostrarlas en gris. Mapas de sitios: solares hasta 2024, industriales hasta 2021."
+  }
 }

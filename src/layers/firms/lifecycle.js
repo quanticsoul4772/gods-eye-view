@@ -46,7 +46,7 @@ export function createLifecycle({
       registerPickOwner(id, (pickedId) =>
         layerState._pickIndexById.has(pickedId),
       );
-      if (!layerState._fires.length && !layerState._loading)
+      if (!layerState._allFires.length && !layerState._loading)
         await components.ingestion.loadHeatmap();
       if (
         layerState._enabled &&
@@ -91,8 +91,12 @@ export function createLifecycle({
       components.rendering.removeDetectionCollections(viewer);
       components.selection.clearContextRegistrations();
       clearSelectedEntityContextForLayer(id);
+      layerState._allFires = [];
+      layerState._allFiresByFrp = [];
       layerState._fires = [];
       layerState._firesByFrp = [];
+      layerState._staticCount = 0;
+      layerState._maskAvailable = false;
       layerState._cellCacheByGrid.clear();
       layerState._count = 0;
       layerState._cellCount = 0;

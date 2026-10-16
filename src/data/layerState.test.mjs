@@ -2858,3 +2858,34 @@ test('explicit provider switches reach durable state without adopting unrelated 
     coordinator.destroy();
   }
 });
+
+test('local-firms hides static sources by default; the choice round-trips under token w and the default stays out of the URL', () => {
+  const entry = LAYER_STATE_REGISTRY.find((row) => row.id === 'local-firms');
+  assert.deepEqual(
+    [entry.token, entry.disposition, entry.optionOwner],
+    ['w', 'enabled+options', 'local-firms'],
+  );
+  assert.deepEqual(createDefaultLayerState().options['local-firms'], {
+    hideStatic: true,
+  });
+  // A link from before the option (no lo entry) decodes to hidden.
+  const old = decodeLayerStateParams(
+    new URLSearchParams([
+      ['v', '2'],
+      ['l', 'w'],
+    ]),
+  );
+  assert.deepEqual(old.options['local-firms'], { hideStatic: true });
+  const hidden = createDefaultLayerState();
+  hidden.enabledLayerIds = ['local-firms'];
+  assert.ok(!encode(hidden).includes('w.s.'), 'the default is not encoded');
+  const shown = createDefaultLayerState();
+  shown.enabledLayerIds = ['local-firms'];
+  shown.options['local-firms'] = { hideStatic: false };
+  const encoded = encode(shown);
+  assert.ok(encoded.includes('w.s.0'), encoded);
+  assert.deepEqual(
+    decodeLayerStateParams(new URLSearchParams(encoded)).options['local-firms'],
+    { hideStatic: false },
+  );
+});

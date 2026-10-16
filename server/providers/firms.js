@@ -4,6 +4,12 @@ import { promises as fsp } from 'node:fs';
 import { filterTrailing24h, parseFirmsCsv } from '../../src/data/firmsCsv.js';
 import { FIRES_DOMAIN } from '../../src/data/sourceDomains.js';
 import { readResponseTextCapped } from './common/http.js';
+import {
+  DEFAULT_MASK_URL,
+  annotateStaticSources,
+  loadMaskPack,
+  stripStaticSources,
+} from './firmsStaticMask.js';
 import { publicOnlyFetch } from './sourceDirectory.js';
 
 /**
@@ -32,13 +38,23 @@ import { publicOnlyFetch } from './sourceDirectory.js';
  * entry: /api/firms → 503 {error:'no_key'} and nothing is fetched. A cache
  * entry remembers which mode filled it and is never served to the other.
  *
+ * Static sources: each refresh annotates detections at known solar farms
+ * (daytime glint) and industrial heat sources from the bundled mask
+ * (server/providers/firmsStaticMask.js) — `staticSource`, and `escalated`
+ * where one still looks like a real fire. Nothing is removed; clients decide
+ * what to show. The cache records which mask (`maskId`) annotated it, and a
+ * cache from another mask is re-annotated when read. No mask → no
+ * annotation, `maskAvailable: false`.
+ *
  * @param {{directory?: ?{usable: Function, ready?: Function},
- *   directoryFetch?: Function}} [options]
+ *   directoryFetch?: Function,
+ *   staticMask?: () => ?{id: string, index: object, escalation: object}}} [options]
  * @returns {import('vite').Plugin}
  */
 export function firmsProxy({
   directory = null,
   directoryFetch = publicOnlyFetch,
+  staticMask = () => loadMaskPack(DEFAULT_MASK_URL),
 } = {}) {
   const TTL_MS = 30 * 60_000;
   const STATUS_TTL_MS = 5 * 60_000;
@@ -72,6 +88,40 @@ export function firmsProxy({
 
   const mapKey = () => String(process.env.FIRMS_MAP_KEY || '').trim();
 
+  /** @type {?{id: string, index: object, escalation: object}|undefined} loaded once, lazily */
+  let mask;
+  function currentMask() {
+    if (mask === undefined) {
+      mask = staticMask() || null;
+      if (!mask)
+        console.warn(
+          '[firms-proxy] static-source mask unavailable; detections are not annotated',
+        );
+    }
+    return mask;
+  }
+
+  /** Annotate an entry's detections with the current mask (in place). */
+  function annotate(entry) {
+    const current = currentMask();
+    if (entry.maskId) stripStaticSources(entry.fires);
+    if (!current) {
+      delete entry.maskId;
+      entry.staticFlagged = 0;
+      entry.staticEscalated = 0;
+      return entry;
+    }
+    const { flagged, escalated } = annotateStaticSources(
+      entry.fires,
+      current.index,
+      current.escalation,
+    );
+    entry.maskId = current.id;
+    entry.staticFlagged = flagged;
+    entry.staticEscalated = escalated;
+    return entry;
+  }
+
   async function readDiskOnce() {
     if (diskChecked) return;
     diskChecked = true;
@@ -87,6 +137,8 @@ export function firmsProxy({
           ...parsed,
           mode: parsed.mode === 'keyless' ? 'keyless' : 'keyed',
         };
+        // Annotated by another mask (or none): annotate again with this one.
+        if ((mem.maskId || null) !== (currentMask()?.id || null)) annotate(mem);
       }
     } catch {
       /* no disk cache yet */
@@ -220,6 +272,7 @@ export function firmsProxy({
       ttlMs: TTL_MS,
       sources: entry.sources,
       count: fires.length,
+      maskAvailable: Boolean(entry.maskId),
       fires,
     };
   }
@@ -261,6 +314,15 @@ export function firmsProxy({
     return statusInflight;
   }
 
+  /** Static-source fields of the status route. */
+  function staticStatus(cached) {
+    return {
+      maskAvailable: Boolean(currentMask()),
+      staticFlagged: cached ? (cached.staticFlagged ?? 0) : null,
+      staticEscalated: cached ? (cached.staticEscalated ?? 0) : null,
+    };
+  }
+
   const installMiddleware = (server) => {
     server.middlewares.use('/api/firms', async (req, res) => {
       const sendJson = (status, obj) => {
@@ -291,6 +353,7 @@ export function firmsProxy({
               stale: known ? Date.now() - cached.at >= TTL_MS : false,
               ttlMs: TTL_MS,
               transactions: null,
+              ...staticStatus(known ? cached : null),
             });
             return;
           }
@@ -302,6 +365,7 @@ export function firmsProxy({
             stale: cached ? Date.now() - cached.at >= TTL_MS : false,
             ttlMs: TTL_MS,
             transactions,
+            ...staticStatus(cached),
           });
           return;
         }
@@ -324,7 +388,7 @@ export function firmsProxy({
             key ? refreshUpstream(key) : refreshKeyless(entries)
           )
             .then(async (refreshed) => {
-              const fresh = { ...refreshed, mode };
+              const fresh = annotate({ ...refreshed, mode });
               mem = fresh;
               await writeDisk(fresh);
               return fresh;

@@ -1,7 +1,11 @@
 import * as Cesium from 'cesium';
-import { FIRMS_OVERLAY_SOURCE_ID } from '../../data/firmsLabels.js';
+import {
+  FIRMS_OVERLAY_SOURCE_ID,
+  accentForSeverity,
+  isMutedStatic,
+} from '../../data/firmsLabels.js';
 import { horizonOccluder } from '../../data/iconOrientation.js';
-import { LOD_LEVELS, CONTEXT_TOP_N } from './policy.js';
+import { LOD_LEVELS, CONTEXT_TOP_N, STATIC_COLOR_STOP } from './policy.js';
 
 export function createRendering({
   layerState,
@@ -25,12 +29,12 @@ export function createRendering({
    */
 
   function renderCurrentLod(force = false) {
-    if (
-      !layerState._dataSource ||
-      !layerState._fires.length ||
-      !layerState._viewer
-    )
+    if (!layerState._dataSource || !layerState._viewer) return false;
+    if (!layerState._fires.length) {
+      // Everything loaded is hidden (static sources): clear what was drawn.
+      if (layerState._allFires.length) clearRendered();
       return false;
+    }
     const lodIndex = components.viewport.selectLodIndex(
       components.viewport.cameraHeight(),
     );
@@ -92,8 +96,10 @@ export function createRendering({
           maxFrp: 0,
           night: 0,
           newestAcqMs: 0,
+          staticCount: 0,
         };
         existing.count += 1;
+        if (isMutedStatic(fire)) existing.staticCount += 1;
         existing.intensity += intensity;
         existing.maxFrp = Math.max(existing.maxFrp, fire.frp);
         existing.newestAcqMs = Math.max(existing.newestAcqMs, fire.acqMs);
@@ -128,6 +134,19 @@ export function createRendering({
    * @param {?Object} bounds - Padded view bounds in degrees, or null.
    */
 
+  /** Remove every drawn cell, sprite, label and context record. */
+  function clearRendered() {
+    layerState._dataSource.entities.removeAll();
+    if (layerState._billboards) layerState._billboards.removeAll();
+    layerState._pickIndexById.clear();
+    layerState._cullPositions.length = 0;
+    layerState._cellCount = 0;
+    layerState._labelCandidates = [];
+    layerState._currentLodIndex = -1;
+    components.cards.rebuildAmbientLabels();
+    components.selection.refreshContextRegistrations([]);
+  }
+
   function renderCells(cells, lod, bounds) {
     ensureDetectionCollections();
     layerState._dataSource.entities.removeAll();
@@ -144,7 +163,12 @@ export function createRendering({
       const score = components.model.heatScore(cell);
       const normalized = Math.min(1, Math.sqrt(score / maxScore));
       const alpha = 0.16 + normalized * 0.5;
-      const color = components.model.heatColor(normalized, alpha);
+      // A cell of only likely static sources (shown on request) is grey.
+      const onlyStatic =
+        cell.staticCount > 0 && cell.staticCount === cell.count;
+      const color = onlyStatic
+        ? STATIC_COLOR_STOP.color.withAlpha(alpha)
+        : components.model.heatColor(normalized, alpha);
       const centerLon = cell.lonCell + lod.gridDegrees / 2;
       const centerLat = cell.latCell + lod.gridDegrees / 2;
       const position = Cesium.Cartesian3.fromDegrees(centerLon, centerLat, 0);
@@ -176,7 +200,9 @@ export function createRendering({
         cullPosition: components.model.cellCullPosition(centerLon, centerLat),
         fire: null,
         cell,
-        accent: components.model.cellAccent(normalized),
+        accent: onlyStatic
+          ? accentForSeverity(STATIC_COLOR_STOP.name)
+          : components.model.cellAccent(normalized),
       });
     }
 

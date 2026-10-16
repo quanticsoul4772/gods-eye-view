@@ -1,13 +1,15 @@
 import * as Cesium from 'cesium';
-import { formatNumber, t } from '../../i18n/index.js';
+import { formatNumber, t, tn } from '../../i18n/index.js';
 import {
   satelliteShortName,
   fireDetectionKey,
   accentForSeverity,
+  isMutedStatic,
 } from '../../data/firmsLabels.js';
 import {
   VIEW_PADDING,
   DETECTION_COLOR_STOPS,
+  STATIC_COLOR_STOP,
   CULL_LIFT_THRESHOLD_M,
   CULL_LIFT_M,
   LABEL_MIN_SEP_PX,
@@ -31,7 +33,7 @@ export function createModel({
    * @param {Object|null|undefined} fire - Internal fire record.
    * @returns {{id: string, lat: number|null, lon: number|null, frp: number|null,
    *   confidence: number|null, satellite: string|null, sensor: string|null,
-   *   acqTime: number|null}}
+   *   acqTime: number|null, staticSource: string|null, escalated: boolean}}
    */
 
   function mapAnalystRecord(fire) {
@@ -50,6 +52,8 @@ export function createModel({
       sensor: text(fire?.sensor), // VIIRS or MODIS
       acqTime:
         Number.isFinite(fire?.acqMs) && fire.acqMs > 0 ? fire.acqMs : null, // epoch ms; 0 = unparseable → null
+      staticSource: fire?.staticSource || null, // 'solar' | 'industrial' (known site)
+      escalated: fire?.escalated === true, // a known site, but likely a real fire
     };
   }
 
@@ -132,6 +136,7 @@ export function createModel({
    */
 
   function detectionColorStop(fire) {
+    if (isMutedStatic(fire)) return STATIC_COLOR_STOP;
     const heat = Math.min(
       1,
       Math.sqrt(Math.max(0, fire.frp) / 150) * 0.85 + fire.confidence * 0.15,
@@ -329,6 +334,23 @@ export function createModel({
    * @returns {Object} firmsLabels entry.
    */
 
+  /** The card line saying a detection is at a known solar farm or industrial site. */
+  function staticSourceLine(fire) {
+    if (fire.staticSource === 'solar')
+      return [
+        fire.escalated
+          ? t('SOLAR FARM · seen again later, may be a real fire')
+          : t('SOLAR FARM · likely sun glint'),
+      ];
+    if (fire.staticSource === 'industrial')
+      return [
+        fire.escalated
+          ? t('INDUSTRIAL SITE · unusually strong, may be a real fire')
+          : t('INDUSTRIAL SITE · kiln, furnace or flare'),
+      ];
+    return [];
+  }
+
   function buildSelectedFireCard(fire, nowMs) {
     const meta = [
       t('{value} conf', {
@@ -351,11 +373,14 @@ export function createModel({
       cullPosition: fireCullPosition(fire),
       gapPx: frpPixelSize(fire.frp),
       accent: accentForSeverity(detectionColorStop(fire).name),
-      title: t('FIRE · {frp} MW', { frp: formatFrpLabel(fire.frp) }),
+      title: isMutedStatic(fire)
+        ? t('HEAT · {frp} MW', { frp: formatFrpLabel(fire.frp) })
+        : t('FIRE · {frp} MW', { frp: formatFrpLabel(fire.frp) }),
       details: [
         meta.join(' · '),
         formatLatLonLabel(fire.lat, fire.lon) +
           (fire.night ? ` · ${t('NIGHT')}` : ''),
+        ...staticSourceLine(fire),
       ],
       selected: true,
       priority: Number.MAX_SAFE_INTEGER,
@@ -406,7 +431,9 @@ export function createModel({
 
   function buildCellCard(candidate, nowMs) {
     const cell = candidate.cell;
-    const noun = cell.count === 1 ? t('FIRE') : t('FIRES');
+    // Likely static sources (shown on request) are not counted as fires.
+    const fires = cell.count - (cell.staticCount || 0);
+    const noun = fires === 1 ? t('FIRE') : t('FIRES');
     const parts = [t('max {value} MW', { value: formatFrpLabel(cell.maxFrp) })];
     if (cell.newestAcqMs > 0) {
       const age = formatAgeLabel(nowMs - cell.newestAcqMs);
@@ -418,7 +445,15 @@ export function createModel({
       cullPosition: candidate.cullPosition || candidate.position,
       gapPx: 10,
       accent: candidate.accent || accentForSeverity('yellow'),
-      title: `${cell.count} ${noun}`,
+      title:
+        fires > 0
+          ? `${fires} ${noun}`
+          : tn(
+              cell.count,
+              '{count} AT SOLAR/INDUSTRIAL SITE',
+              '{count} AT SOLAR/INDUSTRIAL SITES',
+              { count: cell.count },
+            ),
       details: [parts.join(' · ')],
       selected: false,
       priority: Number(cell.maxFrp) || 0,
