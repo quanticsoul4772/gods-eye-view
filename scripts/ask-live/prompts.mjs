@@ -566,7 +566,7 @@ export const PROMPTS = Object.freeze([
     prompt: 'Show active fires in California and tell me how many there are.',
     checks: {
       layersOn: ['local-firms'],
-      answer: /\d/,
+      answer: /\d[\d,]* (active )?fire detections?/i,
       answerNot: /key required|no (FIRMS )?key|not configured/i,
     },
   },
@@ -574,7 +574,10 @@ export const PROMPTS = Object.freeze([
     id: 'fires-keyless-satellites',
     prompt: 'Which satellites detected the fires in view?',
     start: { lat: -8, lon: 25, height: 4000000, pitch: -90 },
-    checks: { answer: /VIIRS|MODIS|NOAA|Terra|Aqua/i, answerNot: /key/i },
+    checks: {
+      answer: /VIIRS|MODIS|NOAA-2[01]|Terra|Aqua/,
+      answerNot: /key|layer is off|no fire detections/i,
+    },
   },
   // Canadian fire perimeters (BC, Ontario) from the source directory.
   {
@@ -590,7 +593,11 @@ export const PROMPTS = Object.freeze([
     id: 'perimeters-ontario-status',
     prompt:
       'Which wildfires are burning in Ontario right now, and are any out of control?',
-    checks: { tools: ['get_fire_perimeters'], answer: /Ontario/i },
+    checks: {
+      tools: ['get_fire_perimeters'],
+      answer:
+        /out of control|not report|no (stage|status)|(stage|status) (of control )?(isn't|is not|aren't|are not)/i,
+    },
   },
   // Worldwide directory feeds stay out of "sources for this place" answers.
   {
@@ -605,7 +612,7 @@ export const PROMPTS = Object.freeze([
   {
     id: 'sources-hazards-topic',
     prompt: 'What hazard data sources can the app list?',
-    checks: { tools: ['find_data_sources'], answer: /fire/i },
+    checks: { tools: ['find_data_sources'], answer: /FIRMS|active[- ]fire/i },
   },
   // A layer that shows nothing here names what the directory lists.
   {
@@ -613,7 +620,10 @@ export const PROMPTS = Object.freeze([
     prompt: 'Turn on bike share here. Is there any?',
     start: LAGOS,
     // get_bike_share consults the source directory itself.
-    checks: { tools: ['get_bike_share'], answer: /no |none|not /i },
+    checks: {
+      tools: ['get_bike_share'],
+      answer: /no bike[- ]?share|no (supported )?system|no stations/i,
+    },
   },
   // Scooters are the bike-share layer's shared-vehicle mode.
   {
@@ -623,7 +633,8 @@ export const PROMPTS = Object.freeze([
     // Paris operators are listed but not yet usable: say so, draw nothing.
     checks: {
       tools: ['find_data_sources'],
-      answer: /scooter|vehicle|Lime|Dott|Tier/i,
+      answer:
+        /(Lime|Dott|Voi|Tier|Bolt)[\s\S]*(not usable|not (yet )?(verified|available|shown)|terms|can't|cannot)|(not usable|terms|can't|cannot)[\s\S]*(Lime|Dott|Voi|Tier|Bolt)/i,
     },
   },
   // AIS type 0 ("not available") counts as unknown, not as a type.
@@ -638,7 +649,8 @@ export const PROMPTS = Object.freeze([
     prompt: 'Which operators run the datacenters around Ashburn, Virginia?',
     checks: {
       tools: ['find_infrastructure'],
-      answer: /operator|Equinix|Digital Realty|AWS|Amazon|CyrusOne|QTS/i,
+      answer:
+        /Equinix|Digital Realty|Amazon|AWS|CyrusOne|QTS|CloudHQ|Vantage|Iron Mountain|NTT|Sabey|STACK|Microsoft|Google|Aligned|RagingWire/,
     },
   },
   // Named explicitly, Space Missions still turns on; only bulk requests skip it.
