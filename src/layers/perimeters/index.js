@@ -319,20 +319,28 @@ export function createFirePerimetersLayer({
         abortLinkVerification();
         const nextEntities = [];
         _rowById.clear();
+        const credited = new Set();
         for (const row of rows) {
           const color = Cesium.Color.fromCssColorString(
             perimeterBand(row).color,
           );
           // Provincial feeds: credit each one the first time it draws.
-          if (row.source && row.source !== 'wfigs' && credits && _viewer)
-            credits.registerDynamicCredit(
-              _viewer,
-              credits.perimeterFeedCredit({
-                id: row.source,
-                attribution: row.attribution,
-                licenseUrl: row.licenceUrl,
-              }),
-            );
+          if (
+            row.source &&
+            row.source !== 'wfigs' &&
+            !credited.has(row.source)
+          ) {
+            credited.add(row.source);
+            if (credits && _viewer)
+              credits.registerDynamicCredit(
+                _viewer,
+                credits.perimeterFeedCredit({
+                  id: row.source,
+                  attribution: row.attribution,
+                  licenseUrl: row.licenceUrl,
+                }),
+              );
+          }
           for (const [index, rings] of row.polygons.entries()) {
             const [outer, ...holes] = rings;
             const outerPositions = ringPositions(outer);

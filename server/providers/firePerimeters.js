@@ -54,9 +54,8 @@ const MIB = 1024 * 1024;
 const DIRECTORY_REFRESH_MS = 15 * 60_000;
 const DIRECTORY_USER_AGENT = 'gods-eye-view-fire-perimeters/1.0';
 
-/** Incident links from a provincial feed stay on that province's wildfire site. */
-const isWildfireSite = (host) =>
-  host === 'wildfiresituation.nrs.gov.bc.ca' || host.endsWith('.gov.bc.ca');
+/** Incident links from a provincial feed: only BC Wildfire Service's incident site. */
+const isWildfireSite = (host) => host === 'wildfiresituation.nrs.gov.bc.ca';
 
 /**
  * Fixed-origin, bounded WFIGS and InciWeb routes for dev and preview, plus the

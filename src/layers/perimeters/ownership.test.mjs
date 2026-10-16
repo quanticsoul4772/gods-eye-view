@@ -634,6 +634,15 @@ test('credits: a provincial feed registers its licence credit when it draws; WFI
           licenceUrl:
             'https://www.ontario.ca/page/open-government-licence-ontario',
         },
+        {
+          ...row,
+          stableId: 'ontario-fire-perimeters-in-year/NIP010',
+          source: 'ontario-fire-perimeters-in-year',
+          containedPct: null,
+          attribution: 'Ontario Ministry of Natural Resources.',
+          licenceUrl:
+            'https://www.ontario.ca/page/open-government-licence-ontario',
+        },
         row,
       ],
     },

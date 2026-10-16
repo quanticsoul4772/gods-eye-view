@@ -525,3 +525,49 @@ test('a cut-off provincial response is a failure, not a partial season', async (
     ['fire'],
   );
 });
+
+test('provincial incident links stay on the BC Wildfire incident site', async () => {
+  const entry = {
+    id: 'bc-wildfire-perimeters-current',
+    access: { url: 'https://bc.example/query', headers: {} },
+    mapping: {
+      id: 'FIRE_NUMBER',
+      size_ha: 'FIRE_SIZE_HECTARES',
+      updated: 'TRACK_DATE',
+      url: 'FIRE_URL',
+      region: 'CA-BC',
+    },
+    licence: {},
+  };
+  const fire = (number, url) => ({
+    properties: { FIRE_NUMBER: number, FIRE_URL: url },
+    geometry: feature().geometry,
+  });
+  const request = install({
+    fetchImpl: async () => Response.json({ features: [] }),
+    directory: { usable: () => [entry] },
+    directoryFetch: async () =>
+      Response.json({
+        type: 'FeatureCollection',
+        features: [
+          fire(
+            'C1',
+            'https://wildfiresituation.nrs.gov.bc.ca/incidents?incidentNumber=C1',
+          ),
+          fire(
+            'C2',
+            'https://www2.gov.bc.ca/gov/content/safety/wildfire-status',
+          ),
+          fire('C3', 'https://wildfiresituation.nrs.gov.bc.ca.evil.example/x'),
+        ],
+      }),
+  });
+  const res = await request();
+  const links = Object.fromEntries(res.body.rows.map((r) => [r.name, r.link]));
+  assert.equal(
+    links.C1,
+    'https://wildfiresituation.nrs.gov.bc.ca/incidents?incidentNumber=C1',
+  );
+  assert.equal(links.C2, null, 'another gov.bc.ca site');
+  assert.equal(links.C3, null, 'a look-alike host');
+});
