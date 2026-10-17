@@ -275,3 +275,23 @@ test('registration joins history; unregister and destroy abort work and release 
   assert.deepEqual(clock.getTimeline(), []);
   assert.equal(await clock.setTarget(time(5)), false);
 });
+
+test('clock state reports a reduced-motion product as suspended but still drawn', (t) => {
+  const { clock } = harness(t);
+  clock.register({
+    id: 'weather-lightning',
+    maxGapMs: 30 * 60_000,
+    getTimes: () => [],
+    getShownTime: () => null,
+    apply: async () => true,
+    isSuspended: () => true,
+    isHidden: () => false,
+  });
+  const [entry] = clock.getState().products;
+  assert.equal(entry.suspended, true);
+  assert.equal(
+    entry.hidden,
+    false,
+    'reduced motion stops playback, not drawing',
+  );
+});

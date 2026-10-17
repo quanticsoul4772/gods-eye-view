@@ -160,7 +160,9 @@ export function worstInView(readings, rect, limit) {
 export function aggregateCells(readings) {
   const cells = new Map();
   for (const reading of readings) {
-    const key = `${Math.floor((reading.lat + 90) / CELL_DEG)}:${Math.floor((reading.lon + 180) / CELL_DEG)}`;
+    // Longitude wraps, so ±180° fall in one cell.
+    const lonCells = Math.round(360 / CELL_DEG);
+    const key = `${Math.floor((reading.lat + 90) / CELL_DEG)}:${Math.floor((reading.lon + 180) / CELL_DEG) % lonCells}`;
     let cell = cells.get(key);
     if (!cell) cells.set(key, (cell = { key, lat: 0, lon: 0, members: [] }));
     cell.lat += reading.lat;
@@ -177,8 +179,9 @@ export function aggregateCells(readings) {
   };
   const out = [];
   for (const cell of cells.values()) {
-    const confirmed = cell.members.filter((reading) => !reading.unconfirmed);
-    const pool = confirmed.length ? confirmed : cell.members;
+    // Only confirmed readings colour a cell; one with none (every sensor in
+    // it possibly faulty) gets no band and isn't drawn.
+    const pool = cell.members.filter((reading) => !reading.unconfirmed);
     const pm25 = median(pool.map((r) => r.pm25).filter(Number.isFinite));
     const pm10 = median(pool.map((r) => r.pm10).filter(Number.isFinite));
     out.push({

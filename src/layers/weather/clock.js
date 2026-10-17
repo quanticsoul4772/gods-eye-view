@@ -59,6 +59,8 @@ export function createWeatherClock({
       shown: product.getShownTime() ?? null,
       selected: selectedFor(product),
       suspended: Boolean(product.isSuspended()),
+      // Not drawn at all (host or tab hidden); reduced motion still draws.
+      hidden: Boolean(product.isHidden?.()),
     })),
   });
   const notify = () => {

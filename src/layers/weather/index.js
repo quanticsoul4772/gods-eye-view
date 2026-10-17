@@ -274,6 +274,7 @@ export function createWeatherLayer({
       getShownTime: shownTime,
       apply: applyClockTime,
       isSuspended: suspended,
+      isHidden: () => hostHidden || Boolean(documentRef?.hidden),
     });
   }
   async function warmNext(time) {
@@ -661,7 +662,7 @@ export function createWeatherLayer({
         lightning &&
         camera &&
         shared?.products?.some(
-          (entry) => entry.id === otherLightning && !entry.suspended,
+          (entry) => entry.id === otherLightning && !entry.hidden,
         ) &&
         lon >= LIGHTNING_OVERLAP.west &&
         lon <= LIGHTNING_OVERLAP.east &&

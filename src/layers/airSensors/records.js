@@ -23,7 +23,7 @@
  * than 3 sensors within 10 km can't be compared: flagged isolated, still
  * ranked, and its card says it is unverified.
  */
-import { FLAG_ISOLATED, FLAG_UNCONFIRMED } from './model.js';
+import { FLAG_ISOLATED, FLAG_UNCONFIRMED, HUMID_RH } from './model.js';
 
 const MAX_AGE_MS = 3 * 60 * 60 * 1000;
 const TIMESTAMP = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
@@ -167,27 +167,45 @@ export function normalizeSensorCommunity(
 
 /** Mark readings far above their neighbours' median PM2.5 as unconfirmed. */
 function flagUnconfirmed(readings) {
+  const lonCells = Math.round(360 / GRID_DEG);
+  const wrapLon = (index) => ((index % lonCells) + lonCells) % lonCells;
   const grid = new Map();
-  const cellOf = (lat, lon) =>
-    `${Math.floor(lat / GRID_DEG)}:${Math.floor(lon / GRID_DEG)}`;
+  const cellOf = (latIndex, lonIndex) => `${latIndex}:${wrapLon(lonIndex)}`;
   for (const reading of readings) {
-    const key = cellOf(reading.lat, reading.lon);
+    const key = cellOf(
+      Math.floor(reading.lat / GRID_DEG),
+      Math.floor(reading.lon / GRID_DEG),
+    );
     const list = grid.get(key);
     if (list) list.push(reading);
     else grid.set(key, [reading]);
   }
-  /** Median of one measure over the sensors within 10 km, and how many. */
-  const neighbours = (reading, measure) => {
+  /**
+   * Median of one measure over the sensors within 10 km, and how many.
+   * Away from the equator 0.1° of longitude is under 10 km, so the search
+   * reaches as many longitude cells as 10 km spans there. `skip` leaves out
+   * neighbours that can't vouch for a reading.
+   */
+  const neighbours = (reading, measure, skip) => {
     const latIndex = Math.floor(reading.lat / GRID_DEG);
     const lonIndex = Math.floor(reading.lon / GRID_DEG);
     const cosLat = Math.cos((reading.lat * Math.PI) / 180);
+    const lonReach = Math.min(
+      Math.ceil(NEIGHBOUR_KM / (111.2 * Math.max(cosLat, 0.01) * GRID_DEG)),
+      lonCells / 2,
+    );
     const near = [];
     for (let a = -1; a <= 1; a++)
-      for (let b = -1; b <= 1; b++)
-        for (const other of grid.get(`${latIndex + a}:${lonIndex + b}`) || []) {
-          if (other === reading || other[measure] === null) continue;
+      for (let b = -lonReach; b <= lonReach; b++)
+        for (const other of grid.get(cellOf(latIndex + a, lonIndex + b)) ||
+          []) {
+          if (other === reading || other[measure] === null || skip(other))
+            continue;
+          let dLon = other.lon - reading.lon;
+          if (dLon > 180) dLon -= 360;
+          if (dLon < -180) dLon += 360;
           const dy = (other.lat - reading.lat) * 111.2;
-          const dx = (other.lon - reading.lon) * 111.2 * cosLat;
+          const dx = dLon * 111.2 * cosLat;
           if (Math.hypot(dx, dy) <= NEIGHBOUR_KM) near.push(other[measure]);
         }
     if (!near.length) return { count: 0, median: null };
@@ -198,18 +216,29 @@ function flagUnconfirmed(readings) {
       median: near.length % 2 ? near[mid] : (near[mid - 1] + near[mid]) / 2,
     };
   };
+  const extreme = (other) => other.pm25 > 500 || other.pm10 > 500;
   for (const reading of readings) {
-    const extreme =
-      reading.pm25 > 500 ? 'pm25' : reading.pm10 > 500 ? 'pm10' : null;
-    if (extreme) {
-      // Smoke raises the sensors around it; a fogged or failing sensor is alone.
-      const { count, median } = neighbours(reading, extreme);
-      if (count < 3 || median * 3 < reading[extreme])
+    // Every measure over 500 needs its own corroboration from sensors that
+    // aren't extreme themselves: smoke raises the sensors around it; a fogged
+    // or failing sensor is alone. Fog inflates every optical sensor nearby
+    // too, so a humid reading is never taken as corroborated smoke.
+    for (const measure of ['pm25', 'pm10']) {
+      if (!(reading[measure] > 500)) continue;
+      const { count, median } = neighbours(reading, measure, extreme);
+      if (
+        count < 3 ||
+        median * 3 < reading[measure] ||
+        (Number.isFinite(reading.rh) && reading.rh > HUMID_RH)
+      )
         reading.flags |= FLAG_UNCONFIRMED;
-      continue;
     }
-    if (!(reading.pm25 > 50)) continue;
-    const { count, median } = neighbours(reading, 'pm25');
+  }
+  // Then each high PM2.5 against its neighbours, leaving out the ones
+  // already judged possibly faulty.
+  const faulty = (other) => (other.flags & FLAG_UNCONFIRMED) !== 0;
+  for (const reading of readings) {
+    if (faulty(reading) || !(reading.pm25 > 50)) continue;
+    const { count, median } = neighbours(reading, 'pm25', faulty);
     if (count < 3) reading.flags |= FLAG_ISOLATED;
     else if (reading.pm25 > 3 * median) reading.flags |= FLAG_UNCONFIRMED;
   }
