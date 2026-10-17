@@ -40,6 +40,7 @@ const LAYER_NOUNS = Object.freeze({
   'rocket-launches': 'launches',
   earthquakes: 'earthquakes',
   'local-firms': 'fires',
+  'air-quality': 'air quality',
   'air-sensors': 'air sensors',
 });
 

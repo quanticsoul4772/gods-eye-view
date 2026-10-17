@@ -554,7 +554,7 @@ export const ACTION_DESCRIPTIONS = {
       properties: {
         layers: {
           description:
-            'Layers to query. fires → local-firms; ships → ais-live-vessels; buses/trains → transit; hurricanes → weather-cyclones; bases → military-installations; my receiver → local-adsb. Units differ per layer, so rank speed within one layer.',
+            'Layers to query. fires → local-firms; ships → ais-live-vessels; buses/trains → transit; hurricanes → weather-cyclones; bases → military-installations; my receiver → local-adsb; air quality → air-sensors (Canada AQHI: air-quality). Units differ per layer, so rank speed within one layer.',
           $position: 2,
         },
         scope: {
