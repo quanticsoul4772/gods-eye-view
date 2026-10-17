@@ -3017,5 +3017,19 @@
     "one": "{n} sensor de aire",
     "many": "{n} de sensores de aire",
     "other": "{n} sensores de aire"
-  }
+  },
+  "5-min window · {time}": "ventana de 5 min · {time}",
+  "SATELLITE LIGHTNING · 5 min accumulation": "RAYOS POR SATÉLITE · acumulación de 5 min",
+  "Europe · Africa · Atlantic · E. South America": "Europa · África · Atlántico · este de Sudamérica",
+  "Color: flashes per ~2 km pixel per 5 min (EUMETSAT colours, approximate)": "Color: destellos por píxel de ~2 km en 5 min (colores de EUMETSAT, aproximados)",
+  "Satellite lightning · 5 min": "Rayos por satélite · 5 min",
+  "Europe · Africa · Atlantic": "Europa · África · Atlántico",
+  "flashes/5 min": "destellos/5 min",
+  "View Europe & Africa": "Ver Europa y África",
+  "{value} flashes per ~2 km pixel in 5 minutes (EUMETSAT colours, approximate)": "{value} destellos por píxel de ~2 km en 5 minutos (colores de EUMETSAT, aproximados)",
+  "Overlap 70°W–0°: NOAA and EUMETSAT lightning measure different things; colours are not comparable": "Solapamiento 70°O–0°: los rayos de NOAA y de EUMETSAT miden cosas distintas; sus colores no son comparables",
+  "EUMETSAT MTG Lightning Imager accumulated flash area: a satellite camera sees the light of every flash, cloud-to-cloud and cloud-to-ground, about 15–20 minutes after it. Colours are EUMETSAT's; values approximate. Positions can drift after satellite manoeuvres and in eclipse season. Coverage 70°W–70°E, 70°S–70°N. Not a safety warning.": "Área de destellos acumulada del Lightning Imager de MTG (EUMETSAT): una cámara en un satélite ve la luz de cada destello, entre nubes y de nube a tierra, unos 15–20 minutos después. Los colores son de EUMETSAT; los valores, aproximados. Las posiciones pueden desviarse tras maniobras del satélite y en temporada de eclipses. Cobertura 70°O–70°E, 70°S–70°N. No es un aviso de seguridad.",
+  "Satellite lightning (EUMETSAT)": "Rayos por satélite (EUMETSAT)",
+  "EUMETSAT EUMETView · OBSERVED": "EUMETSAT EUMETView · OBSERVADO",
+  "Satellite lightning": "Rayos por satélite"
 }

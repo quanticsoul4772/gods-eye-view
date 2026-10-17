@@ -820,6 +820,7 @@
   "src/layers/weather/infraredImage.js",
   "src/layers/weather/infraredImage.test.mjs",
   "src/layers/weather/source.js",
+  "src/layers/weather/coverage.js",
   "src/layers/weather/weather.test.mjs",
   "src/layers/weather/rasterTiles.test.mjs",
   "src/layers/wind/rendering.test.mjs",

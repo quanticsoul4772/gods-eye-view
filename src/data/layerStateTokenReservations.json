@@ -12,6 +12,7 @@
   ["fire-perimeters", "2"],
   ["flights", "f"],
   ["gnss-integrity", "3"],
+  ["lightning-eu", "6"],
   ["local-dams", "q"],
   ["local-datacenters", "d"],
   ["local-firms", "w"],

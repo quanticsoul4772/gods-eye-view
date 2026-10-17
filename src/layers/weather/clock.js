@@ -2,6 +2,8 @@ export const RADAR_MAX_GAP_MS = 30 * 60_000;
 export const REGIONAL_INFRARED_MAX_GAP_MS = 30 * 60_000;
 export const GLOBAL_INFRARED_MAX_GAP_MS = 3 * 60 * 60_000;
 export const LIGHTNING_MAX_GAP_MS = 30 * 60_000;
+/** EUMETSAT lightning frames are 15 minutes apart in history. */
+export const EU_LIGHTNING_MAX_GAP_MS = 15 * 60_000;
 
 /** Transient observed time. Products must honor the signal before installing a frame. */
 export function createWeatherClock({

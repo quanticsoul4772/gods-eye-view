@@ -20,6 +20,7 @@ How to read this:
 | **NOAA nowCOAST observed weather** (`nowcoast.noaa.gov/geoserver/observations/{weather_radar,satellite}/ows`, WMS 1.1.1) | Rain radar (MRMS base reflectivity, contiguous US, about 4-minute updates) and Satellite clouds (GOES-19/18 Band 14 regional infrared, about 5-minute updates; global infrared mosaic, hourly). Keyless; layer metadata refreshed every 2 minutes, exact-time images cached for up to 24 hours | [NOAA disclaimer](https://oceanservice.noaa.gov/disclaimer.html) | "NOAA nowCOAST · NWS/OAR MRMS radar; NESDIS GOES and global satellite partners" |
 | **Keyless source directory** (`quanticsoul4772.github.io/gev-open-sources/v1/`) | Extra keyless transit feeds (GTFS-Realtime), bike-share systems (GBFS) and free-floating shared vehicles (GBFS `vehicle_status`, the bike-share layer's Vehicles mode), and the list `find_data_sources` answers from (worldwide earthquake and disaster-alert feeds are listed there for reference under the hazards topic, not drawn). Checked hourly through its index; only domain files that changed are downloaded; a bundled snapshot covers start-up. Only entries verified by its health checks and cleared for display are fetched | Directory: MIT. Each feed keeps its own licence, decided per entry (known open licence, GBFS 3.x CC0 default, or the operator's terms) | Each feed's own credit, registered when its data first renders |
 | **NOAA nowCOAST lightning density** (`nowcoast.noaa.gov/geoserver/observations/lightning_detection/ows`) | Lightning density: 15-minute accumulated strike density on an approximately 8 km grid, Americas and Pacific. Keyless; layer metadata refreshed every 10 minutes, exact-time images cached for up to 24 hours | NOAA Level-5 derived product from Vaisala NLDN/GLD360; the [product description](https://ocean.weather.gov/lightning/lightning_pdd.php) permits public distribution of this density product, not of raw Vaisala detections | "NOAA/NWS nowCOAST; derived from Vaisala NLDN/GLD360" |
+| **EUMETSAT MTG Lightning Imager** (`view.eumetsat.int/geoserver`, EUMETView WMS, layer `mtg_fd:li_afa`) | Satellite lightning: accumulated flash area (flashes per ~2 km pixel per 5 minutes) over Europe, Africa, the Atlantic and eastern South America (70°W–70°E, 70°S–70°N), 5-minute steps about 15–20 minutes behind | "Core" data: Free and Unrestricted under [CC BY 4.0](https://www-cdn.eumetsat.int/files/2026-01/45173%20-%20Data_Policy.pdf) (EUMETSAT Data Policy, Articles 4, 5.1 and 6.3); keyless, CORS `*`; we keep to EUMETView's advertised limits (20 requests/s, 8 concurrent) with at most 4 requests at once | "Contains modified EUMETSAT Meteosat product {year}" |
 | **NOAA NHC / CPHC advisories** (`www.nhc.noaa.gov/CurrentStorms.json` + the `mapservices.weather.noaa.gov` tropical weather summary MapServer) | Cyclone advisories: storm positions, forecast tracks, points and cones for the Atlantic and eastern/central North Pacific. Keyless through `/api/cyclones`; cached for 5 minutes | [NWS public-data terms](https://www.weather.gov/disclaimer); no endorsement implied | "NOAA/NWS NHC / CPHC" |
 | **Mapillary** (vector tiles, Graph API, MapillaryJS) | Street Level: coverage lines, image cones and the embedded viewer. Coverage tiles cached for 24 h | Imagery [CC BY-SA 4.0](https://www.mapillary.com/terms); API under the Mapillary terms with a client token | "© Mapillary contributors, CC BY-SA 4.0", shown on the globe while the provider is on |
 | **Google Street View** (Maps JavaScript API) | Street Level, on the Google 3D map only (Google's terms): Google's panorama viewer and nearest-panorama lookups; panorama dates and addresses kept for the session only | Google Maps Platform ToS (your own key + billing; every panorama load is billed) | "Street View imagery © Google" on the globe while the provider is on, and Google's logo and terms in the viewer |
@@ -423,6 +424,31 @@ This implementation is original; those contributions have not been merged here.
   a live ground-strike counter, an all-clear indication, or global coverage.
 - **Coverage:** 110°E across the Pacific/Americas to 0°, 25°S–80°N. Display exact advertised
   observations; ten-minute metadata refresh, source-matched colors, bounded shared imagery cache.
+
+### Weather: EUMETSAT MTG satellite lightning
+
+- **Source:** EUMETSAT's [EUMETView](https://view.eumetsat.int/) WMS, layer `mtg_fd:li_afa`
+  (MTG-I Lightning Imager Level 2 Accumulated Flash Area), style `mtg_li_afa`. Capabilities come
+  from the per-layer endpoint `geoserver/mtg_fd/li_afa/ows` (a few KB).
+- **Rights/credit:** "Core" data under the [EUMETSAT Data Policy](https://www-cdn.eumetsat.int/files/2026-01/45173%20-%20Data_Policy.pdf):
+  Article 4 lists LI derived products and Advanced Image Products (visualisations used in Web Map
+  Services) as Core; Article 5.1 grants Core "on a Free and Unrestricted basis under a CC-BY-4.0
+  licence"; Article 6.3 asks for "Contains modified EUMETSAT Meteosat product {year}".
+- **Meaning:** optical total lightning seen from geostationary orbit: a camera sees the light of
+  every flash, cloud-to-cloud and cloud-to-ground, counted as flashes per ~2 km pixel over
+  5 minutes. EUMETSAT colours the images (its legend: 1, 10, 20+ per 5 minutes); there are no
+  values behind the pixels, so the legend is approximate. Not ground-sensor strikes, and not
+  comparable with NOAA's density: the two layers overlap over 70°W–0° and say so there. Positions
+  can drift after satellite manoeuvres and in eclipse season; not a safety warning.
+- **Coverage and timing:** 70°W–70°E, 70°S–70°N. The service advertises one `start/end/PT5M`
+  interval; the proxy expands its last 26 steps (opt-in for this product only) and shows every
+  third, so 13 frames span about 3 hours like NOAA's. Steps are about 15–20 minutes behind.
+  GeoServer answers a missing step with its nearest neighbour and says so in a
+  `Warning: 99 Nearest value used` header; the proxy refuses such a frame rather than show it
+  under the wrong time.
+- **Images:** the data box is 140°×140°, so whole images and Google 3D Tiles shells use a 2:1
+  extent padded to 140°W–140°E (transparent outside the data); globe tiles, detail windows and
+  coverage checks use the data box.
 
 ### Community weather prior art
 

@@ -367,6 +367,13 @@ export const DATA_CREDITS = [
     html: 'Lightning density: NOAA/NWS nowCOAST · derived from Vaisala NLDN/GLD360. <a href="https://ocean.weather.gov/lightning/lightning_pdd.php" target="_blank" rel="noopener">Public derived density product</a>, not raw detections.',
   },
   {
+    key: 'lightning-eu',
+    html:
+      'Satellite lightning: Contains modified EUMETSAT Meteosat product ' +
+      new Date().getUTCFullYear() +
+      ' (MTG Lightning Imager, via <a href="https://view.eumetsat.int/" target="_blank" rel="noopener">EUMETView</a>) · <a href="https://www-cdn.eumetsat.int/files/2026-01/45173%20-%20Data_Policy.pdf" target="_blank" rel="noopener">CC BY 4.0, EUMETSAT Data Policy</a>.',
+  },
+  {
     key: 'wind-gfs',
     html:
       'Wind: resampled NOAA Global Forecast System (GFS) 10 m wind via ' +

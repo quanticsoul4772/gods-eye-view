@@ -325,6 +325,12 @@ const OPTION_GROUPS = Object.freeze({
       both: 'b',
     }),
   ]),
+  'lightning-eu': Object.freeze([
+    enumOption('opacity', 'o', 'strong', ['light', 'strong'], {
+      light: 'l',
+      strong: 's',
+    }),
+  ]),
   traffic: Object.freeze([
     enumOption('roadMode', 'r', null, ['tomtom', 'osm', 'hybrid'], {
       tomtom: 't',
@@ -655,6 +661,12 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     id: 'gnss-integrity',
     token: '3',
     disposition: 'enabled-only',
+  }),
+  Object.freeze({
+    id: 'lightning-eu',
+    token: '6',
+    disposition: 'enabled+options',
+    optionOwner: 'lightning-eu',
   }),
   Object.freeze({ id: 'local-dams', token: 'q', disposition: 'enabled-only' }),
   Object.freeze({

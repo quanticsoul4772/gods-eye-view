@@ -254,6 +254,12 @@ const layers = [
     noQuery: 'map overlay; no countable records',
   },
   {
+    id: 'lightning-eu',
+    aliases: ['satellite lightning', 'lightning europe', 'lightning africa'],
+    context: false,
+    noQuery: 'map overlay; no countable records',
+  },
+  {
     id: 'wind',
     aliases: ['winds', 'wind map'],
     context: false,
@@ -552,6 +558,8 @@ const SELF_EVIDENT_IDS = new Set([
   'radio',
   'wind',
   'directions',
+  'air-sensors',
+  'lightning-eu',
 ]);
 
 /**
