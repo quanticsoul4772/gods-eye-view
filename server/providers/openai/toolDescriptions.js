@@ -25,13 +25,12 @@ export const ACTION_DESCRIPTIONS = {
           $position: 1,
         },
         viewMode: {
-          description:
-            'Optional framing intent. Usually omit this; GEV infers whole-place framing for countries/cities and close framing for landmarks.',
+          description: 'Framing intent. Usually omit this; GEV infers it.',
           $position: 2,
         },
         rangeM: {
           description:
-            'Camera range in meters: a height or distance the user asks for, or for a bare coordinate (else a 250 m close-up) one that fits the subject, e.g. 20000 for a fire, 1500000 for a storm. Omit for named places.',
+            'Camera range in meters: a height or distance the user asks for, a closer or wider view, or for a bare coordinate (else a 250 m close-up) one that fits the subject, e.g. 20000 for a fire, 1500000 for a storm. Omit for named places.',
           $position: 3,
         },
         headingDeg: {
@@ -49,7 +48,7 @@ export const ACTION_DESCRIPTIONS = {
   },
   select_nearest_aircraft: {
     description:
-      'Atomically fly to a place, wait for arrival, enable and load Flights or Military Flights in that viewport, exclude on-ground records, and select/follow the nearest airborne aircraft. Healthy fallback feeds remain usable and are reported in the result. This does not open Contacts or Cockpit.',
+      'Atomically turn on Flights or Military Flights first, fly to the place and wait for arrival, refresh that layer for the destination viewport, exclude on-ground records, and select/follow the nearest airborne aircraft. A healthy fallback feed is valid data, never an enable failure; the result reports it. This does not open Contacts or Cockpit.',
     $position: 1,
     parameters: {
       properties: {
@@ -109,7 +108,7 @@ export const ACTION_DESCRIPTIONS = {
     parameters: {
       properties: {
         layerId: {
-          description: 'Optional layer row to scroll into view and highlight.',
+          description: 'Layer row to scroll into view and highlight.',
           $position: 2,
         },
       },
@@ -121,7 +120,7 @@ export const ACTION_DESCRIPTIONS = {
   },
   set_context_mode: {
     description:
-      'Enter or exit the Global Context sub-mode used by Contacts and Space Missions. Use Contacts only when the user explicitly requests Contacts, and Space Missions only when explicitly requested. A request to open the parent Context panel alone uses set_panel_open and must not activate either sub-mode. Selecting an aircraft does not imply Context.',
+      'Enter or exit the Global Context sub-mode used by Contacts and Space Missions. Use Contacts only when the user explicitly requests Contacts, and Space Missions only when explicitly requested. Selecting an aircraft does not imply Context.',
     $position: 1,
     parameters: {
       properties: {
@@ -145,12 +144,12 @@ export const ACTION_DESCRIPTIONS = {
         },
         targetLayer: {
           description:
-            'Optional contact layer filter for next/previous (for example military for a military-only cycle).',
+            'Contact layer filter for next/previous (for example military for a military-only cycle).',
           $position: 2,
         },
         aircraftClass: {
           description:
-            'Optional aircraft class filter (for example helicopter) when using next/previous navigation.',
+            'Aircraft class filter (for example helicopter) when using next/previous navigation.',
           $position: 1,
         },
       },
@@ -176,7 +175,7 @@ export const ACTION_DESCRIPTIONS = {
           $position: 1,
         },
         layerId: {
-          description: 'Optional layer filter for visible entity context.',
+          description: 'Layer filter for visible entity context.',
           $position: 2,
         },
       },
@@ -202,24 +201,23 @@ export const ACTION_DESCRIPTIONS = {
   },
   set_cyber_sonar: {
     description:
-      'Adjust Cyber-only sonar controls. Requires the Cyber HUD layout; never switches layout or HUD visibility. Omitted fields stay unchanged. Returns actual settings and separate map/contact sweep activity. A saved setting does not mean the effect is active.',
+      'Adjust Cyber-only sonar controls. Requires the Cyber HUD layout; never switches layout or HUD visibility. Omitted fields stay unchanged. Returns actual settings and separate map/contact sweep activity.',
     $position: 1,
     parameters: {
       properties: {
         enabled: { description: 'Explicitly turn sonar on or off.' },
-        rings: { description: 'Number of decorative sonar rings, 3–12.' },
+        rings: { description: 'Number of decorative sonar rings.' },
         rangePct: {
-          description:
-            'Visual ring range, 60–120 percent; not geographic distance.',
+          description: 'Visual ring range percent; not geographic distance.',
         },
         intensityPct: {
-          description: 'Sonar Power slider, 0–100 percent. Zero is valid.',
+          description: 'Sonar Power slider percent. Zero is valid.',
         },
         opacityPct: {
           description:
-            'Contact opacity floor between passes, 35–100 percent; labels have a derived floor. Not whole-scene dimming.',
+            'Contact opacity floor percent between passes; labels have a derived floor. Not whole-scene dimming.',
         },
-        sectorDeg: { description: 'Sonar sweep sector width, 8–60 degrees.' },
+        sectorDeg: { description: 'Sonar sweep sector width in degrees.' },
       },
     },
   },
@@ -344,7 +342,7 @@ export const ACTION_DESCRIPTIONS = {
         },
         locationQuery: {
           description:
-            'Place to search near, such as "Austin, Texas" or "Seattle". Selection does not fly the camera.',
+            'Place to search near, such as "Austin, Texas" or "Seattle".',
           $position: 2,
         },
         country: {
@@ -353,7 +351,7 @@ export const ACTION_DESCRIPTIONS = {
           $position: 2,
         },
         stationQuery: {
-          description: 'Optional station name/tag substring.',
+          description: 'Station name/tag substring.',
           $position: 2,
         },
       },
@@ -404,7 +402,7 @@ export const ACTION_DESCRIPTIONS = {
   },
   annotate_map: {
     description:
-      'Mark places on the 3D map as you talk about them (see WHITEBOARD): pins, highlights, footprints and boundaries, arrows, routes and labels. Give place names (or explicit lat/lng); the app resolves real positions and outlines. Several places may go in one call.',
+      'Mark places on the 3D map as you talk about them (see WHITEBOARD): pins, highlights, footprints and boundaries, arrows, routes and labels. Give place names (or explicit lat/lng); the app resolves real positions and outlines.',
     $position: 1,
     parameters: {
       properties: {
@@ -416,7 +414,7 @@ export const ACTION_DESCRIPTIONS = {
             properties: {
               type: {
                 description:
-                  'pin = planted marker at a spot; highlight = pulsing ring drawing the eye to a point; area = trace the outline of a building/campus/compound/district; arrow = a connector from one place to another (use target as the origin and toTarget as the destination); route = a path through several waypoints (use the points array); label = a floating text callout.',
+                  'pin = planted marker at a spot; highlight = pulsing ring drawing the eye to a point (no footprint); area = trace the outline of a building/campus/compound/park/district/boundary; arrow = a connector from one place to another (use target as the origin and toTarget as the destination); route = a path through several waypoints (use the points array); label = a floating text callout.',
                 $position: 2,
               },
               target: {
@@ -452,8 +450,7 @@ export const ACTION_DESCRIPTIONS = {
                 $position: 2,
               },
               label: {
-                description:
-                  'Short caption shown on the map (a few words). Optional.',
+                description: 'Short caption shown on the map (a few words).',
                 $position: 2,
               },
               color: {
@@ -498,7 +495,7 @@ export const ACTION_DESCRIPTIONS = {
         },
         flyTo: {
           description:
-            'Also move the camera to frame the first annotation. Default false — leave false if the user is already looking at the spot.',
+            'Also move the camera to frame the first annotation. Default false; set true only when the user is not already looking at the place (off-screen marks auto-frame, so when unsure leave it false).',
           $position: 1,
         },
         persist: {
@@ -511,12 +508,12 @@ export const ACTION_DESCRIPTIONS = {
   },
   clear_annotations: {
     description:
-      'Erase ALL map annotations previously drawn with annotate_map. Call this ONLY when the user EXPLICITLY asks to clear or reset the map. Annotations accumulate and persist across navigation and topic changes by design — never clear on your own initiative.',
+      'Erase ALL map annotations previously drawn with annotate_map. Call this ONLY when the user EXPLICITLY asks to clear or reset the map. Annotations accumulate and persist across navigation and topic changes by design.',
     $position: 1,
   },
   move_camera: {
     description:
-      'Direct the camera like a drone operator: orbit the current view target, pan, tilt, or rotate — one bounded nudge (mode=once) or continuous motion until stopped (mode=continuous). Continuous motion also stops on any manual camera input or when a navigation tool runs. Say the RESULTING state when confirming ("Orbiting slowly").',
+      'Direct the camera like a drone operator: orbit the current view target, pan, tilt, or rotate — one bounded nudge (mode=once) or continuous motion until stopped (mode=continuous). Continuous motion also stops on any manual camera input or when a navigation tool runs.',
     $position: 1,
     parameters: {
       properties: {
@@ -548,7 +545,7 @@ export const ACTION_DESCRIPTIONS = {
   },
   analyst_query: {
     description:
-      'Counts, lists, superlatives and attribute filters over records loaded by ENABLED layers — "how many flights over Texas", "biggest fire near LA", "ships headed to Oakland", "next rocket launch". A requested list or ranking requires this tool even after set_context_mode returned a Contacts count; that count alone has no requested items. complete:false means the count is a floor ("at least") and rankings cover the records examined; partial names unanswered layers. Items carry lat/lon for a follow-up fly_to_location. ok:false codes: LAYER_OFF (offer to enable), NOT_READY (loading), FOLLOW_UP_MISMATCH (ask again without followUp), UNKNOWN_FIELD/UNKNOWN_SCOPE/BAD_VALUE (retry with the allowed values). Aircraft emergency fields describe broadcasts, not confirmed incidents: narrate emergencyBroadcast with emergencySource. emergencyKind values are general, unlawful, nordo, downed, minfuel and lifeguard; GEV treats the last two as priorities (emergency:false). lastContactAtMs says when the transponder was last heard, not when the status arrived.',
+      'Counts, lists, superlatives and attribute filters over records loaded by ENABLED layers — "how many flights over Texas", "biggest fire near LA", "ships headed to Oakland", "next rocket launch". A requested list or ranking requires this tool even after set_context_mode returned a Contacts count; that count alone has no requested items. complete:false means the count is a floor ("at least") and rankings cover the records examined; partial names unanswered layers. Items carry lat/lon for a follow-up fly_to_location. ok:false codes: LAYER_OFF (say so and offer to enable), NOT_READY (loading), FOLLOW_UP_MISMATCH (ask again without followUp), UNKNOWN_FIELD/UNKNOWN_SCOPE/BAD_VALUE (retry with the allowed values). Aircraft emergency fields describe broadcasts, not confirmed incidents: narrate emergencyBroadcast with emergencySource. emergencyKind values are general, unlawful, nordo, downed, minfuel and lifeguard; GEV treats the last two as priorities (emergency:false). lastContactAtMs says when the transponder was last heard, not when the status arrived.',
     $position: 1,
     parameters: {
       properties: {
@@ -559,7 +556,7 @@ export const ACTION_DESCRIPTIONS = {
         },
         scope: {
           description:
-            'Always set it (see WHERE). Explicit "in view" uses view; "nearby" uses view when Contacts is off. Around the active Contacts subject uses radius with the requested km and center omitted, never view: the five closest within 250 km use scope:{kind:"radius",km:250}, sortBy:"distance", limit:5. For another requested radius use its actual km, not 250. pointer = "around here/this" while pointing (radius at the cursor); region = "over Texas"; radius with center {lat, lon} = "near <place>" or explicit coordinates; anywhere = no place ("biggest anywhere", "today"). Preserve explicit view, named place, pointer and explicit center even while Contacts is active; never invent coordinates. There is no drawn-area scope yet: say so rather than answering for the view.',
+            'Always set it (see WHERE). Explicit "in view" uses view; "nearby" uses view when Contacts is off. Around the active Contacts subject uses radius with the requested km and center omitted, never view: the five closest within 250 km use scope:{kind:"radius",km:250}, sortBy:"distance", limit:5. pointer = "around here/this" while pointing (radius at the cursor); region = "over Texas"; radius with center {lat, lon} = "near <place>" or explicit coordinates; anywhere = no place ("biggest anywhere", "today"). Preserve explicit view, named place, pointer and explicit center even while Contacts is active. There is no drawn-area scope yet: say so rather than answering for the view.',
           $position: 2,
           properties: {
             name: {
@@ -590,7 +587,7 @@ export const ACTION_DESCRIPTIONS = {
         },
         followUp: {
           description:
-            'true = re-filter the last answer (its layers) instead of fresh data.',
+            'true = re-filter the last answer (its layers) with only the new filter/sort ("which of those…") instead of fresh data.',
           $position: 1,
         },
       },
@@ -603,13 +600,11 @@ export const ACTION_DESCRIPTIONS = {
     parameters: {
       properties: {
         latitude: {
-          description:
-            'Optional observer latitude. Omit to use the current camera position.',
+          description: 'Observer latitude.',
           $position: 3,
         },
         longitude: {
-          description:
-            'Optional observer longitude. Omit to use the current camera position.',
+          description: 'Observer longitude.',
           $position: 3,
         },
         minElevationDeg: {
