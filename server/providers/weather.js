@@ -80,6 +80,36 @@ const PRODUCTS_BY_ID = {
     maxConcurrent: 4,
     image: Object.freeze({ width: 4096, height: 2048 }),
   }),
+  // ECCC's North American radar composite, classified by surface
+  // precipitation type and intensity (dual-pol radar, particle class and
+  // HRDPS surface temperature), every 6 minutes. ECCC Data Services
+  // End-use Licence; the composite includes NOAA NEXRAD.
+  'radar-ca': Object.freeze({
+    capabilitiesUrl:
+      'https://geo.weather.gc.ca/geomet?layer=Radar_1km_SfcPrecipType',
+    mapUrl: 'https://geo.weather.gc.ca/geomet',
+    layer: 'Radar_1km_SfcPrecipType',
+    style: 'SfcPrecipType_Dis',
+    title: 'Precipitation type · North America',
+    coverage:
+      'Canada and the United States where radars reach; gaps do not establish absence of precipitation.',
+    description:
+      'ECCC North American 1 km radar composite classified by surface precipitation type (rain, snow, mixed, freezing rain, hail) and intensity, every 6 minutes; not a forecast.',
+    source: 'ECCC MSC GeoMet',
+    attribution:
+      'Data Source: Environment and Climate Change Canada and NOAA/NWS',
+    metadataTtlMs: 120_000,
+    // ECCC advertises the whole northern band (180°W–180°E, 18°N–90°N);
+    // whole images use the 2:1 globe and coverage uses where radars are.
+    bounds: Object.freeze({ west: -180, south: -90, east: 180, north: 90 }),
+    dataBounds: Object.freeze({ west: -171, south: 16, east: -49, north: 72 }),
+    times: 'interval',
+    historyStep: 2,
+    // GeoMet rejects fractional seconds in TIME.
+    timeFormat: 'seconds',
+    maxConcurrent: 4,
+    image: Object.freeze({ width: 4096, height: 2048 }),
+  }),
 };
 // Every product reads from fixed upstream URLs; nothing in a request chooses
 // the destination.
@@ -239,14 +269,24 @@ export function parseWeatherCapabilities(xml, product, nowMs = Date.now()) {
     .sort()
     .slice(-keep);
   if (!recent.length) throw failure('weather_observations_expired');
-  // Products with fine steps show every n-th step, newest kept, so 13 frames
-  // span about as long as the other products' history.
-  const shown = recent.filter(
-    (_, index) => (recent.length - 1 - index) % step === 0,
-  );
+  // Products with fine steps show the steps on an n-step grid of the clock
+  // (plus the newest), so 13 frames span about as long as the other
+  // products' history and stay the same frames, cacheable, as steps arrive.
+  const stepMs =
+    recent.length > 1
+      ? Date.parse(recent.at(-1)) - Date.parse(recent.at(-2))
+      : 0;
+  const shown =
+    step === 1 || !stepMs
+      ? recent
+      : recent.filter(
+          (value, index) =>
+            index === recent.length - 1 ||
+            Date.parse(value) % (step * stepMs) === 0,
+        );
   return {
     bounds: extent,
-    dataBounds: bounds,
+    dataBounds: spec.dataBounds ? { ...spec.dataBounds } : bounds,
     times: shown.slice(-13),
     allowedTimes: recent,
   };
@@ -486,7 +526,15 @@ export function weatherProxy({
       )
         throw failure('weather_upstream_unavailable');
       attempts.set(product, now());
-      const url = `${spec.capabilitiesUrl}?service=WMS&version=1.3.0&request=GetCapabilities`;
+      // A fixed URL that may carry its own query (GeoMet's `layer=`).
+      const capabilities = new URL(spec.capabilitiesUrl);
+      for (const [key, value] of Object.entries({
+        service: 'WMS',
+        version: '1.3.0',
+        request: 'GetCapabilities',
+      }))
+        capabilities.searchParams.set(key, value);
+      const url = capabilities.href;
       const xml = await shared(
         `metadata:${spec.capabilitiesUrl}`,
         (activeSignal) => upstream(url, activeSignal),
@@ -701,7 +749,8 @@ export function weatherProxy({
           height: String(imageShape.height),
           format: 'image/png',
           transparent: 'true',
-          time,
+          time:
+            spec.timeFormat === 'seconds' ? time.replace(/\.000Z$/, 'Z') : time,
         }).toString();
         try {
           const bytes = await shared(

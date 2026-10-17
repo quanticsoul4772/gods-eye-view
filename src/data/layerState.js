@@ -349,6 +349,11 @@ const OPTION_GROUPS = Object.freeze({
       light: 'l',
       strong: 's',
     }),
+    // US (NOAA reflectivity) or North America (ECCC precipitation type).
+    enumOption('product', 'p', 'radar', ['radar', 'radar-ca'], {
+      radar: 'u',
+      'radar-ca': 'c',
+    }),
   ]),
   'weather-satellite': Object.freeze([
     satelliteFilterOption(),

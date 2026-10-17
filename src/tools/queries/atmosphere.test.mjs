@@ -40,9 +40,9 @@ test('weather windows are 2:1, snapped to 0.25° and kept inside the bounds', ()
     CONUS,
   );
   assert.deepEqual(austin, {
-    west: -98.75,
-    south: 29.75,
-    east: -96.75,
+    west: -99,
+    south: 29.5,
+    east: -96.5,
     north: 30.75,
   });
   const edge = weatherWindow(
@@ -88,7 +88,7 @@ test('weather maps return the latest frame as an image over the area', async () 
     product: 'radar',
     time: '2026-10-01T19:00:00.000Z',
     size: { width: 1024, height: 512 },
-    bbox: { west: -98.75, south: 29.75, east: -96.75, north: 30.75 },
+    bbox: { west: -99, south: 29.5, east: -96.5, north: 30.75 },
     signal: undefined,
   });
   const whole = await catalog.call('get_weather_map', { map: 'satellite' });
@@ -228,4 +228,54 @@ test('lightning where neither NOAA nor EUMETSAT covers the area is refused, not 
     'Mumbai: NOAA advertises a global box but has no data from 0° to 110°E',
   );
   assert.equal(maps.requests.length, 0);
+});
+
+test('radar_north_america maps to ECCC precipitation type over its data box', async () => {
+  const maps = weatherMaps({
+    bounds: { west: -180, south: -90, east: 180, north: 90 },
+    dataBounds: { west: -171, south: 16, east: -49, north: 72 },
+    coverage: 'Canada and the United States',
+  });
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: { weatherMaps: maps },
+  });
+  const result = await catalog.call('get_weather_map', {
+    map: 'radar_north_america',
+    area: { lat: 43.65, lon: -79.38, radius_km: 50 },
+  });
+  assert.equal(maps.requests[0].product, 'radar-ca');
+  assert.ok(maps.requests[0].bbox, 'a window around Toronto');
+  assert.equal(result.data.map, 'radar_north_america');
+  await assert.rejects(
+    catalog.call('get_weather_map', {
+      map: 'radar_north_america',
+      area: { lat: 51.5, lon: -0.1, radius_km: 50 },
+    }),
+    /outside the radar_north_america map's coverage/,
+  );
+});
+
+test('weather windows always hold the whole area: Toronto, and far north where an area is wider than tall', async () => {
+  for (const [lat, lon] of [
+    [43.65, -79.38],
+    [65, -147],
+  ]) {
+    const area = await resolveArea({ lat, lon, radius_km: 50 });
+    const box = weatherWindow(area, {
+      west: -171,
+      south: 16,
+      east: -49,
+      north: 72,
+    });
+    assert.ok(box, `${lat},${lon}`);
+    assert.ok(
+      box.west <= area.west &&
+        box.east >= area.east &&
+        box.south <= area.south &&
+        box.north >= area.north,
+      JSON.stringify({ box, area }),
+    );
+    assert.equal((box.east - box.west) / (box.north - box.south), 2);
+  }
 });

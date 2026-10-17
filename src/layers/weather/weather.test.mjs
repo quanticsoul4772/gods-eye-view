@@ -1795,7 +1795,7 @@ test('one row steps every registered observation; missing frames hide and latest
   });
   assert.deepEqual(
     radar.layer.getParams(),
-    { opacity: 'strong' },
+    { product: 'radar', opacity: 'strong' },
     'history is never serialized',
   );
   satellite.layer.disable();
@@ -1943,7 +1943,11 @@ test('observed descriptors keep configuration only and label satellite clouds by
     assert.equal(controls.summary.sections, undefined);
     assert.deepEqual(
       controls.summary.settings.map(({ label }) => label),
-      id === 'weather-satellite' ? ['REGION', 'IMAGE', 'OPACITY'] : ['OPACITY'],
+      id === 'weather-satellite'
+        ? ['REGION', 'IMAGE', 'OPACITY']
+        : id === 'weather-radar'
+          ? ['SOURCE', 'OPACITY']
+          : ['OPACITY'],
     );
     assert.deepEqual(
       controls.summary.settings.flatMap(({ chips }) => chips),
@@ -2343,5 +2347,48 @@ test('satellite lightning (EUMETSAT) is a lightning layer with its own source, l
     'View Europe & Africa',
   );
   assert.equal(h.layer.getStats().source, 'EUMETSAT EUMETView');
+  h.layer.destroy();
+});
+
+test('rain radar switches between NOAA (US) and ECCC precipitation type (North America)', () => {
+  const h = layerHarness({ id: 'weather-radar' });
+  assert.deepEqual(h.layer.getParams(), {
+    product: 'radar',
+    opacity: 'strong',
+  });
+  let controls = h.layer.getRowControls();
+  assert.deepEqual(
+    controls.summary.settings
+      .find(({ id }) => id === 'source')
+      .chips.map(({ id, active }) => [id, active]),
+    [
+      ['radar', true],
+      ['radar-ca', false],
+    ],
+  );
+  h.layer.setParams({ product: 'radar-ca' });
+  assert.deepEqual(h.layer.getParams(), {
+    product: 'radar-ca',
+    opacity: 'strong',
+  });
+  controls = h.layer.getRowControls();
+  assert.equal(controls.legendCategorical, true);
+  assert.equal(controls.legend.length, 12);
+  assert.deepEqual(controls.legend[0], {
+    label: 'Light snow',
+    color: '#7FDFEB',
+  });
+  assert.equal(controls.legend.at(-1).label, 'Moderate/heavy freezing rain');
+  assert.equal(controls.summary.coverage, 'Canada + US');
+  assert.equal(controls.summary.label, 'Precipitation type · N. America');
+  assert.equal(controls.summary.units, '');
+  assert.match(controls.infoTitle, /NOAA NEXRAD/);
+  assert.equal(h.layer.getStats().source, 'ECCC MSC GeoMet');
+  h.layer.setParams({ product: 'clouds' });
+  assert.equal(
+    h.layer.getParams().product,
+    'radar-ca',
+    'a satellite product is not a radar source',
+  );
   h.layer.destroy();
 });

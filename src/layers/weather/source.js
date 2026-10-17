@@ -10,6 +10,7 @@ export const WEATHER_PRODUCTS = Object.freeze([
   'clouds-regional',
   'lightning',
   'lightning-eu',
+  'radar-ca',
 ]);
 
 export { WEATHER_DATA_BOUNDS, weatherCoverage } from './coverage.js';
@@ -58,6 +59,7 @@ export const WEATHER_IMAGE_SIZES = Object.freeze({
   clouds: Object.freeze({ width: 2048, height: 1024 }),
   lightning: Object.freeze({ width: 4096, height: 2048 }),
   'lightning-eu': Object.freeze({ width: 4096, height: 2048 }),
+  'radar-ca': Object.freeze({ width: 4096, height: 2048 }),
 });
 /** Largest detail-window image for every product; also the proxy default. */
 export const WEATHER_DETAIL_SIZE = Object.freeze({ width: 4096, height: 2048 });
