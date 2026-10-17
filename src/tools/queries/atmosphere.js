@@ -24,6 +24,8 @@ const MAPS = {
   radar_north_america: 'radar-ca',
   precipitation_global: 'precip-global',
   radar_germany: 'radar-de',
+  radar_finland: 'radar-fi',
+  radar_netherlands: 'radar-nl',
   satellite: 'clouds-regional',
   global_satellite: 'clouds',
   lightning: 'lightning',
@@ -38,6 +40,8 @@ const PRODUCT_LAYERS = {
   'radar-ca': 'weather-radar',
   'precip-global': 'weather-radar',
   'radar-de': 'weather-radar',
+  'radar-fi': 'weather-radar',
+  'radar-nl': 'weather-radar',
 };
 
 /** NOAA's lightning: 110°E across the dateline to 0°, 25°S–80°N. */
@@ -134,6 +138,8 @@ export const getWeatherMap = defineTool({
     '(contiguous US), ECCC precipitation type (radar_north_america: Canada and the US), ' +
     'a worldwide NASA IMERG satellite precipitation estimate about 7 h old (precipitation_global), ' +
     'DWD radar rain rate over Germany (radar_germany), ' +
+    'FMI radar rain rate over Finland (radar_finland), ' +
+    'KNMI radar rain rate over the Netherlands (radar_netherlands), ' +
     'regional or global infrared satellite clouds, or ' +
     'lightning (NOAA in the Americas, EUMETSAT in Europe/Africa). Returns the image itself.',
   inputSchema: {

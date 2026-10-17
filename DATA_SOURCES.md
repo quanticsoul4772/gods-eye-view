@@ -40,6 +40,8 @@ How to read this:
 | **Environment and Climate Change Canada** (MSC GeoMet WMS `geo.weather.gc.ca/geomet`, layer `Radar_1km_SfcPrecipType`) | Rain radar's North America source: the 1 km North American radar composite classified by surface precipitation type and intensity, every 6 minutes | [ECCC Data Services End-use Licence](https://eccc-msc.github.io/open-data/licence/readme_en/) (open, attribution required, no endorsement implied); the composite includes NOAA NEXRAD radars | "Data Source: Environment and Climate Change Canada and NOAA/NWS" |
 | **Environment and Climate Change Canada** (MSC GeoMet OGC API) | Air quality (AQHI) — Canadian station observations | [ECCC Data Services End-use Licence](https://eccc-msc.github.io/open-data/licence/readme_en/) (open, attribution required, no endorsement implied) | "Contains information licensed under the Environment and Climate Change Canada Data Services End-use Licence" |
 | **Sensor.Community** (`data.1h.json`) | Air quality (PM sensors) layer: volunteer low-cost particulate sensors (PM2.5, PM10, 1-hour means), mostly in Europe | Contents under the [Open Data Commons Database Contents License 1.0](https://opendatacommons.org/licenses/dbcl/1-0/) (the site footer's "DB Contents License"), which requires complying with the [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/) for the database; Sensor.Community does not name the ODbL itself. Listed by the [gev-open-sources](https://quanticsoul4772.github.io/gev-open-sources/) directory (`airquality.sensors`) and fetched keyless through `/api/air-sensors` at most every 20 minutes, with a User-Agent that names this project as their API asks. Indicative only: uncalibrated, not official monitors | "Air quality: Sensor.Community (contents DbCL 1.0, database per ODbL 1.0)" with the ODbL linked |
+| **FMI** radar composite (WMS `openwms.fmi.fi/geoserver/Radar/wms`, layer `radar_finland_cappi_rate`, style `radar_rate_opera`) | Rain radar's Finland source: precipitation rate in mm/h every 5 minutes | CC BY 4.0 (Finnish Meteorological Institute); keyless | "Finnish Meteorological Institute (CC BY 4.0)" |
+| **KNMI** radar composite (WMS `geoservices.knmi.nl/adagucserver?dataset=RADAR`, layer `RAD_NL25_PCP_CM`, style `precipitation_mm_extranetten_v1`) | Rain radar's Netherlands source: precipitation rate in mm/h every 5 minutes, 1 km | CC BY 4.0 (KNMI); keyless | "KNMI (CC BY 4.0)" |
 | **DWD** radar composite (WMS `maps.dwd.de/geoserver/dwd/wms`, layer `dwd:Niederschlagsradar`, the RV product) | Rain radar's Germany source: precipitation rate in mm/h, 1 km, every 5 minutes, observed frames only | CC BY 4.0 (Deutscher Wetterdienst); keyless | "Deutscher Wetterdienst (CC BY 4.0)" |
 | **NASA GPM IMERG** via **NASA GIBS** (WMS `gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi`, layer `IMERG_Precipitation_Rate_30min`; times from WMTS DescribeDomains) | Rain radar's World source: IMERG Early multi-satellite precipitation rate, global, 30-minute steps about 7 hours behind | U.S. public domain (NASA data); keyless | "NASA GPM IMERG Early via NASA GIBS" with the GIBS acknowledgement |
 | **NASA GIBS** (WMTS tiles + Worldview Snapshots) and **NASA CMR** (granule catalog) | Recent Imagery layer: HLS S30/L30 (Sentinel-2, Landsat 8/9) and VIIRS true-colour tiles draped on the map, per-day thumbnails and PNG exports; the HLS granule catalog (dates, cloud, footprints) for a selected box | U.S. public domain (NASA data); keyless, browser-direct (CORS `*`); no bulk use — one 30-day catalog query per box, tiles bounded to the box, six tile requests in flight | "We acknowledge the use of imagery provided by services from NASA's Global Imagery Browse Services (GIBS), part of NASA's Earth Science Data and Information System (ESDIS)." — [gibs.earthdata.nasa.gov](https://gibs.earthdata.nasa.gov), [HLS](https://lpdaac.usgs.gov/products/hlss30v002/) |
@@ -348,6 +350,35 @@ This Wind prototype adds no cloud-volume or radar data. Mapped.earth's public
 bundles were studied for rendering ideas, but
 no code or assets were reused and no application licence granting reuse was
 found. Its presentation is not a weather-data source for this implementation.
+
+### Observed weather: FMI and KNMI radar composites (Rain radar, Finland and Netherlands)
+
+- **FMI:** WMS `https://openwms.fmi.fi/geoserver/Radar/wms`, layer `radar_finland_cappi_rate` (rain
+  rate, CAPPI, mm/h), style `radar_rate_opera` ("similar as used generally for OPERA composite
+  visualization"). SOURCE chip "Finland · FMI", share links `lo=v.p.f`. Capabilities come from the
+  layer's own endpoint (`…/geoserver/Radar/radar_finland_cappi_rate/wms`, about 12 KB); data box
+  15.3–42.7° E, 57.1–70.8° N; whole images 14–44° E, 56.5–71.5° N (2:1). The style is a ramp
+  (GetLegendGraphic JSON): 0.2, 0.5, 1, 2, 3, 4, 5, 10, 20, 50, 100 and 200 mm/h, fading in from
+  transparent below 0.2; no data is grey at 50 %. Maps carry "Default value used" warnings for FMI's
+  elevation, FILTER and GEOCONF dimensions, which are expected. Licence: CC BY 4.0 ("shall be used
+  by the Finnish Meteorological Institute's open data service",
+  https://en.ilmatieteenlaitos.fi/open-data-licence).
+- **KNMI:** ADAGUC WMS `https://geoservices.knmi.nl/adagucserver?dataset=RADAR` (the dataset is a
+  fixed query that both capabilities and GetMap keep), layer `RAD_NL25_PCP_CM` ("Radar precipitation
+  … 1.0x1.0 km grid … five minute time interval … mm/hour"), style
+  `precipitation_mm_extranetten_v1`. SOURCE chip "Netherlands · KNMI", share links `lo=v.p.n`.
+  Capabilities are 16 KB; data box 0–10.86° E, 48.90–55.97° N; whole images 5.5° W–16.5° E,
+  47–58° N (2:1). The style is a log ramp. KNMI's legend rounds its tick labels to integers, so the
+  legend values come from the ticks' spacing, which follows the 1–2–5 pattern exactly (about 132 px
+  per decade): 0.2, 0.5, 1, 2, 5, 10, 20 and 40 mm/h; colours read at those ticks. Under about 0.2
+  mm/h the map fades to transparent, so the legend starts there. KNMI smooths the image, and
+  advertises `opaque="1"` while returning transparent PNGs. Licence: CC BY 4.0 (data.overheid.nl
+  "CC-BY (4.0)"; capabilities: Fees "no conditions apply", AccessConstraints "None").
+- **Timing (both):** 5-minute steps, the newest about 5–10 minutes old; the capabilities default is
+  the newest step. 13 frames are shown on a 10-minute grid (about 2 hours). Not a forecast.
+- **Other services checked (2026-10-17) and not used:** MET Norway (WMS "Reserved for yr.no"),
+  Météo-France and AEMET (keys), RMI (radar GetMap refused), SMHI (one fixed-extent PNG), DMI and
+  MeteoSwiss (HDF5 only), CHMI (static PNGs, bounding box unverified), JMA (undocumented tile path).
 
 ### Observed weather: DWD radar composite (Rain radar, Germany)
 

@@ -129,6 +129,8 @@ test('shell heights stack every product with lightning highest', () => {
     'radar-ca': 6_200,
     'precip-global': 6_200,
     'radar-de': 6_200,
+    'radar-fi': 6_200,
+    'radar-nl': 6_200,
     'lightning-eu': 6_400,
     lightning: 6_600,
   });

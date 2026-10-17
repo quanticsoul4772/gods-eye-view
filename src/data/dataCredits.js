@@ -160,6 +160,18 @@ export const DATA_CREDITS = [
       '<a href="https://lpdaac.usgs.gov/products/hlss30v002/" target="_blank" rel="noopener">HLS product page</a>',
   },
   {
+    key: 'fmi-radar',
+    html:
+      'Rain radar (Finland): Finnish Meteorological Institute open data, ' +
+      '<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>',
+  },
+  {
+    key: 'knmi-radar',
+    html:
+      'Rain radar (Netherlands): KNMI radar precipitation, ' +
+      '<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>',
+  },
+  {
     key: 'dwd-radar',
     html:
       'Rain radar (Germany): Deutscher Wetterdienst, radar composite RV, ' +

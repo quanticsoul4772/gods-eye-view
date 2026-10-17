@@ -174,6 +174,54 @@ const PRODUCTS_BY_ID = {
     maxConcurrent: 3,
     image: Object.freeze({ width: 2048, height: 1024 }),
   }),
+  // FMI's Finnish radar composite, rain rate (CAPPI, mm/h) every 5 minutes,
+  // CC BY 4.0, drawn in FMI's OPERA-like style.
+  'radar-fi': Object.freeze({
+    capabilitiesUrl:
+      'https://openwms.fmi.fi/geoserver/Radar/radar_finland_cappi_rate/wms',
+    capabilitiesName: 'radar_finland_cappi_rate',
+    mapUrl: 'https://openwms.fmi.fi/geoserver/Radar/wms',
+    layer: 'radar_finland_cappi_rate',
+    style: 'radar_rate_opera',
+    title: 'Rain radar · Finland',
+    coverage:
+      'Finland and nearby seas where FMI radars reach; grey marks no data.',
+    description:
+      'FMI Finnish radar composite, precipitation rate in mm/h every 5 minutes, OPERA-style colours; not a forecast.',
+    source: 'FMI open data',
+    attribution: 'Finnish Meteorological Institute (CC BY 4.0)',
+    metadataTtlMs: 120_000,
+    // 2:1 around FMI's advertised 15.3–42.7° E, 57.1–70.8° N.
+    bounds: Object.freeze({ west: 14, south: 56.5, east: 44, north: 71.5 }),
+    times: 'interval',
+    historyStep: 2,
+    // No strictTime: maps carry "Default value used" warnings for FMI's
+    // elevation, FILTER and GEOCONF dimensions, which are expected.
+    maxConcurrent: 3,
+    image: Object.freeze({ width: 2048, height: 1024 }),
+  }),
+  // KNMI's Dutch radar composite, rain rate in mm/h every 5 minutes, 1 km,
+  // CC BY 4.0. The ADAGUC server selects the dataset by query.
+  'radar-nl': Object.freeze({
+    capabilitiesUrl: 'https://geoservices.knmi.nl/adagucserver?dataset=RADAR',
+    capabilitiesName: 'RAD_NL25_PCP_CM',
+    mapUrl: 'https://geoservices.knmi.nl/adagucserver?dataset=RADAR',
+    layer: 'RAD_NL25_PCP_CM',
+    style: 'precipitation_mm_extranetten_v1',
+    title: 'Rain radar · Netherlands',
+    coverage: 'The Netherlands and surroundings where KNMI radars reach.',
+    description:
+      'KNMI Dutch radar composite, precipitation rate in mm/h every 5 minutes; not a forecast.',
+    source: 'KNMI',
+    attribution: 'KNMI (CC BY 4.0)',
+    metadataTtlMs: 120_000,
+    // 2:1 around KNMI's advertised 0–10.86° E, 48.9–55.97° N.
+    bounds: Object.freeze({ west: -5.5, south: 47, east: 16.5, north: 58 }),
+    times: 'interval',
+    historyStep: 2,
+    maxConcurrent: 3,
+    image: Object.freeze({ width: 2048, height: 1024 }),
+  }),
 };
 // Every product reads from fixed upstream URLs; nothing in a request chooses
 // the destination.
@@ -950,8 +998,9 @@ export function weatherProxy({
         if (now() - (tileFailures.get(key) ?? -Infinity) < 30_000)
           throw failure('weather_upstream_unavailable');
         const spec = PRODUCTS[product];
+        // A fixed map URL may carry its own query (KNMI's `dataset=`).
         const upstreamUrl = new URL(spec.mapUrl);
-        upstreamUrl.search = new URLSearchParams({
+        for (const [name, value] of Object.entries({
           service: 'WMS',
           version: '1.1.1',
           request: 'GetMap',
@@ -965,7 +1014,8 @@ export function weatherProxy({
           transparent: 'true',
           time:
             spec.timeFormat === 'seconds' ? time.replace(/\.000Z$/, 'Z') : time,
-        }).toString();
+        }))
+          upstreamUrl.searchParams.set(name, value);
         try {
           const bytes = await shared(
             `image:${key}`,

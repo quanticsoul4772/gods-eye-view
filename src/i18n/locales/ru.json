@@ -3151,5 +3151,22 @@
   "DWD German radar composite: rain rate every 5 minutes, observed frames only": "Немецкий радарный композит DWD: интенсивность осадков каждые 5 минут, только наблюдения",
   "View Germany": "Показать Германию",
   "Outside radar range": "Вне зоны радаров",
-  "DWD German radar composite (RV product): precipitation rate in mm/h every 5 minutes, about 1 km. Observed frames only; DWD's 2-hour nowcast is not shown. Grey shading marks areas outside radar range; no colour inside it means under 0.1 mm/h. Not a forecast or a storm warning.": "Немецкий радарный композит DWD (продукт RV): интенсивность осадков в мм/ч каждые 5 минут, около 1 км. Только наблюдаемые кадры; 2-часовой наукаст DWD не показан. Серым отмечены области вне зоны радаров; отсутствие цвета внутри означает меньше 0,1 мм/ч. Не прогноз и не штормовое предупреждение."
+  "DWD German radar composite (RV product): precipitation rate in mm/h every 5 minutes, about 1 km. Observed frames only; DWD's 2-hour nowcast is not shown. Grey shading marks areas outside radar range; no colour inside it means under 0.1 mm/h. Not a forecast or a storm warning.": "Немецкий радарный композит DWD (продукт RV): интенсивность осадков в мм/ч каждые 5 минут, около 1 км. Только наблюдаемые кадры; 2-часовой наукаст DWD не показан. Серым отмечены области вне зоны радаров; отсутствие цвета внутри означает меньше 0,1 мм/ч. Не прогноз и не штормовое предупреждение.",
+  "FMI RADAR · 5 min": "РАДАР FMI · 5 мин",
+  "KNMI RADAR · 5 min": "РАДАР KNMI · 5 мин",
+  "Finland · grey = no data": "Финляндия · серым — нет данных",
+  "Netherlands · smoothed by KNMI": "Нидерланды · сглажено KNMI",
+  "Rain radar · Finland": "Радар осадков · Финляндия",
+  "Rain radar · Netherlands": "Радар осадков · Нидерланды",
+  "FMI Finnish radar composite: precipitation rate in mm/h every 5 minutes, in FMI's OPERA-style colours; faint dark blue is under 0.2 mm/h and grey marks no data. Not a forecast or a storm warning.": "Финский радарный композит FMI: интенсивность осадков в мм/ч каждые 5 минут, в цветах FMI в стиле OPERA; бледный тёмно-синий — меньше 0,2 мм/ч, серым отмечено отсутствие данных. Не прогноз и не штормовое предупреждение.",
+  "KNMI Dutch radar composite: precipitation rate in mm/h every 5 minutes on a 1 km grid, drawn smoothed by KNMI; under about 0.2 mm/h fades out. Not a forecast or a storm warning.": "Нидерландский радарный композит KNMI: интенсивность осадков в мм/ч каждые 5 минут на сетке 1 км, сглажено KNMI; ниже примерно 0,2 мм/ч исчезает. Не прогноз и не штормовое предупреждение.",
+  "Finland (FMI radars)": "Финляндия (радары FMI)",
+  "Netherlands (KNMI radars)": "Нидерланды (радары KNMI)",
+  "Finland · FMI": "Финляндия · FMI",
+  "Netherlands · KNMI": "Нидерланды · KNMI",
+  "FMI Finnish radar composite: rain rate every 5 minutes": "Финский радарный композит FMI: интенсивность осадков каждые 5 минут",
+  "KNMI Dutch radar composite: rain rate every 5 minutes": "Нидерландский радарный композит KNMI: интенсивность осадков каждые 5 минут",
+  "View Finland": "Показать Финляндию",
+  "View Netherlands": "Показать Нидерланды",
+  "{value} mm/h rain rate": "{value} мм/ч — интенсивность осадков"
 }
