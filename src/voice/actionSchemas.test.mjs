@@ -51,7 +51,8 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // Satellite lightning (lightning-eu) extends it; two self-evident ids drop alias hints.
     // Plain "air quality" routes to air-sensors (AQHI keeps Canada); hints skip the id spelled with spaces.
     // Prompt room: a rule stated twice keeps one copy; ranges and "Optional" that the schema already says are dropped.
-    '6320ea4d3b5d569e2fa5c4f5fe6e1d0be2988fad9e0697abbd13b45c826fe598',
+    // rangeM says a bare coordinate is a 250 m close-up, so a storm or fire gets a fitting range.
+    '11c8d2dd2d3276701267edb88037587d600a9eeac515c510408028033e6f8f0a',
   );
 });
 

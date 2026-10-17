@@ -276,6 +276,13 @@ function runChecks(checks = {}, calls, state, rounds) {
     if (d > km)
       failures.push(`camera ${Math.round(d)} km from target (max ${km})`);
   }
+  if (
+    Number.isFinite(checks.minHeightM) &&
+    state.camera.heightM < checks.minHeightM
+  )
+    failures.push(
+      `camera at ${state.camera.heightM} m (min ${checks.minHeightM})`,
+    );
   for (const id of checks.layersOn || [])
     if (!state.layersOn.includes(id)) failures.push(`layer ${id} not on`);
   for (const id of checks.layersOff || [])
@@ -325,30 +332,37 @@ try {
     rounds = [];
     pageErrors = [];
     const startedAt = Date.now();
-    await page.$eval('#gev-ask-composer input', (input) => {
-      input.value = '';
-      input.focus();
-    });
-    await page.keyboard.type(item.prompt);
-    await page.keyboard.press('Enter');
     let timedOut = false;
-    try {
-      await page.waitForFunction(
-        () =>
-          !document.querySelector('#gev-ask-composer .gev-ask-cancel')?.hidden,
-        { timeout: 10_000 },
-      );
-    } catch {
-      /* answered before the cancel button showed */
-    }
-    try {
-      await page.waitForFunction(
-        () =>
-          document.querySelector('#gev-ask-composer .gev-ask-cancel')?.hidden,
-        { timeout: TURN_TIMEOUT_MS },
-      );
-    } catch {
-      timedOut = true;
+    // A follow-up (`then`) is typed into the same conversation once the
+    // previous turn has finished.
+    for (const text of [item.prompt, ...(item.then || [])]) {
+      await page.$eval('#gev-ask-composer input', (input) => {
+        input.value = '';
+        input.focus();
+      });
+      await page.keyboard.type(text);
+      await page.keyboard.press('Enter');
+      try {
+        await page.waitForFunction(
+          () =>
+            !document.querySelector('#gev-ask-composer .gev-ask-cancel')
+              ?.hidden,
+          { timeout: 10_000 },
+        );
+      } catch {
+        /* answered before the cancel button showed */
+      }
+      try {
+        await page.waitForFunction(
+          () =>
+            document.querySelector('#gev-ask-composer .gev-ask-cancel')?.hidden,
+          { timeout: TURN_TIMEOUT_MS },
+        );
+      } catch {
+        timedOut = true;
+        break;
+      }
+      if (item.then) await pause(2500);
     }
     await pause(2500); // let a final fly-to settle before reading the camera
     const totalMs = Date.now() - startedAt;

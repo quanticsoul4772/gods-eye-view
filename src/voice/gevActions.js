@@ -1241,7 +1241,22 @@ export function createGevActionRunner({
     }
 
     if (name === 'annotate_map') {
-      return annotateMap(annotations, args, reportProgress);
+      // Framing the drawing moves the camera, so it takes the camera the way
+      // every other destination does: a route flight, orbit or follow that is
+      // still running would otherwise keep driving the view.
+      const framed =
+        args.flyTo === true &&
+        runManagedVoiceNavigation(
+          styleManager,
+          'annotation',
+          'annotate_map',
+          () => true,
+        ) === true;
+      return annotateMap(
+        annotations,
+        { ...args, flyTo: framed },
+        reportProgress,
+      );
     }
 
     if (name === 'clear_annotations') {

@@ -263,6 +263,63 @@ test('AIS type 0 (not available) is counted as unknown, not as a type', async ()
   );
 });
 
+test('numeric AIS ship-type codes group and filter by their family', async () => {
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: {
+      vessels: vessels({
+        records: [
+          vessel('366000001', 37.78, -122.4, { type: '70' }),
+          vessel('366000002', 37.79, -122.41, { type: '74' }),
+          vessel('366000003', 37.77, -122.39, { type: '79' }),
+          vessel('366000004', 37.76, -122.38, { type: '80' }),
+          vessel('366000005', 37.75, -122.37, { type: '52' }),
+        ],
+      }),
+    },
+  });
+  const grouped = await catalog.call('vessels_in_area', {
+    area: bay,
+    group_by: 'type',
+  });
+  assert.deepEqual(grouped.data.breakdown.groups, [
+    { value: 'CARGO', count: 3 },
+    { value: 'TANKER', count: 1 },
+    { value: 'TUG', count: 1 },
+  ]);
+  const tankers = await catalog.call('vessels_in_area', {
+    area: bay,
+    type: 'tanker',
+  });
+  assert.deepEqual(
+    tankers.data.rows.map((row) => [row.mmsi, row.type]),
+    [['366000004', 'TANKER']],
+  );
+});
+
+test('a destination with no letters counts as unknown', async () => {
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: {
+      vessels: vessels({
+        records: [
+          vessel('366000001', 37.78, -122.4, { destination: '0' }),
+          vessel('366000002', 37.79, -122.41, { destination: '---' }),
+          vessel('366000003', 37.77, -122.39, { destination: 'NLRTM' }),
+        ],
+      }),
+    },
+  });
+  const result = await catalog.call('vessels_in_area', {
+    area: bay,
+    group_by: 'destination',
+  });
+  assert.deepEqual(result.data.breakdown.groups, [
+    { value: 'NLRTM', count: 1 },
+  ]);
+  assert.equal(result.data.breakdown.unknown_count, 2);
+});
+
 test('vessels in an area can be counted by destination with a speed summary', async () => {
   const catalog = composeCatalog({
     tools: coreTools,

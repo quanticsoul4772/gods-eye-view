@@ -30,7 +30,7 @@ export const ACTION_DESCRIPTIONS = {
         },
         rangeM: {
           description:
-            'Camera range from the target in meters. Omit it for automatic whole-country/whole-city or close-landmark framing; provide it only when the user explicitly asks for a numeric height or distance, or a closer or wider view.',
+            'Camera range in meters: a height or distance the user asks for, a closer or wider view, or for a bare coordinate (else a 250 m close-up) one that fits the subject, e.g. 20000 for a fire, 1500000 for a storm. Omit for named places.',
           $position: 3,
         },
         headingDeg: {
