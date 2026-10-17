@@ -457,6 +457,10 @@ test('an airline designator is read from an ICAO flight callsign only', () => {
     ['GABCD', null],
     ['SWA', null],
     ['SWAX123', null],
+    ['SWA12345', null],
+    ['RPC1234', null],
+    ['CUT1240', null],
+    ['CUB123', 'CUB'],
     ['', null],
     [null, null],
   ])

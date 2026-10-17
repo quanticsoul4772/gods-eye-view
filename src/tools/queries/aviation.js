@@ -44,15 +44,17 @@ const GROUP_LABELS = Object.freeze({
 
 /**
  * The ICAO airline designator a callsign flies under: three letters, then a
- * flight number that starts with a digit (SWA1234, UAL12A, BAW1). Registrations
- * used as callsigns (N123AB, GABCD) have no designator.
+ * flight number that starts with a digit, seven characters at most (SWA1234,
+ * UAL12A, BAW1). Registrations used as callsigns (N123AB, GABCD) have no
+ * designator; Philippine RP-C1234 and Cuban CU-T1240, which read like one
+ * without their hyphen, are excluded too.
  */
 export function airlineDesignator(callsign) {
-  const match = /^([A-Z]{3})\d[0-9A-Z]{0,4}$/.exec(
-    String(callsign ?? '')
-      .trim()
-      .toUpperCase(),
-  );
+  const text = String(callsign ?? '')
+    .trim()
+    .toUpperCase();
+  if (/^(?:RPC|CUT)\d{4}$/.test(text)) return null;
+  const match = /^([A-Z]{3})\d[0-9A-Z]{0,3}$/.exec(text);
   return match ? match[1] : null;
 }
 
