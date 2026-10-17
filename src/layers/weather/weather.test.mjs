@@ -2392,3 +2392,29 @@ test('rain radar switches between NOAA (US) and ECCC precipitation type (North A
   );
   h.layer.destroy();
 });
+
+test('switching the radar source while the layer is on drops the NOAA frame and asks for the ECCC manifest', async () => {
+  const asked = [];
+  const h = layerHarness({
+    id: 'weather-radar',
+    feed: {
+      getSnapshot: async ({ product }) => {
+        asked.push(product);
+        return { ...snapshot, product };
+      },
+    },
+  });
+  h.layer.enable();
+  const first = h.layer.update();
+  await flush();
+  h.stages[0].finish();
+  await first;
+  assert.deepEqual(asked, ['radar']);
+  h.layer.setParams({ product: 'radar-ca' });
+  await flush();
+  h.stages.at(-1)?.finish();
+  await flush();
+  assert.deepEqual(asked, ['radar', 'radar-ca']);
+  assert.equal(h.layer.getParams().product, 'radar-ca');
+  h.layer.destroy();
+});

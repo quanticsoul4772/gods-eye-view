@@ -40,10 +40,10 @@ test('weather windows are 2:1, snapped to 0.25° and kept inside the bounds', ()
     CONUS,
   );
   assert.deepEqual(austin, {
-    west: -99,
+    west: -99.25,
     south: 29.5,
-    east: -96.5,
-    north: 30.75,
+    east: -96.25,
+    north: 31,
   });
   const edge = weatherWindow(
     {
@@ -88,7 +88,7 @@ test('weather maps return the latest frame as an image over the area', async () 
     product: 'radar',
     time: '2026-10-01T19:00:00.000Z',
     size: { width: 1024, height: 512 },
-    bbox: { west: -99, south: 29.5, east: -96.5, north: 30.75 },
+    bbox: { west: -99.25, south: 29.5, east: -96.25, north: 31 },
     signal: undefined,
   });
   const whole = await catalog.call('get_weather_map', { map: 'satellite' });
@@ -278,4 +278,44 @@ test('weather windows always hold the whole area: Toronto, and far north where a
     );
     assert.equal((box.east - box.west) / (box.north - box.south), 2);
   }
+});
+
+test('weather windows hold the whole area at every snap phase (latitude sweep)', async () => {
+  const bounds = { west: -171, south: 16, east: -49, north: 68 };
+  for (const radius of [50, 200, 800])
+    for (let lat = 20; lat <= 60; lat += 0.037) {
+      const area = await resolveArea({ lat, lon: -95.123, radius_km: radius });
+      const box = weatherWindow(area, bounds);
+      assert.ok(box, `${radius} km at ${lat.toFixed(3)}`);
+      // The part of the area inside the product must be in the window.
+      assert.ok(
+        box.west <= Math.max(area.west, bounds.west) &&
+          box.east >= Math.min(area.east, bounds.east) &&
+          box.south <= Math.max(area.south, bounds.south) &&
+          box.north >= Math.min(area.north, bounds.north),
+        `${radius} km at ${lat.toFixed(3)}`,
+      );
+    }
+});
+
+test('with no area, a padded product shows its data box, not the padding', async () => {
+  const maps = weatherMaps({
+    bounds: { west: -180, south: -90, east: 180, north: 90 },
+    dataBounds: { west: -171, south: 16, east: -49, north: 68 },
+  });
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: { weatherMaps: maps },
+  });
+  const result = await catalog.call('get_weather_map', {
+    map: 'radar_north_america',
+  });
+  const box = maps.requests[0].bbox;
+  assert.ok(box, 'a window, not the whole globe');
+  assert.ok(
+    box.west <= -171 && box.east >= -49 && box.south <= 16 && box.north >= 68,
+    JSON.stringify(box),
+  );
+  assert.equal((box.east - box.west) / (box.north - box.south), 2);
+  assert.deepEqual(result.data.box, box);
 });

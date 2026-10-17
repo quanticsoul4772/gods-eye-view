@@ -1373,7 +1373,7 @@ test('ECCC precipitation type: 12-minute grid of 6-minute steps, data box overri
     west: -171,
     south: 16,
     east: -49,
-    north: 72,
+    north: 68,
   });
   const calls = [];
   const { request } = install({
@@ -1410,4 +1410,25 @@ test('ECCC precipitation type: 12-minute grid of 6-minute steps, data box overri
     'no fractional seconds',
   );
   assert.ok(calls.every((url) => url.host === 'geo.weather.gc.ca'));
+});
+
+test('interval history: a newest step on the grid gives 13 grid frames; an interval off its own step grid is refused', () => {
+  const onGrid = CA_XML.replaceAll('02:06:00Z', '02:12:00Z').replaceAll(
+    '23:06:00Z',
+    '23:12:00Z',
+  );
+  const parsed = parseWeatherCapabilities(onGrid, 'radar-ca', NOW + 6 * 60_000);
+  assert.equal(parsed.times.length, 13);
+  assert.equal(parsed.times.at(-1), '2026-09-16T02:12:00.000Z');
+  assert.equal(new Set(parsed.times).size, 13, 'no duplicate newest');
+  for (const time of parsed.times)
+    assert.equal(Date.parse(time) % (12 * 60_000), 0, time);
+  const offPhase = CA_XML.replaceAll('02:06:00Z', '02:03:00Z').replaceAll(
+    '23:06:00Z',
+    '23:03:00Z',
+  );
+  assert.throws(
+    () => parseWeatherCapabilities(offPhase, 'radar-ca', NOW),
+    'steps off their own grid would leave history with one frame',
+  );
 });

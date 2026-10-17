@@ -3125,8 +3125,8 @@
   "Canada + US": "Канада + США",
   "US · NOAA": "США · NOAA",
   "N. America · ECCC": "Сев. Америка · ECCC",
-  "ECCC North American composite: precipitation type and intensity, every 6 minutes": "Североамериканская композиция ECCC: тип и интенсивность осадков, каждые 6 минут",
+  "ECCC North American composite: precipitation type and intensity, every 6 minutes": "Североамериканская мозаика ECCC: тип и интенсивность осадков, каждые 6 минут",
   "NOAA MRMS reflectivity, contiguous US, about every 4 minutes": "Отражаемость NOAA MRMS, континентальная часть США, примерно каждые 4 минуты",
   "View North America": "Показать Северную Америку",
-  "ECCC North American 1 km radar composite classified by surface precipitation type and intensity, from dual-polarization radar, particle classification and model surface temperature; includes NOAA NEXRAD radars. Frames every 6 minutes; not a forecast or a storm warning.": "Североамериканская радарная композиция ECCC (1 км), классифицированная по типу и интенсивности осадков у поверхности по данным радаров с двойной поляризацией, классификации частиц и приземной температуре модели; включает радары NOAA NEXRAD. Кадры каждые 6 минут; не прогноз и не штормовое предупреждение."
+  "ECCC North American 1 km radar composite classified by surface precipitation type and intensity, from dual-polarization radar, particle classification and model surface temperature; includes NOAA NEXRAD radars. Frames every 6 minutes; not a forecast or a storm warning.": "Североамериканская радарная мозаика ECCC (1 км), классифицированная по типу и интенсивности осадков у поверхности по данным радаров с двойной поляризацией, классификации частиц и приземной температуре модели; включает радары NOAA NEXRAD. Кадры каждые 6 минут; не прогноз и не штормовое предупреждение."
 }
