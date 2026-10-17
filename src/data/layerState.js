@@ -349,16 +349,18 @@ const OPTION_GROUPS = Object.freeze({
       light: 'l',
       strong: 's',
     }),
-    // US (NOAA reflectivity) or North America (ECCC precipitation type).
+    // US (NOAA reflectivity), North America (ECCC precipitation type), World
+    // (NASA IMERG estimate) or Germany (DWD rain rate).
     enumOption(
       'product',
       'p',
       'radar',
-      ['radar', 'radar-ca', 'precip-global'],
+      ['radar', 'radar-ca', 'precip-global', 'radar-de'],
       {
         radar: 'u',
         'radar-ca': 'c',
         'precip-global': 'g',
+        'radar-de': 'd',
       },
     ),
   ]),

@@ -1554,3 +1554,119 @@ test('IMERG proxy: DescribeDomains window floored to 30 minutes on a fixed GIBS 
   );
   assert.ok(calls.every((url) => url.host === 'gibs.earthdata.nasa.gov'));
 });
+
+// DWD German radar: the time axis runs on into a 2 h nowcast; REFERENCE_TIME's
+// default is the newest analysis. The leaf has only CRS boxes.
+const DE_REF = '2026-09-16T02:10:00.000Z';
+const DE_BOX =
+  '<BoundingBox CRS="EPSG:3857" minx="162893" miny="5729950" maxx="2085194" maxy="7602217"/><BoundingBox CRS="EPSG:4326" minx="45.684605" miny="1.463301" maxx="56.219403" maxy="18.731616"/>';
+const deLeaf = ({
+  box = DE_BOX,
+  interval = '2026-09-13T00:00:00.000Z/2026-09-16T04:10:00.000Z/PT5M',
+  reference = `<Dimension name="REFERENCE_TIME" default="${DE_REF}" units="ISO8601">2026-09-13T00:00:00.000Z,${DE_REF}</Dimension>`,
+  timeDefault = 'current',
+} = {}) =>
+  `<WMS_Capabilities><Capability><Layer><Title>DWD</Title><EX_GeographicBoundingBox><westBoundLongitude>-180</westBoundLongitude><eastBoundLongitude>180</eastBoundLongitude><southBoundLatitude>-90</southBoundLatitude><northBoundLatitude>90</northBoundLatitude></EX_GeographicBoundingBox><Layer><Name>Radar</Name><Layer queryable="1" opaque="0"><Name>Niederschlagsradar</Name><Title>dwd:Niederschlagsradar</Title><CRS>EPSG:4326</CRS>${box}<Dimension name="time" default="${timeDefault}" units="ISO8601">${interval}</Dimension>${reference}<Style><Name>niederschlagsradar</Name></Style></Layer></Layer></Layer></Capability></WMS_Capabilities>`;
+
+test('DWD radar: frames stop at the newest analysis, not the nowcast; 13 frames on a 10-minute grid; lat/lon CRS box', () => {
+  const parsed = parseWeatherCapabilities(deLeaf(), 'radar-de', NOW);
+  assert.equal(parsed.allowedTimes.length, 26);
+  assert.equal(parsed.allowedTimes.at(-1), DE_REF);
+  assert.equal(parsed.times.length, 13);
+  assert.equal(parsed.times.at(-1), DE_REF);
+  for (const time of parsed.times.slice(0, -1))
+    assert.equal(Date.parse(time) % (10 * 60_000), 0, time);
+  assert.ok(parsed.allowedTimes.every((time) => Date.parse(time) <= NOW));
+  assert.deepEqual(parsed.bounds, { west: -2, south: 45, east: 22, north: 57 });
+  assert.deepEqual(parsed.dataBounds, {
+    west: 1.463301,
+    south: 45.684605,
+    east: 18.731616,
+    north: 56.219403,
+  });
+  const lonLat = parseWeatherCapabilities(
+    deLeaf({
+      box: '<BoundingBox CRS="CRS:84" minx="1.463301" miny="45.684605" maxx="18.731616" maxy="56.219403"/>',
+    }),
+    'radar-de',
+    NOW,
+  );
+  assert.deepEqual(lonLat.dataBounds, parsed.dataBounds);
+});
+
+test('DWD radar: a missing, off-grid, outside or future reference, a box beyond the padded extent, and "current" elsewhere are refused', () => {
+  for (const options of [
+    { reference: '' },
+    {
+      reference:
+        '<Dimension name="REFERENCE_TIME" default="2026-09-16T02:12:00.000Z" units="ISO8601">x</Dimension>',
+    },
+    {
+      reference:
+        '<Dimension name="REFERENCE_TIME" default="2026-09-16T05:00:00.000Z" units="ISO8601">x</Dimension>',
+    },
+    {
+      interval: '2026-09-13T00:00:00.000Z/2026-09-16T04:10:00.000Z/PT5M',
+      reference:
+        '<Dimension name="REFERENCE_TIME" default="2026-09-16T03:10:00.000Z" units="ISO8601">x</Dimension>',
+    },
+    {
+      box: '<BoundingBox CRS="EPSG:4326" minx="44" miny="1.46" maxx="56.2" maxy="18.7"/>',
+    },
+    { box: '' },
+  ])
+    assert.throws(
+      () => parseWeatherCapabilities(deLeaf(options), 'radar-de', NOW),
+      /invalid_weather_metadata/,
+      JSON.stringify(options),
+    );
+  assert.throws(
+    () =>
+      parseWeatherCapabilities(
+        CA_XML.replace('default="2026-09-16T02:06:00Z"', 'default="current"'),
+        'radar-ca',
+        NOW,
+      ),
+    /invalid_weather_metadata/,
+  );
+});
+
+test('DWD radar proxy: per-layer capabilities, TIME passed through, the REFERENCE_TIME default-value warning is expected', async () => {
+  const calls = [];
+  const { request } = install({
+    fetchImpl: async (url) => {
+      calls.push(new URL(url));
+      return url.includes('GetCapabilities')
+        ? new Response(deLeaf())
+        : new Response(png(256, 256), {
+            headers: {
+              'Content-Type': 'image/png',
+              Warning: `99 Default value used: REFERENCE_TIME=[2026-09-16 02:10:00.0] ISO8601 (dwd:Niederschlagsradar)`,
+            },
+          });
+    },
+  });
+  const manifest = body(await request('/manifest?product=radar-de'));
+  assert.equal(manifest.source, 'DWD GeoServer');
+  assert.equal(manifest.attribution, 'Deutscher Wetterdienst (CC BY 4.0)');
+  assert.equal(
+    calls[0].origin + calls[0].pathname,
+    'https://maps.dwd.de/geoserver/dwd/Niederschlagsradar/wms',
+  );
+  const ok = await request(
+    tile({ product: 'radar-de', time: DE_REF, z: 5, x: 16, y: 10 }),
+  );
+  assert.equal(ok.statusCode, 200);
+  const map = calls.at(-1);
+  assert.equal(
+    map.origin + map.pathname,
+    'https://maps.dwd.de/geoserver/dwd/wms',
+  );
+  assert.equal(map.searchParams.get('layers'), 'dwd:Niederschlagsradar');
+  assert.equal(map.searchParams.get('time'), DE_REF);
+  const future = await request(
+    tile({ product: 'radar-de', time: '2026-09-16T02:15:00.000Z' }),
+  );
+  assert.notEqual(future.statusCode, 200, 'nowcast frames are not served');
+  assert.ok(calls.every((url) => url.host === 'maps.dwd.de'));
+});

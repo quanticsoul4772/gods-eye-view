@@ -337,3 +337,21 @@ test('precipitation_global maps to the NASA IMERG estimate anywhere', async () =
   assert.equal(maps.requests[0].product, 'precip-global');
   assert.ok(maps.requests[0].bbox, 'a window around Singapore');
 });
+
+test('radar_germany maps to the DWD radar around a German city', async () => {
+  const maps = weatherMaps({
+    bounds: { west: -2, south: 45, east: 22, north: 57 },
+    dataBounds: { west: 1.46, south: 45.68, east: 18.73, north: 56.22 },
+    coverage: 'Germany',
+  });
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: { weatherMaps: maps },
+  });
+  await catalog.call('get_weather_map', {
+    map: 'radar_germany',
+    area: { lat: 52.52, lon: 13.4, radius_km: 100 },
+  });
+  assert.equal(maps.requests[0].product, 'radar-de');
+  assert.ok(maps.requests[0].bbox, 'a window around Berlin');
+});

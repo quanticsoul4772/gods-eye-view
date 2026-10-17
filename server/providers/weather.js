@@ -145,6 +145,35 @@ const PRODUCTS_BY_ID = {
     // Near IMERG's 0.1° grid; 13 frames stay well inside the shared cache.
     image: Object.freeze({ width: 2048, height: 1024 }),
   }),
+  // DWD's German radar composite (RV product, 1 km, every 5 minutes), CC BY 4.0.
+  'radar-de': Object.freeze({
+    capabilitiesUrl: 'https://maps.dwd.de/geoserver/dwd/Niederschlagsradar/wms',
+    capabilitiesName: 'Niederschlagsradar',
+    mapUrl: 'https://maps.dwd.de/geoserver/dwd/wms',
+    layer: 'dwd:Niederschlagsradar',
+    style: '',
+    title: 'Rain radar · Germany',
+    coverage:
+      'Germany and its borders where DWD radars reach; grey marks outside radar range.',
+    description:
+      'DWD German radar composite (RV), precipitation rate in mm/h every 5 minutes; observed frames only, not the DWD nowcast; not a forecast.',
+    source: 'DWD GeoServer',
+    attribution: 'Deutscher Wetterdienst (CC BY 4.0)',
+    metadataTtlMs: 120_000,
+    // 2:1 around Germany, with room for the 180 km scan range DWD moves to
+    // on 2026-11-24 (about 45.4–56.5° N). Coverage is DWD's advertised box.
+    bounds: Object.freeze({ west: -2, south: 45, east: 22, north: 57 }),
+    times: 'interval',
+    // The time axis runs on into the 2 h nowcast; frames stop at the newest
+    // analysis (REFERENCE_TIME's default). A past TIME is that analysis
+    // whatever REFERENCE_TIME says, so cached frames stay valid.
+    observedEnd: 'REFERENCE_TIME',
+    historyStep: 2,
+    // No strictTime: an off-grid TIME is a ServiceException, and every map
+    // carries "Default value used: REFERENCE_TIME", which is expected.
+    maxConcurrent: 3,
+    image: Object.freeze({ width: 2048, height: 1024 }),
+  }),
 };
 // Every product reads from fixed upstream URLs; nothing in a request chooses
 // the destination.
@@ -247,6 +276,35 @@ export function parseWeatherCapabilities(xml, product, nowMs = Date.now()) {
       ?.trim();
     bounds[key] = value ? Number(value) : NaN;
   }
+  // DWD gives its leaf only CRS boxes: EPSG:4326 in WMS 1.3.0 lat/lon order,
+  // or CRS:84 in lon/lat.
+  if (!box) {
+    for (const [crs, latFirst] of [
+      ['EPSG:4326', true],
+      ['CRS:84', false],
+    ]) {
+      const attributes = [
+        ...leaf.matchAll(/<(?:[\w.-]+:)?BoundingBox\b([^>]*)>/g),
+      ].find((entry) =>
+        new RegExp(`\\bCRS\\s*=\\s*["']${crs}["']`).test(entry[1]),
+      )?.[1];
+      if (!attributes) continue;
+      const attr = (name) =>
+        Number(
+          attributes.match(
+            new RegExp(`\\b${name}\\s*=\\s*["']([^"']+)["']`),
+          )?.[1],
+        );
+      const [x0, y0, x1, y1] = ['minx', 'miny', 'maxx', 'maxy'].map(attr);
+      Object.assign(
+        bounds,
+        latFirst
+          ? { west: y0, south: x0, east: y1, north: x1 }
+          : { west: x0, south: y0, east: x1, north: y1 },
+      );
+      break;
+    }
+  }
   if (
     !Object.values(bounds).every(Number.isFinite) ||
     bounds.west < -180 ||
@@ -284,15 +342,21 @@ export function parseWeatherCapabilities(xml, product, nowMs = Date.now()) {
   // 13·n − (n − 1) steps (26 for one-step products, as before).
   const step = spec.historyStep ?? 1;
   const keep = Math.max(26, 13 * step - (step - 1));
+  const reference =
+    spec.observedEnd === 'REFERENCE_TIME'
+      ? observedEnd(leaf, raw.at(-1).trim())
+      : null;
   const times =
     spec.times === 'interval'
-      ? intervalTimes(raw.at(-1).trim(), keep)
+      ? intervalTimes(reference?.interval ?? raw.at(-1).trim(), keep)
       : raw.map((value) => observationTime(value.trim()));
   if (times.some((value) => !value || Date.parse(value) > nowMs + 5 * 60_000))
     throw failure('invalid_weather_metadata');
-  const defaultTime = observationTime(
-    dimensions[0][1].match(/\bdefault\s*=\s*["']([^"']+)["']/)?.[1],
-  );
+  const defaultTime =
+    reference?.end ??
+    observationTime(
+      dimensions[0][1].match(/\bdefault\s*=\s*["']([^"']+)["']/)?.[1],
+    );
   if (
     !defaultTime ||
     !times.includes(defaultTime) ||
@@ -300,6 +364,34 @@ export function parseWeatherCapabilities(xml, product, nowMs = Date.now()) {
   )
     throw failure('invalid_weather_metadata');
   return history(spec, times, nowMs, extent, bounds);
+}
+
+/**
+ * DWD's time axis runs on into its 2 h nowcast (`default="current"`); the
+ * REFERENCE_TIME dimension's default is the newest analysis. The observed
+ * interval is the advertised one ending there; the reference must sit on its
+ * grid, inside it.
+ */
+function observedEnd(leaf, interval) {
+  const dimension = [
+    ...leaf.matchAll(/<(?:[\w.-]+:)?Dimension\b([^>]*)>/g),
+  ].find((entry) => /\bname\s*=\s*["']REFERENCE_TIME["']/.test(entry[1]));
+  const end = observationTime(
+    dimension?.[1].match(/\bdefault\s*=\s*["']([^"']+)["']/)?.[1],
+  );
+  const [start, last, period] = interval.split('/');
+  const minutes = Number(/^PT([1-9]\d?)M$/.exec(period ?? '')?.[1]);
+  const first = Date.parse(observationTime(start) ?? '');
+  const at = Date.parse(end ?? '');
+  if (
+    !end ||
+    !(minutes <= 60) ||
+    !(at >= first) ||
+    !(at <= Date.parse(observationTime(last) ?? '')) ||
+    (at - first) % (minutes * 60_000) !== 0
+  )
+    throw failure('invalid_weather_metadata');
+  return { end, interval: `${start}/${end}/${period}` };
 }
 
 /** The recent, shown and allowed frames of a product's advertised times. */

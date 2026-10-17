@@ -3142,5 +3142,14 @@
   "World · NASA IMERG": "Мир · NASA IMERG",
   "NASA GPM IMERG satellite precipitation estimate, worldwide, every 30 minutes, about 6–7 hours behind": "Спутниковая оценка осадков NASA GPM IMERG, весь мир, каждые 30 минут, отставание около 6–7 часов",
   "View world": "Показать мир",
-  "NASA GPM IMERG Early multi-satellite precipitation estimate, not radar: each frame is the 30-minute average starting at its time, about 6–7 hours behind, so recent history has no frame. Rain and snow use separate colour ramps; under 0.1 mm/h is not shown. Light rain and snow tend to be underestimated. Not a forecast.": "Мультиспутниковая оценка осадков NASA GPM IMERG Early, не радар: каждый кадр — среднее за 30 минут, начиная с его времени, с отставанием около 6–7 часов, поэтому для недавней истории кадров нет. Дождь и снег показаны разными цветовыми шкалами; меньше 0,1 мм/ч не отображается. Слабый дождь и снег обычно занижаются. Не прогноз."
+  "NASA GPM IMERG Early multi-satellite precipitation estimate, not radar: each frame is the 30-minute average starting at its time, about 6–7 hours behind, so recent history has no frame. Rain and snow use separate colour ramps; under 0.1 mm/h is not shown. Light rain and snow tend to be underestimated. Not a forecast.": "Мультиспутниковая оценка осадков NASA GPM IMERG Early, не радар: каждый кадр — среднее за 30 минут, начиная с его времени, с отставанием около 6–7 часов, поэтому для недавней истории кадров нет. Дождь и снег показаны разными цветовыми шкалами; меньше 0,1 мм/ч не отображается. Слабый дождь и снег обычно занижаются. Не прогноз.",
+  "DWD RADAR · 5 min": "РАДАР DWD · 5 мин",
+  "Germany · grey = outside radar range": "Германия · серым — вне зоны радаров",
+  "Rain radar · Germany": "Радар осадков · Германия",
+  "Germany (DWD radars)": "Германия (радары DWD)",
+  "Germany · DWD": "Германия · DWD",
+  "DWD German radar composite: rain rate every 5 minutes, observed frames only": "Немецкий радарный композит DWD: интенсивность осадков каждые 5 минут, только наблюдения",
+  "View Germany": "Показать Германию",
+  "Outside radar range": "Вне зоны радаров",
+  "DWD German radar composite (RV product): precipitation rate in mm/h every 5 minutes, about 1 km. Observed frames only; DWD's 2-hour nowcast is not shown. Grey shading marks areas outside radar range; no colour inside it means under 0.1 mm/h. Not a forecast or a storm warning.": "Немецкий радарный композит DWD (продукт RV): интенсивность осадков в мм/ч каждые 5 минут, около 1 км. Только наблюдаемые кадры; 2-часовой наукаст DWD не показан. Серым отмечены области вне зоны радаров; отсутствие цвета внутри означает меньше 0,1 мм/ч. Не прогноз и не штормовое предупреждение."
 }
