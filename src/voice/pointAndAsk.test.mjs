@@ -348,7 +348,8 @@ test('deixis prompt lint: one short rule, and every sentinel it names exists in 
   // policy once (WHERE precedence, AREAS routing, AFTER TOOLS speech) brought
   // it to 51,646. New layers grew it to 51,989; keeping one copy of each rule
   // stated twice (the tool or parameter the model reads when it decides)
-  // brought it to 49,257. A new tool or rule has to fit under this ceiling.
+  // brought it to 49,257; the bare-coordinate rangeM wording added 10 (49,267).
+  // A new tool or rule has to fit under this ceiling.
   const size = instructions.length + JSON.stringify(GEV_REALTIME_TOOLS).length;
   assert.ok(size <= 52000, `prompt size ${size}`);
 });
@@ -368,6 +369,9 @@ test('rules kept once live in the tool or parameter the model reads when it deci
   const tool = (name) => GEV_REALTIME_TOOLS.find((t) => t.name === name);
   const fly = tool('fly_to_location').parameters.properties;
   assert.match(fly.rangeM.description, /a closer or wider view/);
+  // The only copy of "named places frame themselves" (whole country, city or
+  // landmark): without it the model would pass a range for "take me to Italy".
+  assert.match(fly.rangeM.description, /Omit for named places/);
   const annotate = tool('annotate_map').parameters.properties;
   assert.match(annotate.flyTo.description, /not already looking at the place/);
   assert.match(
