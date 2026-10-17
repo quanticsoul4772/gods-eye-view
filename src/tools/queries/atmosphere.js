@@ -13,21 +13,57 @@ import {
   resolvePoint,
 } from '../area.js';
 import { toBase64 } from '../results.js';
+import {
+  WEATHER_DATA_BOUNDS,
+  weatherCoverage,
+} from '../../layers/weather/coverage.js';
 
 /** Map names offered to callers, and the weather products behind them. */
 const MAPS = {
   radar: 'radar',
+  radar_north_america: 'radar-ca',
+  precipitation_global: 'precip-global',
+  radar_germany: 'radar-de',
+  radar_finland: 'radar-fi',
+  radar_netherlands: 'radar-nl',
   satellite: 'clouds-regional',
   global_satellite: 'clouds',
   lightning: 'lightning',
 };
-/** The app layer that shows each map. */
-const MAP_LAYERS = {
+/** The app layer that shows each product. */
+const PRODUCT_LAYERS = {
   radar: 'weather-radar',
-  satellite: 'weather-satellite',
-  global_satellite: 'weather-satellite',
+  'clouds-regional': 'weather-satellite',
+  clouds: 'weather-satellite',
   lightning: 'weather-lightning',
+  'lightning-eu': 'lightning-eu',
+  'radar-ca': 'weather-radar',
+  'precip-global': 'weather-radar',
+  'radar-de': 'weather-radar',
+  'radar-fi': 'weather-radar',
+  'radar-nl': 'weather-radar',
 };
+
+/** NOAA's lightning: 110°E across the dateline to 0°, 25°S–80°N. */
+const inNoaaLightning = ({ lat, lon }) =>
+  lat >= -25 && lat <= 80 && (lon >= 110 || lon <= 0);
+const inside = (box, { lat, lon }) =>
+  lat >= box.south && lat <= box.north && lon >= box.west && lon <= box.east;
+
+/**
+ * The product behind a map for an area: lightning is NOAA's (Americas and
+ * Pacific) unless the area's centre is only in EUMETSAT's (Europe, Africa,
+ * the Atlantic).
+ */
+export function weatherProductFor(map, area) {
+  const product = MAPS[map];
+  if (product !== 'lightning' || !area) return product;
+  const center = areaCenter(area);
+  return !inNoaaLightning(center) &&
+    inside(WEATHER_DATA_BOUNDS['lightning-eu'], center)
+    ? 'lightning-eu'
+    : product;
+}
 const IMAGE_SIZE = { width: 1024, height: 512 };
 const SNAP_DEGREES = 0.25;
 const MIN_HALF_HEIGHT_DEGREES = 0.5;
@@ -52,7 +88,19 @@ export function weatherWindow(area, bounds) {
     MIN_HALF_HEIGHT_DEGREES,
     areaRadiusKm(area) / KM_PER_DEGREE,
   );
-  const height = snapUp(halfHeight * 2);
+  // Tall enough for the area's own box (wider in longitude away from the
+  // equator), plus two grid steps: snapping the south edge down to 0.25° can
+  // move the box up to one step away from the area, so one step of margin
+  // can still uncover its north edge.
+  const height =
+    snapUp(
+      Math.max(
+        halfHeight * 2,
+        area.north - area.south,
+        (area.east - area.west) / 2,
+      ),
+    ) +
+    2 * SNAP_DEGREES;
   const width = height * 2;
   if (width > bounds.east - bounds.west || height > bounds.north - bounds.south)
     return null;
@@ -86,9 +134,14 @@ export const getWeatherMap = defineTool({
   name: 'get_weather_map',
   title: 'Weather map',
   description:
-    'The latest NOAA weather map image over an area: precipitation radar ' +
-    '(contiguous US), regional or global infrared satellite clouds, or ' +
-    'lightning density (the Americas). Returns the image itself.',
+    'The latest weather map image over an area: NOAA precipitation radar ' +
+    '(contiguous US), ECCC precipitation type (radar_north_america: Canada and the US), ' +
+    'a worldwide NASA IMERG satellite precipitation estimate about 7 h old (precipitation_global), ' +
+    'DWD radar rain rate over Germany (radar_germany), ' +
+    'FMI radar rain rate over Finland (radar_finland), ' +
+    'KNMI radar rain rate over the Netherlands (radar_netherlands), ' +
+    'regional or global infrared satellite clouds, or ' +
+    'lightning (NOAA in the Americas, EUMETSAT in Europe/Africa). Returns the image itself.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -100,7 +153,10 @@ export const getWeatherMap = defineTool({
   },
   requires: ['weatherMaps'],
   async run(args, { services, signal }) {
-    const product = MAPS[args.map];
+    const area = args.area
+      ? await resolveArea(args.area, { services, signal })
+      : null;
+    const product = weatherProductFor(args.map, area);
     const snapshot = await services.weatherMaps.getSnapshot({
       product,
       signal,
@@ -110,24 +166,41 @@ export const getWeatherMap = defineTool({
         'unavailable',
         `The ${args.map} map is unavailable right now`,
       );
-    const area = args.area
-      ? await resolveArea(args.area, { services, signal })
-      : null;
     let mapBox = null;
     if (area) {
-      const { bounds } = snapshot;
+      // Where the product has data (EUMETSAT's extent is padded to 2:1).
+      const bounds = weatherCoverage(snapshot);
       const center = areaCenter(area);
       if (
         center.lon < bounds.west ||
         center.lon > bounds.east ||
         center.lat < bounds.south ||
-        center.lat > bounds.north
+        center.lat > bounds.north ||
+        // NOAA advertises a global box but has no data from 0° to 110°E.
+        (product === 'lightning' && !inNoaaLightning(center))
       )
         throw new ToolError(
           'invalid_arguments',
           `${area.label} is outside the ${args.map} map's coverage: ${snapshot.coverage || 'see its bounds'}`,
         );
       mapBox = weatherWindow(area, bounds);
+    }
+    // No area, and the product's image extent is padded wider than its data
+    // (ECCC's 2:1 globe, EUMETSAT's disc): show the data box, not the padding.
+    const coverage = weatherCoverage(snapshot);
+    const padded =
+      coverage &&
+      snapshot.bounds &&
+      ['west', 'south', 'east', 'north'].some(
+        (edge) => coverage[edge] !== snapshot.bounds[edge],
+      );
+    if (!area && padded) {
+      const lat = (coverage.south + coverage.north) / 2;
+      const lon = (coverage.west + coverage.east) / 2;
+      mapBox = weatherWindow(
+        { ...coverage, center: { lat, lon, radiusKm: 0 } },
+        snapshot.bounds,
+      );
     }
     const image = await services.weatherMaps.getImage({
       product,
@@ -147,14 +220,14 @@ export const getWeatherMap = defineTool({
         view: suggestView(
           services,
           area
-            ? { area, layers: [MAP_LAYERS[args.map]] }
+            ? { area, layers: [PRODUCT_LAYERS[product]] }
             : {
                 point: {
-                  lat: (snapshot.bounds.south + snapshot.bounds.north) / 2,
-                  lon: (snapshot.bounds.west + snapshot.bounds.east) / 2,
+                  lat: (coverage.south + coverage.north) / 2,
+                  lon: (coverage.west + coverage.east) / 2,
                 },
                 altitudeM: 8_000_000,
-                layers: [MAP_LAYERS[args.map]],
+                layers: [PRODUCT_LAYERS[product]],
               },
         ),
         map: args.map,

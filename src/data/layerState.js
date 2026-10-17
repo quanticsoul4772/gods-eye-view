@@ -325,6 +325,12 @@ const OPTION_GROUPS = Object.freeze({
       both: 'b',
     }),
   ]),
+  'lightning-eu': Object.freeze([
+    enumOption('opacity', 'o', 'strong', ['light', 'strong'], {
+      light: 'l',
+      strong: 's',
+    }),
+  ]),
   traffic: Object.freeze([
     enumOption('roadMode', 'r', null, ['tomtom', 'osm', 'hybrid'], {
       tomtom: 't',
@@ -343,6 +349,30 @@ const OPTION_GROUPS = Object.freeze({
       light: 'l',
       strong: 's',
     }),
+    // US (NOAA reflectivity), North America (ECCC precipitation type), World
+    // (NASA IMERG estimate), or Germany, Finland or the Netherlands (DWD, FMI,
+    // KNMI rain rate).
+    enumOption(
+      'product',
+      'p',
+      'radar',
+      [
+        'radar',
+        'radar-ca',
+        'precip-global',
+        'radar-de',
+        'radar-fi',
+        'radar-nl',
+      ],
+      {
+        radar: 'u',
+        'radar-ca': 'c',
+        'precip-global': 'g',
+        'radar-de': 'd',
+        'radar-fi': 'f',
+        'radar-nl': 'n',
+      },
+    ),
   ]),
   'weather-satellite': Object.freeze([
     satelliteFilterOption(),
@@ -602,6 +632,11 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     disposition: 'enabled-only',
   }),
   Object.freeze({
+    id: 'air-sensors',
+    token: '5',
+    disposition: 'enabled-only',
+  }),
+  Object.freeze({
     id: 'ais-live-vessels',
     token: 'a',
     disposition: 'enabled-only',
@@ -650,6 +685,12 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     id: 'gnss-integrity',
     token: '3',
     disposition: 'enabled-only',
+  }),
+  Object.freeze({
+    id: 'lightning-eu',
+    token: '6',
+    disposition: 'enabled+options',
+    optionOwner: 'lightning-eu',
   }),
   Object.freeze({ id: 'local-dams', token: 'q', disposition: 'enabled-only' }),
   Object.freeze({

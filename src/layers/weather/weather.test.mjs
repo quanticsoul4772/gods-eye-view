@@ -1330,6 +1330,7 @@ for (const [id, product] of [
   ['weather-satellite', 'clouds-regional'],
   ['weather-satellite', 'clouds'],
   ['weather-lightning', 'lightning'],
+  ['lightning-eu', 'lightning-eu'],
 ]) {
   test(`${product} shows on 3D Tiles at street level and keeps its history through host changes`, async (t) => {
     t.mock.timers.enable({ apis: ['setTimeout'] });
@@ -1794,7 +1795,7 @@ test('one row steps every registered observation; missing frames hide and latest
   });
   assert.deepEqual(
     radar.layer.getParams(),
-    { opacity: 'strong' },
+    { product: 'radar', opacity: 'strong' },
     'history is never serialized',
   );
   satellite.layer.disable();
@@ -1933,6 +1934,7 @@ test('observed descriptors keep configuration only and label satellite clouds by
     ['weather-radar', 'CONUS'],
     ['weather-satellite', 'North America'],
     ['weather-lightning', 'Americas + Pacific'],
+    ['lightning-eu', 'Europe · Africa · Atlantic'],
   ]) {
     const h = layerHarness({ id });
     const controls = h.layer.getRowControls();
@@ -1941,7 +1943,11 @@ test('observed descriptors keep configuration only and label satellite clouds by
     assert.equal(controls.summary.sections, undefined);
     assert.deepEqual(
       controls.summary.settings.map(({ label }) => label),
-      id === 'weather-satellite' ? ['REGION', 'IMAGE', 'OPACITY'] : ['OPACITY'],
+      id === 'weather-satellite'
+        ? ['REGION', 'IMAGE', 'OPACITY']
+        : id === 'weather-radar'
+          ? ['SOURCE', 'OPACITY']
+          : ['OPACITY'],
     );
     assert.deepEqual(
       controls.summary.settings.flatMap(({ chips }) => chips),
@@ -2311,3 +2317,206 @@ for (const product of ['radar', 'clouds-regional', 'lightning']) {
     assert.equal(h.viewer.camera.moveEnd.size, 0);
   });
 }
+
+test('satellite lightning (EUMETSAT) is a lightning layer with its own source, legend, units and coverage', () => {
+  const h = layerHarness({ id: 'lightning-eu' });
+  assert.equal(h.layer.name, 'Satellite lightning (EUMETSAT)');
+  assert.equal(h.layer.source, 'EUMETSAT EUMETView · OBSERVED');
+  assert.equal(h.layer.updateInterval, 300_000);
+  assert.deepEqual(h.layer.getParams(), {
+    product: 'lightning-eu',
+    opacity: 'strong',
+  });
+  const controls = h.layer.getRowControls();
+  assert.deepEqual(
+    controls.legend.map(({ label, color }) => [label, color]),
+    [
+      ['1', '#FFFFC9'],
+      ['10', '#FD8339'],
+      ['20+', '#8C0026'],
+    ],
+  );
+  assert.match(
+    controls.legend[0].blurb,
+    /Flashes per ~2 km pixel in 5 minutes: 1 /,
+  );
+  assert.equal(controls.summary.units, 'flashes/5 min');
+  assert.match(controls.infoTitle, /EUMETSAT MTG Lightning Imager/);
+  assert.equal(
+    controls.chips.find(({ id }) => id === 'coverage').label,
+    'View Europe & Africa',
+  );
+  assert.equal(h.layer.getStats().source, 'EUMETSAT EUMETView');
+  h.layer.destroy();
+});
+
+test('rain radar switches between NOAA (US) and ECCC precipitation type (North America)', () => {
+  const h = layerHarness({ id: 'weather-radar' });
+  assert.deepEqual(h.layer.getParams(), {
+    product: 'radar',
+    opacity: 'strong',
+  });
+  let controls = h.layer.getRowControls();
+  assert.deepEqual(
+    controls.summary.settings
+      .find(({ id }) => id === 'source')
+      .chips.map(({ id, active }) => [id, active]),
+    [
+      ['radar', true],
+      ['radar-ca', false],
+      ['precip-global', false],
+      ['radar-de', false],
+      ['radar-fi', false],
+      ['radar-nl', false],
+    ],
+  );
+  h.layer.setParams({ product: 'radar-ca' });
+  assert.deepEqual(h.layer.getParams(), {
+    product: 'radar-ca',
+    opacity: 'strong',
+  });
+  controls = h.layer.getRowControls();
+  assert.equal(controls.legendCategorical, true);
+  assert.equal(controls.legend.length, 12);
+  assert.deepEqual(controls.legend[0], {
+    label: 'Light snow',
+    color: '#7FDFEB',
+  });
+  assert.equal(controls.legend.at(-1).label, 'Moderate/heavy freezing rain');
+  assert.equal(controls.summary.coverage, 'Canada + US');
+  assert.equal(controls.summary.label, 'Precipitation type · N. America');
+  assert.equal(controls.summary.units, '');
+  assert.match(controls.infoTitle, /NOAA NEXRAD/);
+  assert.equal(h.layer.getStats().source, 'ECCC MSC GeoMet');
+  h.layer.setParams({ product: 'clouds' });
+  assert.equal(
+    h.layer.getParams().product,
+    'radar-ca',
+    'a satellite product is not a radar source',
+  );
+  h.layer.destroy();
+});
+
+test('switching the radar source while the layer is on drops the NOAA frame and asks for the ECCC manifest', async () => {
+  const asked = [];
+  const h = layerHarness({
+    id: 'weather-radar',
+    feed: {
+      getSnapshot: async ({ product }) => {
+        asked.push(product);
+        return { ...snapshot, product };
+      },
+    },
+  });
+  h.layer.enable();
+  const first = h.layer.update();
+  await flush();
+  h.stages[0].finish();
+  await first;
+  assert.deepEqual(asked, ['radar']);
+  h.layer.setParams({ product: 'radar-ca' });
+  await flush();
+  h.stages.at(-1)?.finish();
+  await flush();
+  assert.deepEqual(asked, ['radar', 'radar-ca']);
+  assert.equal(h.layer.getParams().product, 'radar-ca');
+  h.layer.destroy();
+});
+
+test('rain radar World source: NASA IMERG estimate with rain and snow legends, mm/h and a 9 h delay threshold', () => {
+  const h = layerHarness({ id: 'weather-radar' });
+  h.layer.setParams({ product: 'precip-global' });
+  assert.deepEqual(h.layer.getParams(), {
+    product: 'precip-global',
+    opacity: 'strong',
+  });
+  const controls = h.layer.getRowControls();
+  assert.equal(controls.legendCategorical, true);
+  assert.deepEqual(
+    controls.legend.map(({ label }) => label),
+    [
+      'Rain · 0.1–1 mm/h',
+      'Rain · 1–5 mm/h',
+      'Rain · 5+ mm/h',
+      'Snow · 0.1–1 mm/h',
+      'Snow · 1–5 mm/h',
+      'Snow · 5+ mm/h',
+    ],
+  );
+  assert.equal(controls.summary.units, 'mm/h');
+  assert.equal(controls.summary.label, 'Precipitation estimate · World');
+  assert.match(controls.infoTitle, /not radar/);
+  assert.equal(h.layer.getStats().source, 'NASA GIBS · GPM IMERG');
+  h.layer.destroy();
+});
+
+test('rain radar Germany source: DWD rain rate with its 15 classes, the outside-range row, mm/h and a 10-minute gap', () => {
+  const h = layerHarness({ id: 'weather-radar' });
+  h.layer.setParams({ product: 'radar-de' });
+  assert.deepEqual(h.layer.getParams(), {
+    product: 'radar-de',
+    opacity: 'strong',
+  });
+  const controls = h.layer.getRowControls();
+  assert.equal(controls.legendCategorical, true);
+  assert.equal(controls.legend.length, 16);
+  assert.deepEqual(controls.legend[0], {
+    label: '0.1–0.2 mm/h',
+    color: '#33FFFF',
+  });
+  assert.deepEqual(controls.legend[14], {
+    label: '150+ mm/h',
+    color: '#0000FE',
+  });
+  assert.equal(controls.legend.at(-1).label, 'Outside radar range');
+  assert.equal(controls.summary.units, 'mm/h');
+  assert.equal(controls.summary.label, 'Rain radar · Germany');
+  assert.equal(controls.summary.coverage, 'Germany (DWD radars)');
+  assert.equal(controls.summary.maxGapMinutes, 10);
+  assert.match(controls.infoTitle, /nowcast is not shown/);
+  assert.equal(h.layer.getStats().source, 'DWD GeoServer');
+  h.layer.destroy();
+});
+
+test('rain radar Finland and Netherlands sources: FMI and KNMI rain-rate ramps in mm/h with a 10-minute gap', () => {
+  const h = layerHarness({ id: 'weather-radar' });
+  for (const [product, first, last, count, label, source] of [
+    [
+      'radar-fi',
+      ['0.2', '#002896'],
+      ['200', '#8B0000'],
+      12,
+      'Rain radar · Finland',
+      'FMI open data',
+    ],
+    [
+      'radar-nl',
+      ['0.2', '#ACE4FF'],
+      ['40', '#8D01DA'],
+      8,
+      'Rain radar · Netherlands',
+      'KNMI',
+    ],
+  ]) {
+    h.layer.setParams({ product });
+    assert.equal(h.layer.getParams().product, product);
+    const controls = h.layer.getRowControls();
+    assert.notEqual(controls.legendCategorical, true, product);
+    assert.deepEqual(
+      [controls.legend[0].label, controls.legend[0].color],
+      first,
+    );
+    assert.deepEqual(
+      [controls.legend.at(-1).label, controls.legend.at(-1).color],
+      last,
+    );
+    assert.equal(controls.legend.length, count);
+    assert.match(controls.legend[0].blurb, /mm\/h rain rate/);
+    assert.equal(controls.summary.units, 'mm/h');
+    assert.equal(controls.summary.label, label);
+    assert.equal(controls.summary.maxGapMinutes, 10);
+    assert.match(controls.infoTitle, /Not a forecast/);
+    assert.equal(h.layer.getStats().source, source);
+  }
+  h.layer.destroy();
+});

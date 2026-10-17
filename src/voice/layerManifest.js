@@ -254,6 +254,12 @@ const layers = [
     noQuery: 'map overlay; no countable records',
   },
   {
+    id: 'lightning-eu',
+    aliases: ['satellite lightning', 'lightning europe', 'lightning africa'],
+    context: false,
+    noQuery: 'map overlay; no countable records',
+  },
+  {
     id: 'wind',
     aliases: ['winds', 'wind map'],
     context: false,
@@ -261,7 +267,8 @@ const layers = [
   },
   {
     id: 'air-quality',
-    aliases: ['air quality', 'aqhi', 'smog', 'air pollution'],
+    // Canada only: plain "air quality" belongs to the worldwide air-sensors.
+    aliases: ['aqhi', 'canada air quality', 'air quality canada'],
     context: false,
     query: {
       fields: {
@@ -275,6 +282,34 @@ const layers = [
         observedMs: ['ms'],
       },
       timeField: 'observedMs',
+      scope: 'Canada only',
+      caveat: 'Canada only (AQHI); elsewhere use air-sensors',
+    },
+  },
+  {
+    id: 'air-sensors',
+    aliases: [
+      'air quality',
+      'air pollution',
+      'smog',
+      'air sensors',
+      'pm sensors',
+      'air quality europe',
+      'pm2.5',
+    ],
+    context: false,
+    query: {
+      fields: {
+        pm25: ['n', 'µg/m³'],
+        pm10: ['n', 'µg/m³'],
+        band: ['t'],
+        country: ['t'],
+        suspect: ['f'],
+        quality: ['t'],
+        observedMs: ['ms'],
+      },
+      timeField: 'observedMs',
+      caveat: 'indicative low-cost sensors; EEA bands, PM only',
     },
   },
   {
@@ -466,6 +501,7 @@ function normalizeEntry(entry) {
           timeField: entry.query.timeField || null,
           window: entry.query.window || null,
           caveat: entry.query.caveat || null,
+          scope: entry.query.scope || null,
           viewportLoaded: entry.query.viewportLoaded === true,
         })
       : null,
@@ -505,20 +541,23 @@ export const VOICE_QUERY_LAYER_IDS = Object.freeze(
 
 /**
  * Spoken name → layer id, for the browser runner. Ids map to themselves and
- * each alias to its layer; the first layer to claim an alias keeps it.
+ * each alias to its layer; the first layer to claim an alias keeps it. An id
+ * spelled with spaces comes last, so an explicit alias wins over it ("air
+ * quality" is air-sensors, not the Canada-only air-quality).
  * @returns {Map<string, string>} Lower-case phrase → layer id.
  */
 export function voiceLayerAliasMap() {
   const map = new Map();
-  for (const entry of VOICE_LAYER_MANIFEST) {
-    map.set(entry.id, entry.id);
-    map.set(entry.id.replace(/-/g, ' '), entry.id);
-  }
+  for (const entry of VOICE_LAYER_MANIFEST) map.set(entry.id, entry.id);
   for (const entry of VOICE_LAYER_MANIFEST) {
     for (const alias of entry.aliases) {
       const key = alias.toLowerCase();
       if (!map.has(key)) map.set(key, entry.id);
     }
+  }
+  for (const entry of VOICE_LAYER_MANIFEST) {
+    const spoken = entry.id.replace(/-/g, ' ');
+    if (!map.has(spoken)) map.set(spoken, entry.id);
   }
   return map;
 }
@@ -533,12 +572,15 @@ const SELF_EVIDENT_IDS = new Set([
   'radio',
   'wind',
   'directions',
+  'lightning-eu',
 ]);
 
 /**
  * Compact model-facing alias hint: "alias/alias→id; …" for toggleable layers
  * whose id is not already the spoken word. At most two aliases per layer keep
- * the tool JSON small; the runner accepts the full alias list.
+ * the tool JSON small; the runner accepts the full alias list. Of those two,
+ * the id with spaces ("fire perimeters") is left out: the model reads it from
+ * the id and the runner maps it.
  * @returns {string} One line for the layerId description.
  */
 export function voiceLayerAliasHint() {
@@ -546,7 +588,14 @@ export function voiceLayerAliasHint() {
     (entry) =>
       entry.toggle && entry.aliases.length && !SELF_EVIDENT_IDS.has(entry.id),
   )
-    .map((entry) => `${entry.aliases.slice(0, 2).join('/')}→${entry.id}`)
+    .map((entry) => {
+      const spoken = entry.id.replace(/-/g, ' ');
+      const shown = entry.aliases
+        .slice(0, 2)
+        .filter((alias) => alias.toLowerCase() !== spoken);
+      return shown.length ? `${shown.join('/')}→${entry.id}` : null;
+    })
+    .filter(Boolean)
     .join('; ');
 }
 
@@ -574,10 +623,13 @@ export function voiceQueryFieldHint() {
           spec.unit && !UNIT_SUFFIX.test(name) ? `${name}(${spec.unit})` : name,
         )
         .join(',');
-      const plain = `${entry.id}: ${fields}`;
+      const label = entry.query.scope
+        ? `${entry.id} (${entry.query.scope})`
+        : entry.id;
+      const plain = `${label}: ${fields}`;
       if (!parent) return plain;
       const minus = parent.names.filter((name) => !names.includes(name));
-      const relative = `${entry.id}: as ${parent.id}${minus.length ? ` minus ${minus.join(',')}` : ''}`;
+      const relative = `${label}: as ${parent.id}${minus.length ? ` minus ${minus.join(',')}` : ''}`;
       // The relative form only pays when it is shorter than the plain list.
       return relative.length < plain.length ? relative : plain;
     })

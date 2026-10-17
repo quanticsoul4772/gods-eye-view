@@ -1,6 +1,10 @@
 import { acquireWeatherImage } from './infraredImage.js';
 import { imageryHostStatus } from './imageryHost.js';
-import { WEATHER_DETAIL_SIZE, WEATHER_IMAGE_SIZES } from './source.js';
+import {
+  WEATHER_DETAIL_SIZE,
+  WEATHER_IMAGE_SIZES,
+  weatherCoverage,
+} from './source.js';
 import { msg } from '../../i18n/index.js';
 
 /** Metres above the ellipsoid. Lower shells draw first, so lightning draws last. */
@@ -9,6 +13,15 @@ export const WEATHER_SHELL_HEIGHTS = Object.freeze({
   clouds: 5_500,
   'clouds-regional': 5_800,
   radar: 6_200,
+  // One radar source shows at a time.
+  'radar-ca': 6_200,
+  'precip-global': 6_200,
+  'radar-de': 6_200,
+  'radar-fi': 6_200,
+  'radar-nl': 6_200,
+  // Under NOAA's lightning, as on the globe (different measures; NOAA's is
+  // drawn on top where they overlap).
+  'lightning-eu': 6_400,
   lightning: 6_600,
 });
 // Decoded canvases per renderer, full-extent and detail images alike: the shown
@@ -581,7 +594,7 @@ export function createWeatherShell({
     };
     const next = detailWindow(
       footprint,
-      current.extent,
+      current.coverage,
       viewBounds === current.bounds ? view : null,
     );
     viewBounds = current.bounds;
@@ -653,6 +666,9 @@ export function createWeatherShell({
       infrared: frame.infrared,
       bounds: frame.bounds,
       extent: { west, south, east, north },
+      // Detail windows only where the product has data (a padded extent's
+      // margin is empty).
+      coverage: { ...weatherCoverage(frame.snapshot) },
       key: frame.key,
       mosaic: frame.mosaic,
       loadMs: now() - frame.startedAt,

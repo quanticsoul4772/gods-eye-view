@@ -1,4 +1,13 @@
-import { weatherTileUrl } from './source.js';
+import { weatherCoverage, weatherTileUrl } from './source.js';
+
+/** Every Rain radar source (NOAA, ECCC, NASA IMERG, DWD, FMI, KNMI) shares radar's place. */
+const isRadar = (product) =>
+  product === 'radar' ||
+  product === 'radar-ca' ||
+  product === 'precip-global' ||
+  product === 'radar-de' ||
+  product === 'radar-fi' ||
+  product === 'radar-nl';
 import { orderWeatherImagery } from './imageryOrder.js';
 import { imageryHostStatus } from './imageryHost.js';
 import { createRasterTileProvider } from './rasterTiles.js';
@@ -80,7 +89,8 @@ function createGlobeRendering({
   }
 
   function prefetchTiles(snapshot, time) {
-    const { west, south, east, north } = snapshot.bounds;
+    // Only where the product has data: a padded extent's margin is empty.
+    const { west, south, east, north } = weatherCoverage(snapshot);
     const bounds = cesium.Rectangle.fromDegrees(west, south, east, north);
     const view = viewer.camera?.computeViewRectangle?.(
       viewer.scene.globe?.ellipsoid,
@@ -234,7 +244,7 @@ function createGlobeRendering({
       )
         return true;
       lastError = null;
-      const { west, south, east, north } = snapshot.bounds;
+      const { west, south, east, north } = weatherCoverage(snapshot);
       const rectangle = cesium.Rectangle.fromDegrees(west, south, east, north);
       const global = snapshot.product === 'clouds';
       const frame = {
@@ -247,12 +257,15 @@ function createGlobeRendering({
         controller: new AbortController(),
         collection,
         kind,
+        // NOAA lightning on top, EUMETSAT's just under it, then radar.
         priority:
           snapshot.product === 'lightning'
             ? 3
-            : snapshot.product === 'radar'
-              ? 2
-              : 1,
+            : snapshot.product === 'lightning-eu'
+              ? 2.5
+              : isRadar(snapshot.product)
+                ? 2
+                : 1,
         product: snapshot.product,
         requests: new Set(),
         retries: new Map(),
@@ -340,9 +353,21 @@ function createGlobeRendering({
         const credit = new cesium.Credit(
           snapshot.product === 'lightning'
             ? 'NOAA/NWS lightning density · derived from Vaisala NLDN/GLD360'
-            : snapshot.product === 'radar'
-              ? 'NOAA nowCOAST · NWS/OAR MRMS'
-              : 'NOAA nowCOAST · NESDIS GOES / global satellite partners',
+            : snapshot.product === 'lightning-eu'
+              ? `Contains modified EUMETSAT Meteosat product ${time.slice(0, 4)} · CC BY 4.0`
+              : snapshot.product === 'radar-fi'
+                ? 'Finnish Meteorological Institute (CC BY 4.0)'
+                : snapshot.product === 'radar-nl'
+                  ? 'KNMI (CC BY 4.0)'
+                  : snapshot.product === 'radar-de'
+                    ? 'Deutscher Wetterdienst (CC BY 4.0)'
+                    : snapshot.product === 'precip-global'
+                      ? 'NASA GPM IMERG via NASA GIBS'
+                      : snapshot.product === 'radar-ca'
+                        ? 'Data Source: Environment and Climate Change Canada and NOAA/NWS'
+                        : snapshot.product === 'radar'
+                          ? 'NOAA nowCOAST · NWS/OAR MRMS'
+                          : 'NOAA nowCOAST · NESDIS GOES / global satellite partners',
           false,
         );
         const provider = global

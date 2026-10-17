@@ -47,8 +47,11 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // A derived field list prints whole when that is shorter than "as X minus".
     // Fire perimeters add provincial fields (hectares, status, source, times).
     // Active fires add static-source fields (known solar farms and industrial sites).
+    // Air sensors (Sensor.Community PM) extend the manifest.
+    // Satellite lightning (lightning-eu) extends it; two self-evident ids drop alias hints.
+    // Plain "air quality" routes to air-sensors (AQHI keeps Canada); hints skip the id spelled with spaces.
     // rangeM says a bare coordinate is a 250 m close-up, so a storm or fire gets a fitting range.
-    'c6ead21a181ecf067bdc1a2a34f51a70e3defc162195b2bd9e6e6ed43e80b70d',
+    'a620eb77c5c49150aa5759b7a5c49f3ca1a5470e5196a1e4f5830ae0e7c2028d',
   );
 });
 

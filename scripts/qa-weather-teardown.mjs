@@ -38,6 +38,7 @@ const WEATHER = [
   'weather-radar',
   'weather-satellite',
   'weather-lightning',
+  'lightning-eu',
   'weather-cyclones',
 ];
 
@@ -106,6 +107,7 @@ const snapshot = (page) =>
       'weather-radar',
       'weather-satellite',
       'weather-lightning',
+      'lightning-eu',
     ]) {
       const d = dm.layers.get(id)?.module?.getDiagnostics?.();
       if (d)
@@ -223,14 +225,17 @@ try {
   await a.page
     .waitForFunction(
       () =>
-        ['weather-radar', 'weather-satellite', 'weather-lightning'].every(
-          (id) => {
-            const d = window.__godsEyeView.dataManager.layers
-              .get(id)
-              ?.module?.getDiagnostics?.();
-            return d && !d.loading && d.time;
-          },
-        ),
+        [
+          'weather-radar',
+          'weather-satellite',
+          'weather-lightning',
+          'lightning-eu',
+        ].every((id) => {
+          const d = window.__godsEyeView.dataManager.layers
+            .get(id)
+            ?.module?.getDiagnostics?.();
+          return d && !d.loading && d.time;
+        }),
       { timeout: 120_000 },
     )
     .catch(() => console.log('  !! weather not ready'));

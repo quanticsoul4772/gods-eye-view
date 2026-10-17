@@ -20,6 +20,7 @@ How to read this:
 | **NOAA nowCOAST observed weather** (`nowcoast.noaa.gov/geoserver/observations/{weather_radar,satellite}/ows`, WMS 1.1.1) | Rain radar (MRMS base reflectivity, contiguous US, about 4-minute updates) and Satellite clouds (GOES-19/18 Band 14 regional infrared, about 5-minute updates; global infrared mosaic, hourly). Keyless; layer metadata refreshed every 2 minutes, exact-time images cached for up to 24 hours | [NOAA disclaimer](https://oceanservice.noaa.gov/disclaimer.html) | "NOAA nowCOAST · NWS/OAR MRMS radar; NESDIS GOES and global satellite partners" |
 | **Keyless source directory** (`quanticsoul4772.github.io/gev-open-sources/v1/`) | Extra keyless transit feeds (GTFS-Realtime), bike-share systems (GBFS) and free-floating shared vehicles (GBFS `vehicle_status`, the bike-share layer's Vehicles mode), and the list `find_data_sources` answers from (worldwide earthquake and disaster-alert feeds are listed there for reference under the hazards topic, not drawn). Checked hourly through its index; only domain files that changed are downloaded; a bundled snapshot covers start-up. Only entries verified by its health checks and cleared for display are fetched | Directory: MIT. Each feed keeps its own licence, decided per entry (known open licence, GBFS 3.x CC0 default, or the operator's terms) | Each feed's own credit, registered when its data first renders |
 | **NOAA nowCOAST lightning density** (`nowcoast.noaa.gov/geoserver/observations/lightning_detection/ows`) | Lightning density: 15-minute accumulated strike density on an approximately 8 km grid, Americas and Pacific. Keyless; layer metadata refreshed every 10 minutes, exact-time images cached for up to 24 hours | NOAA Level-5 derived product from Vaisala NLDN/GLD360; the [product description](https://ocean.weather.gov/lightning/lightning_pdd.php) permits public distribution of this density product, not of raw Vaisala detections | "NOAA/NWS nowCOAST; derived from Vaisala NLDN/GLD360" |
+| **EUMETSAT MTG Lightning Imager** (`view.eumetsat.int/geoserver`, EUMETView WMS, layer `mtg_fd:li_afa`) | Satellite lightning: accumulated flash area (flashes per ~2 km pixel per 5 minutes) over Europe, Africa, the Atlantic and eastern South America (70°W–70°E, 70°S–70°N), 5-minute steps about 15–20 minutes behind | "Core" data: Free and Unrestricted under [CC BY 4.0](https://www-cdn.eumetsat.int/files/2026-01/45173%20-%20Data_Policy.pdf) (EUMETSAT Data Policy, Articles 4, 5.1 and 6.3); keyless, CORS `*`; we keep to the limits EUMETView sends in its response headers (`x-rate-limit-limit: 20` per second, `x-concurrent-limit-user: 8`) with at most 4 requests at once | "Contains modified EUMETSAT Meteosat product {year}" |
 | **NOAA NHC / CPHC advisories** (`www.nhc.noaa.gov/CurrentStorms.json` + the `mapservices.weather.noaa.gov` tropical weather summary MapServer) | Cyclone advisories: storm positions, forecast tracks, points and cones for the Atlantic and eastern/central North Pacific. Keyless through `/api/cyclones`; cached for 5 minutes | [NWS public-data terms](https://www.weather.gov/disclaimer); no endorsement implied | "NOAA/NWS NHC / CPHC" |
 | **Mapillary** (vector tiles, Graph API, MapillaryJS) | Street Level: coverage lines, image cones and the embedded viewer. Coverage tiles cached for 24 h | Imagery [CC BY-SA 4.0](https://www.mapillary.com/terms); API under the Mapillary terms with a client token | "© Mapillary contributors, CC BY-SA 4.0", shown on the globe while the provider is on |
 | **Google Street View** (Maps JavaScript API) | Street Level, on the Google 3D map only (Google's terms): Google's panorama viewer and nearest-panorama lookups; panorama dates and addresses kept for the session only | Google Maps Platform ToS (your own key + billing; every panorama load is billed) | "Street View imagery © Google" on the globe while the provider is on, and Google's logo and terms in the viewer |
@@ -36,7 +37,13 @@ How to read this:
 | **The Space Devs — Launch Library 2 v2.3**                            | Recent launch, payload, stage, and recovery metadata for Space Missions (30d)                                                       | [The Space Devs terms of use](https://github.com/TheSpaceDevs/Tutorials/blob/main/faqs/faq_TSD.md#terms-of-use): data may be used and shared in any form; avoid forwarding it without added value; attribution is encouraged (not mandatory). [Official API limits](https://ll.thespacedevs.com/docs/): 15 unauthenticated calls/hour; optional token | "Launch Library 2 — The Space Devs" (courtesy attribution)                                                                                  |
 | **Esri World Imagery** (ArcGIS Online tile service)                   | The keyless satellite basemap — the default landing when no Google/ion credential is configured, and the "Esri Satellite" map stack | [Esri Master Agreement](https://www.esri.com/en-us/legal/terms/full-master-agreement): the public World Imagery service is usable in public-facing apps with attribution; no key is required for this classic endpoint, but Esri governs and can change access — an app at scale should review current ArcGIS Location Platform terms                 | "Powered by Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community" (provider carries the service's own credit line) |
 | **USGS**                                                              | Earthquakes                                                                                                                         | U.S. public domain                                                                                                                                                                                                                                                                                                                                    | "Data courtesy of the U.S. Geological Survey"                                                                                               |
-| **Environment and Climate Change Canada** (MSC GeoMet OGC API) | Air quality (AQHI) — Canadian station observations | [ECCC Data Servers End-use Licence](https://eccc-msc.github.io/open-data/licence/readme_en/) (open, attribution required, no endorsement implied) | "Contains information licensed under the Environment and Climate Change Canada Data Servers End-use Licence" |
+| **Environment and Climate Change Canada** (MSC GeoMet WMS `geo.weather.gc.ca/geomet`, layer `Radar_1km_SfcPrecipType`) | Rain radar's North America source: the 1 km North American radar composite classified by surface precipitation type and intensity, every 6 minutes | [ECCC Data Services End-use Licence](https://eccc-msc.github.io/open-data/licence/readme_en/) (open, attribution required, no endorsement implied); the composite includes NOAA NEXRAD radars | "Data Source: Environment and Climate Change Canada and NOAA/NWS" |
+| **Environment and Climate Change Canada** (MSC GeoMet OGC API) | Air quality (AQHI) — Canadian station observations | [ECCC Data Services End-use Licence](https://eccc-msc.github.io/open-data/licence/readme_en/) (open, attribution required, no endorsement implied) | "Contains information licensed under the Environment and Climate Change Canada Data Services End-use Licence" |
+| **Sensor.Community** (`data.1h.json`) | Air quality (PM sensors) layer: volunteer low-cost particulate sensors (PM2.5, PM10, 1-hour means), mostly in Europe | Contents under the [Open Data Commons Database Contents License 1.0](https://opendatacommons.org/licenses/dbcl/1-0/) (the site footer's "DB Contents License"), which requires complying with the [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/) for the database; Sensor.Community does not name the ODbL itself. Listed by the [gev-open-sources](https://quanticsoul4772.github.io/gev-open-sources/) directory (`airquality.sensors`) and fetched keyless through `/api/air-sensors` at most every 20 minutes, with a User-Agent that names this project as their API asks. Indicative only: uncalibrated, not official monitors | "Air quality: Sensor.Community (contents DbCL 1.0, database per ODbL 1.0)" with the ODbL linked |
+| **FMI** radar composite (WMS `openwms.fmi.fi/geoserver/Radar/wms`, layer `radar_finland_cappi_rate`, style `radar_rate_opera`) | Rain radar's Finland source: precipitation rate in mm/h every 5 minutes | CC BY 4.0 (Finnish Meteorological Institute); keyless | "Finnish Meteorological Institute (CC BY 4.0)" |
+| **KNMI** radar composite (WMS `geoservices.knmi.nl/adagucserver?dataset=RADAR`, layer `RAD_NL25_PCP_CM`, style `precipitation_mm_extranetten_v1`) | Rain radar's Netherlands source: precipitation rate in mm/h every 5 minutes, 1 km | CC BY 4.0 (KNMI); keyless | "KNMI (CC BY 4.0)" |
+| **DWD** radar composite (WMS `maps.dwd.de/geoserver/dwd/wms`, layer `dwd:Niederschlagsradar`, the RV product) | Rain radar's Germany source: precipitation rate in mm/h, 1 km, every 5 minutes, observed frames only | CC BY 4.0 (Deutscher Wetterdienst); keyless | "Deutscher Wetterdienst (CC BY 4.0)" |
+| **NASA GPM IMERG** via **NASA GIBS** (WMS `gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi`, layer `IMERG_Precipitation_Rate_30min`; times from WMTS DescribeDomains) | Rain radar's World source: IMERG Early multi-satellite precipitation rate, global, 30-minute steps about 7 hours behind | U.S. public domain (NASA data); keyless | "NASA GPM IMERG Early via NASA GIBS" with the GIBS acknowledgement |
 | **NASA GIBS** (WMTS tiles + Worldview Snapshots) and **NASA CMR** (granule catalog) | Recent Imagery layer: HLS S30/L30 (Sentinel-2, Landsat 8/9) and VIIRS true-colour tiles draped on the map, per-day thumbnails and PNG exports; the HLS granule catalog (dates, cloud, footprints) for a selected box | U.S. public domain (NASA data); keyless, browser-direct (CORS `*`); no bulk use — one 30-day catalog query per box, tiles bounded to the box, six tile requests in flight | "We acknowledge the use of imagery provided by services from NASA's Global Imagery Browse Services (GIBS), part of NASA's Earth Science Data and Information System (ESDIS)." — [gibs.earthdata.nasa.gov](https://gibs.earthdata.nasa.gov), [HLS](https://lpdaac.usgs.gov/products/hlss30v002/) |
 | **NIFC WFIGS** (Wildland Fire Interagency Geospatial Services, ArcGIS feature service) | Fire Perimeters layer: current interagency wildfire incident perimeters, containment, and incident facts | U.S. public domain (interagency wildland-fire data published through the [NIFC Open Data portal](https://data-nifc.opendata.arcgis.com/)); fetched keyless through `/api/fire-perimeters` (5-minute server cache) with `exceededTransferLimit` paging | "Wildfire perimeters: National Interagency Fire Center (WFIGS)" |
 | **BC Wildfire Service** (BCWS_FirePerimeters_PublicView, ArcGIS Online) | Fire Perimeters layer: British Columbia's current-season wildfire perimeters, size in hectares, stage of control (Out of Control / Being Held / Under Control / Out) and the BC Wildfire incident page | [Open Government Licence – British Columbia 2.0](https://www2.gov.bc.ca/gov/content/data/policy-standards/data-policies/open-data/open-government-licence-bc), plus BC's API Terms of Use (identify the client; limits may change without notice). Listed by the [gev-open-sources](https://quanticsoul4772.github.io/gev-open-sources/) directory (`hazards.perimeters`, verified there) and fetched keyless through `/api/fire-perimeters` at most every 15 minutes; simplified at the source (about 20 m). For reference only; no provincial logos or official status implied | "BC Wildfire Service. Contains information licensed under the Open Government Licence – British Columbia." |
@@ -104,6 +111,7 @@ The optional Local ADS-B layer and the broadcast-FM receiver use radio you recei
 ### Notes on the live sources
 
 - **Air quality (ECCC AQHI).** Keyless. Read from the MSC GeoMet OGC API (`api.weather.gc.ca`): the `aqhi-stations` catalog plus `aqhi-observations-realtime`. **Coverage is Canada only** — ECCC is the single registered provider, and the layer row and readout card both say so. Roughly 134 stations across ECCC's five administrative zones (Atlantic, Quebec, Ontario, Prairies & North, Pacific & Yukon). AQHI publishes hourly, so readings poll every 20 minutes and the station catalog, which changes a few times a year, is refetched only every 12 hours. Observations are requested with `latest=true`; without it the collection returns the full history, roughly 2,000 rows nationally. Readings older than six hours are dropped rather than displayed as current.
+- **Air quality (PM sensors) — Sensor.Community.** Keyless, from the source directory's `airquality.sensors` entry through `/api/air-sensors` (20-minute server cache; served stale with a status line when Sensor.Community is unreachable, for at most 3 hours, with a minute between retries; 503 until the directory lists a verified entry). About 9,000 outdoor sensors, mostly in Europe. Each reading is the sensor's 1-hour mean, banded on the European Environment Agency's revised index bands for PM2.5 and PM10 (ETC HE Report 2024/17, Table 5.2: PM2.5 ≤5 Good, ≤15 Fair, ≤50 Moderate, ≤90 Poor, ≤140 Very poor, above that Extremely poor), the worse of the two. The real index also uses NO₂, O₃ and SO₂, so the layer says "EEA index bands, PM only". The 2024 bands are strict: an ordinary European day reads mostly Good or Fair, and Moderate is common. Dropped: indoor sensors, values at or above 999 (the SDS011's ceiling), PM2.5 well above PM10, all-zero rows and readings older than 3 h. A reading over 500 µg/m³ that the sensors around it don't back up (an hourly mean that high is almost always a fogged or failing sensor; wildfire smoke raises the nearby sensors too, so a reading over 500 with at least three sensors within 10 km, themselves under 500, whose median is at least a third of it counts as real, unless its humidity is above 75 %, since fog inflates the neighbours as well), or a PM2.5 over 50 µg/m³ and over 3× the median of at least three sensors within 10 km, is drawn small and grey, marked possibly faulty on its card, and never ranked. A PM2.5 over 50 with fewer than three sensors within 10 km is still ranked, and its card says it is unverified. These low-cost optical sensors read high in humid air (above about 75 % RH); a sensor with a co-located humidity reading above that says so on its card. On one October night 72 % of PM sensors had a humidity reading and 77 % of those were above 75 %, yet humid and dry sensors fell into the same bands (about 65 % Good, 24 % Fair, 9 % Moderate), so humid readings are kept, with the card line. Above about 800 km the sensors are drawn as 0.25° cells coloured by the median of their confirmed readings; a cell with none is not drawn. Not comparable with Canada's AQHI.
 
   Readings are stored as `{ provider, scale, value, band }` rather than a bare number, because air-quality indices are not interchangeable: AQHI runs 1-10+ on health risk, the US AQI runs 0-500 on concentration breakpoints, and Europe's EAQI is a five-step category. Naming the index a value belongs to is what lets another network be added later without inventing a shared numeric meaning that does not exist.
 
@@ -343,6 +351,109 @@ bundles were studied for rendering ideas, but
 no code or assets were reused and no application licence granting reuse was
 found. Its presentation is not a weather-data source for this implementation.
 
+### Observed weather: FMI and KNMI radar composites (Rain radar, Finland and Netherlands)
+
+- **FMI:** WMS `https://openwms.fmi.fi/geoserver/Radar/wms`, layer `radar_finland_cappi_rate` (rain
+  rate, CAPPI, mm/h), style `radar_rate_opera` ("similar as used generally for OPERA composite
+  visualization"). SOURCE chip "Finland · FMI", share links `lo=v.p.f`. Capabilities come from the
+  layer's own endpoint (`…/geoserver/Radar/radar_finland_cappi_rate/wms`, about 12 KB); data box
+  15.3–42.7° E, 57.1–70.8° N; whole images 14–44° E, 56.5–71.5° N (2:1). The style is a ramp
+  (GetLegendGraphic JSON): 0.2, 0.5, 1, 2, 3, 4, 5, 10, 20, 50, 100 and 200 mm/h, fading in from
+  transparent below 0.2; no data is grey at 50 %. Maps carry "Default value used" warnings for FMI's
+  elevation, FILTER and GEOCONF dimensions, which are expected. Licence: CC BY 4.0 ("shall be used
+  by the Finnish Meteorological Institute's open data service",
+  https://en.ilmatieteenlaitos.fi/open-data-licence).
+- **KNMI:** ADAGUC WMS `https://geoservices.knmi.nl/adagucserver?dataset=RADAR` (the dataset is a
+  fixed query that both capabilities and GetMap keep), layer `RAD_NL25_PCP_CM` ("Radar precipitation
+  … 1.0x1.0 km grid … five minute time interval … mm/hour"), style
+  `precipitation_mm_extranetten_v1`. SOURCE chip "Netherlands · KNMI", share links `lo=v.p.n`.
+  Capabilities are 16 KB; data box 0–10.86° E, 48.90–55.97° N; whole images 5.5° W–16.5° E,
+  47–58° N (2:1). The style is a log ramp. KNMI's legend rounds its tick labels to integers, so the
+  legend values come from the ticks' spacing, which follows the 1–2–5 pattern exactly (about 132 px
+  per decade): 0.2, 0.5, 1, 2, 5, 10, 20 and 40 mm/h; colours read at those ticks. Under about 0.2
+  mm/h the map fades to transparent, so the legend starts there. KNMI smooths the image, and
+  advertises `opaque="1"` while returning transparent PNGs. Licence: CC BY 4.0 (data.overheid.nl
+  "CC-BY (4.0)"; capabilities: Fees "no conditions apply", AccessConstraints "None").
+- **Timing (both):** 5-minute steps, the newest about 5–10 minutes old; the capabilities default is
+  the newest step. 13 frames are shown on a 10-minute grid (about 2 hours). Not a forecast.
+- **Other services checked (2026-10-17) and not used:** MET Norway (WMS "Reserved for yr.no"),
+  Météo-France and AEMET (keys), RMI (radar GetMap refused), SMHI (one fixed-extent PNG), DMI and
+  MeteoSwiss (HDF5 only), CHMI (static PNGs, bounding box unverified), JMA (undocumented tile path).
+
+### Observed weather: DWD radar composite (Rain radar, Germany)
+
+- **Source:** DWD GeoServer WMS (`https://maps.dwd.de/geoserver/dwd/wms`), layer `dwd:Niederschlagsradar`
+  (an alias for the RV product), chosen in Rain radar's SOURCE setting ("Germany · DWD"; share links
+  `lo=v.p.d`). Capabilities come from the layer's own endpoint
+  (`…/geoserver/dwd/Niederschlagsradar/wms`, about 38 KB).
+- **Meaning:** the German radar composite's precipitation rate in mm/h, about 1 km, every 5 minutes.
+  The legend is DWD's own 15 classes from 0.1 to 150+ mm/h; no colour means under 0.1 mm/h. DWD
+  draws a grey veil outside radar range and a magenta line at its edge; both are DWD's own coverage
+  marking and are kept. Not a forecast or a storm warning.
+- **Timing and the nowcast:** the `time` axis runs about 2 hours past now, because it includes DWD's
+  nowcast. The `REFERENCE_TIME` dimension's default is the newest analysis, and the proxy stops the
+  frames there. A past `TIME` returns that step's analysis whatever `REFERENCE_TIME` says (checked
+  across a reference rollover), so cached frames stay valid. Every map carries a
+  `Warning: 99 Default value used: REFERENCE_TIME=…` header, which is expected. An off-grid `TIME`
+  is a ServiceException. 13 frames are shown on a 10-minute grid (about 2 hours); the newest is about
+  4–10 minutes old.
+- **Extent:** the layer advertises only CRS boxes (EPSG:4326 in lat/lon order), which the proxy
+  reads. The whole-image extent is 2°W–22°E, 45–57°N (2:1). It leaves room for the scan range
+  growing from 150 to 180 km on 2026-11-24, when DWD's advertised box grows slightly under the same
+  layer name.
+- **Rights/credit:** DWD geodata are free to reuse under CC BY 4.0 with a source credit
+  (https://www.dwd.de/copyright).
+
+### Observed weather: NASA GPM IMERG precipitation estimate (Rain radar, World)
+
+- **Source:** NASA GIBS WMS (`https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi`), layer
+  `IMERG_Precipitation_Rate_30min`, chosen in Rain radar's SOURCE setting ("World · NASA IMERG";
+  share links `lo=v.p.g`). The recent frames are the IMERG **Early** (near-real-time) run.
+- **Meaning:** a multi-satellite precipitation **estimate**, not radar: each frame is the 30-minute
+  average rate (mm/h) starting at its time. GIBS colours rain and snow on separate log-scaled ramps
+  (green→red and cyan→purple, colormap `GPM_Precipitation_Rate` v1.3); under 0.1 mm/h is not drawn.
+  The legend lists light (0.1–1), moderate (1–5) and heavy (5+) for each, in each ramp's own colours.
+  Light rain and snow tend to be underestimated. Not a forecast.
+- **Timing:** steps every 30 minutes. GIBS lists a new step about 5½ hours after it, but its servers
+  take about an hour to agree on it (on 2026-10-17 the two newest steps alternated between the image
+  and a blank one, while older steps were consistent), so the proxy holds back the two newest. The
+  newest frame shown is therefore about 7 hours old (6h53m measured on 2026-10-17, up to about 7½
+  hours before the next step is listed), and in shared-clock history the last ~7 hours have no
+  frame. 13 frames (6.5 hours) are shown. The delayed warning starts at 9 hours.
+- **Metadata:** GIBS's WMS capabilities are 2.5 MB (1,609 layers), too big for the proxy, so times
+  come from WMTS **DescribeDomains** for the last 24 hours (a few hundred bytes), the window floored
+  to 30 minutes so GIBS's own cache answers repeats. A step GIBS lacks splits the domain into
+  several `start/end/PT30M` intervals (single missing steps exist, e.g. 2026-02-10T00:30Z); the proxy
+  expands and merges them all. GIBS writes a step at midnight as a bare date, which the proxy reads
+  as 00:00Z. GIBS
+  rejects fractional seconds in `TIME`, and answers a gap or a future time with a blank image rather
+  than an error, so only the advertised steps are requested.
+- **Images:** whole images are 2048×1024 (IMERG's grid is 0.1°); tiles as for the other products.
+- **Rights/credit:** U.S. public domain (NASA data), with the GIBS acknowledgement.
+
+### Observed weather: ECCC precipitation type (Rain radar, North America)
+
+- **Source:** ECCC MSC GeoMet WMS (`https://geo.weather.gc.ca/geomet`), layer `Radar_1km_SfcPrecipType`
+  ("Radar surface precipitation type"), style `SfcPrecipType_Dis`. Chosen in the Rain radar layer's
+  SOURCE setting (US · NOAA is the default; the choice is kept in share links as `lo=v.p.c`).
+- **Meaning:** a 1 km North American composite that classifies each pixel by surface precipitation type
+  and intensity (light/moderate/heavy snow, mixed rain/snow and rain; hail/rain; light and
+  moderate/heavy freezing rain), from dual-polarization radar, a particle-classification composite and
+  HRDPS model surface temperature. Categories, not rates or reflectivity; the legend is ECCC's own.
+  Not a forecast or a storm warning; gaps do not establish absence of precipitation. ECCC's separate
+  rain and snow rate layers (`RADAR_1KM_RRAI`/`RSNO`) are the same echoes converted with two formulas,
+  not a per-pixel split, so they are not used.
+- **Coverage and timing:** Canada and the United States where radars reach (the app treats
+  171°W–49°W, 16°N–68°N as coverage, around ECCC's own coverage mask
+  (`Radar-Coverage_SfcPrecipType-Inverted`: 170.1°W–50°W, 16.1°N–67°N, including Alaska, Hawaii
+  and Puerto Rico); ECCC advertises the whole northern band, so whole images use
+  the 2:1 globe). Frames every 6 minutes, kept 3 hours; the layer shows every second frame on a
+  12-minute grid (13 frames). `nearestValue="0"`: a missing time is an error, never a substituted
+  frame. GeoMet rejects fractional seconds, so the proxy sends `TIME` as `…:00Z`.
+- **Rights/credit:** [ECCC Data Services End-use Licence](https://eccc-msc.github.io/open-data/licence/readme_en/); the composite
+  includes NOAA NEXRAD data, so the credit names both: "Data Source: Environment and Climate Change
+  Canada and NOAA/NWS".
+
 ### Observed weather: NOAA nowCOAST
 
 The Weather section provides keyless, observed **MRMS radar reflectivity** for the
@@ -421,6 +532,32 @@ This implementation is original; those contributions have not been merged here.
   a live ground-strike counter, an all-clear indication, or global coverage.
 - **Coverage:** 110°E across the Pacific/Americas to 0°, 25°S–80°N. Display exact advertised
   observations; ten-minute metadata refresh, source-matched colors, bounded shared imagery cache.
+
+### Weather: EUMETSAT MTG satellite lightning
+
+- **Source:** EUMETSAT's [EUMETView](https://view.eumetsat.int/) WMS, layer `mtg_fd:li_afa`
+  (MTG-I Lightning Imager Level 2 Accumulated Flash Area), style `mtg_li_afa`. Capabilities come
+  from the per-layer endpoint `geoserver/mtg_fd/li_afa/ows` (a few KB).
+- **Rights/credit:** "Core" data under the [EUMETSAT Data Policy](https://www-cdn.eumetsat.int/files/2026-01/45173%20-%20Data_Policy.pdf):
+  Article 4 lists LI derived products and Advanced Image Products (visualisations used in Web Map
+  Services) as Core; Article 5.1 grants Core "on a Free and Unrestricted basis under a CC-BY-4.0
+  licence" ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)); Article 6.3 asks for
+  "Contains modified EUMETSAT Meteosat product {year}".
+- **Meaning:** optical total lightning seen from geostationary orbit: a camera sees the light of
+  most flashes, cloud-to-cloud and cloud-to-ground, counted as flashes per ~2 km pixel over
+  5 minutes. EUMETSAT colours the images (its legend: 1, 10, 20+ per 5 minutes); there are no
+  values behind the pixels, so the legend is approximate. Not ground-sensor strikes, and not
+  comparable with NOAA's density: the two layers overlap over 70°W–0° and say so there. Positions
+  can drift after satellite manoeuvres and in eclipse season; not a safety warning.
+- **Coverage and timing:** 70°W–70°E, 70°S–70°N. The service advertises one `start/end/PT5M`
+  interval; the proxy expands its last 37 steps (opt-in for this product only) and shows every
+  third, so 13 frames span about 3 hours like NOAA's. Steps are about 15–20 minutes behind.
+  GeoServer answers a missing step with its nearest neighbour and says so in a
+  `Warning: 99 Nearest value used` header; the proxy refuses such a frame rather than show it
+  under the wrong time.
+- **Images:** the data box is 140°×140°, so whole images and Google 3D Tiles shells use a 2:1
+  extent padded to 140°W–140°E (transparent outside the data); globe tiles, detail windows and
+  coverage checks use the data box.
 
 ### Community weather prior art
 

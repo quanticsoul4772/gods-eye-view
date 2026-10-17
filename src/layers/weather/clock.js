@@ -2,6 +2,14 @@ export const RADAR_MAX_GAP_MS = 30 * 60_000;
 export const REGIONAL_INFRARED_MAX_GAP_MS = 30 * 60_000;
 export const GLOBAL_INFRARED_MAX_GAP_MS = 3 * 60 * 60_000;
 export const LIGHTNING_MAX_GAP_MS = 30 * 60_000;
+/** ECCC precipitation-type frames are 12 minutes apart in history. */
+export const CA_RADAR_MAX_GAP_MS = 12 * 60_000;
+/** NASA IMERG frames are 30 minutes apart. */
+export const IMERG_MAX_GAP_MS = 30 * 60_000;
+/** 5-minute national radars (DWD, FMI, KNMI) are shown 10 minutes apart. */
+export const RADAR_10MIN_MAX_GAP_MS = 10 * 60_000;
+/** EUMETSAT lightning frames are 15 minutes apart in history. */
+export const EU_LIGHTNING_MAX_GAP_MS = 15 * 60_000;
 
 /** Transient observed time. Products must honor the signal before installing a frame. */
 export function createWeatherClock({
@@ -55,6 +63,8 @@ export function createWeatherClock({
       shown: product.getShownTime() ?? null,
       selected: selectedFor(product),
       suspended: Boolean(product.isSuspended()),
+      // Not drawn at all (host or tab hidden); reduced motion still draws.
+      hidden: Boolean(product.isHidden?.()),
     })),
   });
   const notify = () => {

@@ -7,7 +7,9 @@ import { readResponseTextCapped } from './common/http.js';
 import {
   DEFAULT_MASK_URL,
   annotateStaticSources,
+  countRecurringCells,
   loadMaskPack,
+  recordUnflaggedDays,
   stripStaticSources,
 } from './firmsStaticMask.js';
 import { publicOnlyFetch } from './sourceDirectory.js';
@@ -46,6 +48,17 @@ import { publicOnlyFetch } from './sourceDirectory.js';
  * cache from another mask is re-annotated when read. No mask → no
  * annotation, `maskAvailable: false`.
  *
+ * Mask upkeep: each refresh also records which ~400 m cells had unflagged
+ * daytime VIIRS detections on which UTC day (7 days kept, in
+ * .gev-cache/firms-recurrence.json, reset when the mask changes). Status
+ * reports `unflaggedRecurring`, the cells seen on 3+ of those days, and
+ * `unflaggedRecurringDays`, the days recorded. Solar farms or industrial
+ * sites the mask lacks raise it, but so do long fires and seasonal crop
+ * burning in one place, which dominate in fire season: a rising count is a
+ * reason to look at those cells, not proof the mask is stale. Days are only
+ * recorded while the proxy is refreshing (i.e. while it is used); days with
+ * the server off are missing.
+ *
  * @param {{directory?: ?{usable: Function, ready?: Function},
  *   directoryFetch?: Function,
  *   staticMask?: () => ?{id: string, index: object, escalation: object}}} [options]
@@ -72,6 +85,7 @@ export function firmsProxy({
   const FIRMS_MAX_RESPONSE_BYTES = 64 * 1024 * 1024;
   const CACHE_DIR = path.join(process.cwd(), '.gev-cache');
   const CACHE_PATH = path.join(CACHE_DIR, 'firms.json');
+  const RECURRENCE_PATH = path.join(CACHE_DIR, 'firms-recurrence.json');
 
   /** How long a keyless request waits for the directory's first live load. */
   const DIRECTORY_WAIT_MS = 15_000;
@@ -122,9 +136,34 @@ export function firmsProxy({
     return entry;
   }
 
+  /** Unflagged daytime cells per UTC day, under one mask. */
+  let recurrence = { maskId: null, days: {} };
+
+  /** Add an annotated entry's unflagged cells to the history (in memory). */
+  function recordRecurrence(entry) {
+    if (!entry.maskId) return;
+    const days = recurrence.maskId === entry.maskId ? recurrence.days : {};
+    recurrence = {
+      maskId: entry.maskId,
+      days: recordUnflaggedDays(days, entry.fires),
+    };
+  }
+
   async function readDiskOnce() {
     if (diskChecked) return;
     diskChecked = true;
+    try {
+      const parsed = JSON.parse(await fsp.readFile(RECURRENCE_PATH, 'utf8'));
+      if (
+        typeof parsed?.maskId === 'string' &&
+        parsed.days &&
+        typeof parsed.days === 'object' &&
+        Object.values(parsed.days).every(Array.isArray)
+      )
+        recurrence = { maskId: parsed.maskId, days: parsed.days };
+    } catch {
+      /* no history yet */
+    }
     try {
       const parsed = JSON.parse(await fsp.readFile(CACHE_PATH, 'utf8'));
       if (
@@ -149,6 +188,12 @@ export function firmsProxy({
     try {
       await fsp.mkdir(CACHE_DIR, { recursive: true });
       await fsp.writeFile(CACHE_PATH, JSON.stringify(entry), 'utf8');
+      if (recurrence.maskId)
+        await fsp.writeFile(
+          RECURRENCE_PATH,
+          JSON.stringify(recurrence),
+          'utf8',
+        );
     } catch (err) {
       console.warn('[firms-proxy] cache write failed:', err?.message || err);
     }
@@ -316,10 +361,16 @@ export function firmsProxy({
 
   /** Static-source fields of the status route. */
   function staticStatus(cached) {
+    const current = currentMask();
+    const history =
+      current && recurrence.maskId === current.id ? recurrence.days : null;
+    const recorded = history ? Object.keys(history).length : 0;
     return {
-      maskAvailable: Boolean(currentMask()),
+      maskAvailable: Boolean(current),
       staticFlagged: cached ? (cached.staticFlagged ?? 0) : null,
       staticEscalated: cached ? (cached.staticEscalated ?? 0) : null,
+      unflaggedRecurring: recorded ? countRecurringCells(history) : null,
+      unflaggedRecurringDays: recorded,
     };
   }
 
@@ -389,6 +440,7 @@ export function firmsProxy({
           )
             .then(async (refreshed) => {
               const fresh = annotate({ ...refreshed, mode });
+              recordRecurrence(fresh);
               mem = fresh;
               await writeDisk(fresh);
               return fresh;

@@ -1,5 +1,6 @@
 [
   ["air-quality", "4"],
+  ["air-sensors", "5"],
   ["ais-live-vessels", "a"],
   ["alpr-cameras", "p"],
   ["bhote-koshi-2026", "h"],
@@ -11,6 +12,7 @@
   ["fire-perimeters", "2"],
   ["flights", "f"],
   ["gnss-integrity", "3"],
+  ["lightning-eu", "6"],
   ["local-dams", "q"],
   ["local-datacenters", "d"],
   ["local-firms", "w"],

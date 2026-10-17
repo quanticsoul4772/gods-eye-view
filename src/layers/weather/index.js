@@ -6,7 +6,12 @@ import {
   REGIONAL_INFRARED_MAX_GAP_MS,
   GLOBAL_INFRARED_MAX_GAP_MS,
   LIGHTNING_MAX_GAP_MS,
+  EU_LIGHTNING_MAX_GAP_MS,
+  CA_RADAR_MAX_GAP_MS,
+  IMERG_MAX_GAP_MS,
+  RADAR_10MIN_MAX_GAP_MS,
 } from './clock.js';
+import { weatherCoverage } from './coverage.js';
 import { formatUtcDayMonth, t, msg } from '../../i18n/index.js';
 import { formatScaleLabel } from '../../ui/unitLabels.js';
 
@@ -35,6 +40,35 @@ const STOPS = [
   [70, '#ff00ff'],
   [80, '#05ede0'],
 ];
+// FMI radar_rate_opera (GetLegendGraphic JSON, a ramp): mm/h stops; below
+// 0.2 it fades in from transparent.
+const FI_RADAR_STOPS = [
+  ['0.2', '#002896'],
+  ['0.5', '#0056C8'],
+  ['1', '#00A3C6'],
+  ['2', '#00E384'],
+  ['3', '#3DFF1B'],
+  ['4', '#CCFF23'],
+  ['5', '#FFD01E'],
+  ['10', '#FF350E'],
+  ['20', '#F370CC'],
+  ['50', '#C3F3FF'],
+  ['100', '#FFFFFF'],
+  ['200', '#8B0000'],
+];
+// KNMI precipitation_mm_extranetten_v1: a log ramp whose legend rounds its
+// tick labels; the ticks' 1–2–5 spacing gives these mm/h values. Under about
+// 0.2 the map fades out, so the legend starts there.
+const NL_RADAR_STOPS = [
+  ['0.2', '#ACE4FF'],
+  ['0.5', '#2579F2'],
+  ['1', '#10BB88'],
+  ['2', '#83CD3C'],
+  ['5', '#F8830B'],
+  ['10', '#E3340F'],
+  ['20', '#B10256'],
+  ['40', '#8D01DA'],
+];
 const LIGHTNING_STOPS = [
   ['0.1', '#FFFFCC'],
   ['1', '#FFA400'],
@@ -45,6 +79,108 @@ const LIGHTNING_STOPS = [
   ['200', '#00C7FF'],
   ['300+', '#00FF00'],
 ];
+// EUMETView's own legend for mtg_li_afa (GetLegendGraphic, read 2026-10-17):
+// "Accumulated Flash Area, Count / 5 minutes", ticks 1, 10 and 20+.
+const LIGHTNING_EU_STOPS = [
+  ['1', '#FFFFC9'],
+  ['10', '#FD8339'],
+  ['20+', '#8C0026'],
+];
+// ECCC precipitation type (Radar_1km_SfcPrecipType, style SfcPrecipType_Dis):
+// the classes and colours of ECCC's own legend (GetLegendGraphic, read
+// 2026-10-17), lightest snow first.
+const RADAR_CA_TYPES = [
+  ['snow-light', '#7FDFEB'],
+  ['snow-moderate', '#47A4F0'],
+  ['snow-heavy', '#0000E0'],
+  ['mixed-light', '#E0BDE6'],
+  ['mixed-moderate', '#C36DD2'],
+  ['mixed-heavy', '#9B27AF'],
+  ['rain-light', '#9AFD9A'],
+  ['rain-moderate', '#00CB00'],
+  ['rain-heavy', '#008000'],
+  ['hail', '#FEC007'],
+  ['freezing-light', '#FECBC8'],
+  ['freezing-heavy', '#FE1E0D'],
+];
+// NASA IMERG precipitation rate (GIBS colormap GPM_Precipitation_Rate v1.3):
+// two log-scaled ramps, rain and snow, in mm/h; under 0.1 is not drawn. The
+// colours are each ramp's own at 0.5, 2 and 10 mm/h.
+const IMERG_CLASSES = [
+  ['rain-light', '#4EC300'],
+  ['rain-moderate', '#FFB006'],
+  ['rain-heavy', '#E70000'],
+  ['snow-light', '#63A7DA'],
+  ['snow-moderate', '#4048D2'],
+  ['snow-heavy', '#770BD1'],
+];
+// DWD radar (dwd:Niederschlagsradar legend): rain rate in mm/h; no colour
+// under 0.1, and a grey veil outside radar range.
+const DE_RADAR_CLASSES = [
+  ['0.1–0.2', '#33FFFF'],
+  ['0.2–0.4', '#1ACC9A'],
+  ['0.4–1', '#019934'],
+  ['1–2', '#4DB31B'],
+  ['2–3', '#99CC01'],
+  ['3–5', '#CCE601'],
+  ['5–7.5', '#FFFF01'],
+  ['7.5–10', '#FFC401'],
+  ['10–15', '#FF8901'],
+  ['15–30', '#FF4501'],
+  ['30–45', '#FE0000'],
+  ['45–75', '#E5004C'],
+  ['75–100', '#CC0098'],
+  ['100–150', '#6600CB'],
+  ['150+', '#0000FE'],
+];
+/** An IMERG legend row in the UI language. */
+function imergLabel(id) {
+  switch (id) {
+    case 'rain-light':
+      return t('Rain · 0.1–1 mm/h');
+    case 'rain-moderate':
+      return t('Rain · 1–5 mm/h');
+    case 'rain-heavy':
+      return t('Rain · 5+ mm/h');
+    case 'snow-light':
+      return t('Snow · 0.1–1 mm/h');
+    case 'snow-moderate':
+      return t('Snow · 1–5 mm/h');
+    default:
+      return t('Snow · 5+ mm/h');
+  }
+}
+/** A precipitation-type class name in the UI language. */
+function radarTypeLabel(id) {
+  switch (id) {
+    case 'snow-light':
+      return t('Light snow');
+    case 'snow-moderate':
+      return t('Moderate snow');
+    case 'snow-heavy':
+      return t('Heavy snow');
+    case 'mixed-light':
+      return t('Light mixed rain/snow');
+    case 'mixed-moderate':
+      return t('Moderate mixed rain/snow');
+    case 'mixed-heavy':
+      return t('Heavy mixed rain/snow');
+    case 'rain-light':
+      return t('Light rain');
+    case 'rain-moderate':
+      return t('Moderate rain');
+    case 'rain-heavy':
+      return t('Heavy rain');
+    case 'hail':
+      return t('Hail/rain');
+    case 'freezing-light':
+      return t('Light freezing rain');
+    default:
+      return t('Moderate/heavy freezing rain');
+  }
+}
+// Where NOAA's and EUMETSAT's lightning coverage overlap (70°W–0°).
+const LIGHTNING_OVERLAP = { west: -70, south: -25, east: 0, north: 70 };
 const utc = (value) =>
   value
     ? `${formatUtcDayMonth(value)} ${value.slice(11, 16)} UTC`
@@ -65,9 +201,18 @@ export function createWeatherLayer({
   if (typeof feed?.getSnapshot !== 'function')
     throw new TypeError('Weather requires a snapshot source');
   const radar = id === 'weather-radar';
-  const lightning = id === 'weather-lightning';
+  // Satellite lightning (EUMETSAT MTG, Europe/Africa/Atlantic) beside NOAA's.
+  const eu = id === 'lightning-eu';
+  const lightning = id === 'weather-lightning' || eu;
   const satellite = !radar && !lightning;
-  let product = radar ? 'radar' : lightning ? 'lightning' : 'clouds-regional';
+  const otherLightning = eu ? 'weather-lightning' : 'lightning-eu';
+  let product = radar
+    ? 'radar'
+    : eu
+      ? 'lightning-eu'
+      : lightning
+        ? 'lightning'
+        : 'clouds-regional';
   let opacity = 'strong';
   let infrared = 100;
   let viewer = null,
@@ -94,9 +239,17 @@ export function createWeatherLayer({
   let noFrame = false;
   const maxGap = () =>
     radar
-      ? RADAR_MAX_GAP_MS
+      ? product === 'radar-ca'
+        ? CA_RADAR_MAX_GAP_MS
+        : product === 'precip-global'
+          ? IMERG_MAX_GAP_MS
+          : ['radar-de', 'radar-fi', 'radar-nl'].includes(product)
+            ? RADAR_10MIN_MAX_GAP_MS
+            : RADAR_MAX_GAP_MS
       : lightning
-        ? LIGHTNING_MAX_GAP_MS
+        ? eu
+          ? EU_LIGHTNING_MAX_GAP_MS
+          : LIGHTNING_MAX_GAP_MS
         : product === 'clouds'
           ? GLOBAL_INFRARED_MAX_GAP_MS
           : REGIONAL_INFRARED_MAX_GAP_MS;
@@ -113,7 +266,16 @@ export function createWeatherLayer({
   const observationDelayed = () =>
     manifest?.latest &&
     Date.now() - Date.parse(manifest.latest) >
-      (product === 'clouds' ? 240 : lightning ? 45 : 20) * 60_000;
+      (product === 'clouds'
+        ? 240
+        : product === 'precip-global'
+          ? 540
+          : eu
+            ? 35
+            : lightning
+              ? 45
+              : 20) *
+        60_000;
   const stop = () => {
     if (clock) return;
     playing = false;
@@ -203,6 +365,7 @@ export function createWeatherLayer({
       getShownTime: shownTime,
       apply: applyClockTime,
       isSuspended: suspended,
+      isHidden: () => hostHidden || Boolean(documentRef?.hidden),
     });
   }
   async function warmNext(time) {
@@ -272,12 +435,14 @@ export function createWeatherLayer({
     id,
     name: radar
       ? 'Rain radar'
-      : lightning
-        ? 'Lightning density'
-        : 'Satellite clouds',
+      : eu
+        ? 'Satellite lightning (EUMETSAT)'
+        : lightning
+          ? 'Lightning density'
+          : 'Satellite clouds',
     icon: radar ? '◉' : lightning ? 'ϟ' : '☁',
-    source: 'NOAA nowCOAST · OBSERVED',
-    updateInterval: lightning ? 600_000 : 120_000,
+    source: eu ? 'EUMETSAT EUMETView · OBSERVED' : 'NOAA nowCOAST · OBSERVED',
+    updateInterval: eu ? 300_000 : lightning ? 600_000 : 120_000,
     init(nextViewer) {
       viewer = nextViewer;
       rendering = createRendering({
@@ -424,8 +589,17 @@ export function createWeatherLayer({
         rendering?.setAlpha(opacity === 'light' ? 0.4 : satellite ? 0.7 : 0.8);
       }
       if (
-        satellite &&
-        ['clouds', 'clouds-regional'].includes(params.product) &&
+        ((satellite &&
+          ['clouds', 'clouds-regional'].includes(params.product)) ||
+          (radar &&
+            [
+              'radar',
+              'radar-ca',
+              'precip-global',
+              'radar-de',
+              'radar-fi',
+              'radar-nl',
+            ].includes(params.product))) &&
         params.product !== product
       ) {
         product = params.product;
@@ -456,9 +630,10 @@ export function createWeatherLayer({
         manifest?.bounds &&
         runNavigation
       ) {
-        const b = lightning
-          ? { west: 110, south: -25, east: 0, north: 80 }
-          : manifest.bounds;
+        const b =
+          lightning && !eu
+            ? { west: 110, south: -25, east: 0, north: 80 }
+            : weatherCoverage(manifest);
         runNavigation(() =>
           viewer.camera.flyTo({
             destination: cesium.Rectangle.fromDegrees(
@@ -506,11 +681,7 @@ export function createWeatherLayer({
       notify();
     },
     getParams() {
-      return radar
-        ? { opacity }
-        : satellite
-          ? { product, opacity, infrared }
-          : { product, opacity };
+      return satellite ? { product, opacity, infrared } : { product, opacity };
     },
     getRowControls() {
       const shared = clock?.getState();
@@ -558,7 +729,9 @@ export function createWeatherLayer({
       const problem = error || diagnostic?.error;
       const shownProblem = problem ? presentWeatherProblem(problem) : null;
       const shownHost = hostStatus ? t(hostStatus) : null;
-      const b = manifest?.bounds;
+      // The EU product's extent is padded to 2:1; coverage is the data box.
+      // Coverage is where the product has data (padded extents are wider).
+      const b = weatherCoverage(manifest);
       const canvas = viewer?.scene?.canvas;
       const point =
         canvas &&
@@ -581,11 +754,25 @@ export function createWeatherLayer({
           lon > b.east ||
           lat < b.south ||
           lat > b.north ||
-          (lightning && lon > 0 && lon < 110));
+          (lightning && !eu && lon > 0 && lon < 110));
+      // Both lightning layers on, map centre where they overlap: they measure
+      // different things, so their colours can't be compared.
+      const overlap =
+        lightning &&
+        camera &&
+        shared?.products?.some(
+          (entry) => entry.id === otherLightning && !entry.hidden,
+        ) &&
+        lon >= LIGHTNING_OVERLAP.west &&
+        lon <= LIGHTNING_OVERLAP.east &&
+        lat >= LIGHTNING_OVERLAP.south &&
+        lat <= LIGHTNING_OVERLAP.north;
       let detail = time
         ? t('{state} · {time} · {lag}', {
             state: followLatest ? t('Observed') : t('History'),
-            time: utc(time),
+            time: eu
+              ? t('5-min window · {time}', { time: utc(time) })
+              : utc(time),
             lag,
           })
         : missing
@@ -594,13 +781,30 @@ export function createWeatherLayer({
       if (relation === 'synced') detail = t('{detail} · synced', { detail });
       else if (relation === 'nearest')
         detail = t('{detail} · nearest', { detail });
+      const ca = product === 'radar-ca';
+      const imerg = product === 'precip-global';
+      const de = product === 'radar-de';
+      const fi = product === 'radar-fi';
+      const nl = product === 'radar-nl';
       const infoHeading = radar
-        ? t('RADAR REFLECTIVITY · dBZ')
-        : lightning
-          ? t('LIGHTNING DENSITY · 15 min accumulation')
-          : product === 'clouds'
-            ? t('GLOBAL INFRARED · hourly')
-            : t('GOES INFRARED · ~5 min');
+        ? fi
+          ? t('FMI RADAR · 5 min')
+          : nl
+            ? t('KNMI RADAR · 5 min')
+            : de
+              ? t('DWD RADAR · 5 min')
+              : imerg
+                ? t('SATELLITE PRECIPITATION · 30 min')
+                : ca
+                  ? t('PRECIPITATION TYPE · 6 min')
+                  : t('RADAR REFLECTIVITY · dBZ')
+        : eu
+          ? t('SATELLITE LIGHTNING · 5 min accumulation')
+          : lightning
+            ? t('LIGHTNING DENSITY · 15 min accumulation')
+            : product === 'clouds'
+              ? t('GLOBAL INFRARED · hourly')
+              : t('GOES INFRARED · ~5 min');
       const infoTime = time
         ? `${t('{state}: {time}', {
             state: followLatest ? t('Latest observation') : t('History'),
@@ -621,12 +825,24 @@ export function createWeatherLayer({
             .filter(Boolean)
             .join(' · ');
       const infoCoverage = radar
-        ? t('Contiguous US · gaps ≠ no rain')
-        : lightning
-          ? `${t('Americas + Pacific · not individual strikes')}\n${t('Color: strikes/km²/min ×10³')}`
-          : product === 'clouds'
-            ? t('60°S–60°N · typically 2–3 h delayed')
-            : t('North America · infrared imagery');
+        ? fi
+          ? t('Finland · grey = no data')
+          : nl
+            ? t('Netherlands · smoothed by KNMI')
+            : de
+              ? t('Germany · grey = outside radar range')
+              : imerg
+                ? t('Global · satellite estimate, about 7 h behind')
+                : ca
+                  ? t('Canada + US · gaps ≠ no precipitation')
+                  : t('Contiguous US · gaps ≠ no rain')
+        : eu
+          ? `${t('Europe · Africa · Atlantic · E. South America')}\n${t('Color: flashes per ~2 km pixel per 5 min (EUMETSAT colours, approximate)')}`
+          : lightning
+            ? `${t('Americas + Pacific · not individual strikes')}\n${t('Color: strikes/km²/min ×10³')}`
+            : product === 'clouds'
+              ? t('60°S–60°N · typically 2–3 h delayed')
+              : t('North America · infrared imagery');
       const infoMotion = motion?.matches
         ? clock
           ? t('Reduced motion · history playback unavailable')
@@ -636,17 +852,41 @@ export function createWeatherLayer({
         readout: true,
         summary: {
           label: radar
-            ? t('Rain radar · US')
-            : lightning
-              ? t('Lightning density · 15 min')
-              : t('Satellite clouds'),
+            ? fi
+              ? t('Rain radar · Finland')
+              : nl
+                ? t('Rain radar · Netherlands')
+                : de
+                  ? t('Rain radar · Germany')
+                  : imerg
+                    ? t('Precipitation estimate · World')
+                    : ca
+                      ? t('Precipitation type · N. America')
+                      : t('Rain radar · US')
+            : eu
+              ? t('Satellite lightning · 5 min')
+              : lightning
+                ? t('Lightning density · 15 min')
+                : t('Satellite clouds'),
           coverage: radar
-            ? 'CONUS'
-            : lightning
-              ? t('Americas + Pacific')
-              : product === 'clouds'
-                ? t('Global · 60°S–60°N')
-                : t('North America'),
+            ? fi
+              ? t('Finland (FMI radars)')
+              : nl
+                ? t('Netherlands (KNMI radars)')
+                : de
+                  ? t('Germany (DWD radars)')
+                  : imerg
+                    ? t('Global (satellite)')
+                    : ca
+                      ? t('Canada + US')
+                      : 'CONUS'
+            : eu
+              ? t('Europe · Africa · Atlantic')
+              : lightning
+                ? t('Americas + Pacific')
+                : product === 'clouds'
+                  ? t('Global · 60°S–60°N')
+                  : t('North America'),
           shownTime: time,
           maxGapMinutes: maxGap() / 60_000,
           detail,
@@ -663,9 +903,58 @@ export function createWeatherLayer({
                   : outside
                     ? t('Map center outside coverage')
                     : null),
-          units: radar ? 'dBZ' : lightning ? t('strikes/km²/min ×10³') : '',
+          units: radar
+            ? imerg || de || fi || nl
+              ? 'mm/h'
+              : ca
+                ? ''
+                : 'dBZ'
+            : eu
+              ? t('flashes/5 min')
+              : lightning
+                ? t('strikes/km²/min ×10³')
+                : '',
         },
         chips: [
+          ...(radar
+            ? [
+                ['radar', t('US · NOAA')],
+                ['radar-ca', t('N. America · ECCC')],
+                ['precip-global', t('World · NASA IMERG')],
+                ['radar-de', t('Germany · DWD')],
+                ['radar-fi', t('Finland · FMI')],
+                ['radar-nl', t('Netherlands · KNMI')],
+              ].map(([value, label]) => ({
+                id: value,
+                label,
+                active: product === value,
+                params: { product: value },
+                title:
+                  value === 'radar-fi'
+                    ? t(
+                        'FMI Finnish radar composite: rain rate every 5 minutes',
+                      )
+                    : value === 'radar-nl'
+                      ? t(
+                          'KNMI Dutch radar composite: rain rate every 5 minutes',
+                        )
+                      : value === 'radar-de'
+                        ? t(
+                            'DWD German radar composite: rain rate every 5 minutes, observed frames only',
+                          )
+                        : value === 'precip-global'
+                          ? t(
+                              'NASA GPM IMERG satellite precipitation estimate, worldwide, every 30 minutes, about 7 hours behind',
+                            )
+                          : value === 'radar-ca'
+                            ? t(
+                                'ECCC North American composite: precipitation type and intensity, every 6 minutes',
+                              )
+                            : t(
+                                'NOAA MRMS reflectivity, contiguous US, about every 4 minutes',
+                              ),
+              }))
+            : []),
           ...(satellite
             ? [
                 ['clouds-regional', t('N. America')],
@@ -713,44 +1002,133 @@ export function createWeatherLayer({
           {
             id: 'coverage',
             label: radar
-              ? t('View US radar')
-              : lightning
-                ? t('View Americas & Pacific')
-                : t('View coverage'),
+              ? fi
+                ? t('View Finland')
+                : nl
+                  ? t('View Netherlands')
+                  : de
+                    ? t('View Germany')
+                    : imerg
+                      ? t('View world')
+                      : ca
+                        ? t('View North America')
+                        : t('View US radar')
+              : eu
+                ? t('View Europe & Africa')
+                : lightning
+                  ? t('View Americas & Pacific')
+                  : t('View coverage'),
             disabled: !manifest || !runNavigation,
             params: { focus: true },
           },
         ],
         legend:
-          radar || lightning
-            ? (lightning ? LIGHTNING_STOPS : STOPS).map(([label, color]) => ({
-                label: String(label),
+          fi || nl
+            ? // A ramp: FMI's grey no-data is told in the info text, not as a stop.
+              (fi ? FI_RADAR_STOPS : NL_RADAR_STOPS).map(([label, color]) => ({
+                label,
                 color,
-                blurb: lightning
-                  ? t('{value} strikes/km²/min ×10³ (15-minute density)', {
-                      value: formatScaleLabel(label),
-                    })
-                  : t('{value} dBZ radar reflectivity', {
-                      value: formatScaleLabel(label),
-                    }),
+                blurb: t('{value} mm/h rain rate', {
+                  value: formatScaleLabel(label),
+                }),
               }))
-            : [],
+            : de
+              ? [
+                  ...DE_RADAR_CLASSES.map(([label, color]) => ({
+                    label: `${label} mm/h`,
+                    color,
+                  })),
+                  // DWD's veil is this grey at 30 % opacity.
+                  { label: t('Outside radar range'), color: '#7E7E7E4D' },
+                ]
+              : imerg
+                ? IMERG_CLASSES.map(([type, color]) => ({
+                    label: imergLabel(type),
+                    color,
+                  }))
+                : ca
+                  ? RADAR_CA_TYPES.map(([type, color]) => ({
+                      label: radarTypeLabel(type),
+                      color,
+                    }))
+                  : radar || lightning
+                    ? (eu
+                        ? LIGHTNING_EU_STOPS
+                        : lightning
+                          ? LIGHTNING_STOPS
+                          : STOPS
+                      ).map(([label, color]) => ({
+                        label: String(label),
+                        color,
+                        blurb: eu
+                          ? t(
+                              'Flashes per ~2 km pixel in 5 minutes: {value} (EUMETSAT colours, approximate)',
+                              {
+                                value: formatScaleLabel(label),
+                              },
+                            )
+                          : lightning
+                            ? t(
+                                '{value} strikes/km²/min ×10³ (15-minute density)',
+                                {
+                                  value: formatScaleLabel(label),
+                                },
+                              )
+                            : t('{value} dBZ radar reflectivity', {
+                                value: formatScaleLabel(label),
+                              }),
+                      }))
+                    : [],
         info: hostHidden
           ? shownHost
-          : `${infoHeading}\n${infoTime}${missing ? `\n${missing}` : ''}${manifest?.stale ? `\n${t('STALE · cached source metadata')}` : ''}${shownProblem ? `\n${shownProblem}` : ''}\n${infoCoverage}${outside ? `\n${t('Map center is outside source coverage')}` : ''}${infoMotion ? `\n${infoMotion}` : ''}`,
-        infoTitle: lightning
+          : `${infoHeading}\n${infoTime}${missing ? `\n${missing}` : ''}${manifest?.stale ? `\n${t('STALE · cached source metadata')}` : ''}${shownProblem ? `\n${shownProblem}` : ''}\n${infoCoverage}${overlap ? `\n${t('Overlap 70°W–0°: NOAA and EUMETSAT lightning measure different things; colours are not comparable')}` : ''}${outside ? `\n${t('Map center is outside source coverage')}` : ''}${infoMotion ? `\n${infoMotion}` : ''}`,
+        infoTitle: eu
           ? t(
-              'NOAA/NWS 15-minute lightning density derived from Vaisala NLDN/GLD360. Coverage 110°E across the Pacific/Americas to 0°, 25°S–80°N. Not a live strike count, global coverage or a safety warning.',
+              "EUMETSAT MTG Lightning Imager accumulated flash area: a satellite camera sees the light of most flashes, cloud-to-cloud and cloud-to-ground; each 5-minute image is shown about 15–20 minutes later. Colours are EUMETSAT's; values approximate. Positions can drift after satellite manoeuvres and in eclipse season. Coverage 70°W–70°E, 70°S–70°N. Not a safety warning.",
             )
-          : radar
+          : lightning
             ? t(
-                'NOAA MRMS radar echoes indicate precipitation patterns, not rain rate, a storm warning or a future forecast. Native source approximately 1 km; display is limited to level 6. Frames use exact advertised observation times.',
+                'NOAA/NWS 15-minute lightning density derived from Vaisala NLDN/GLD360. Coverage 110°E across the Pacific/Americas to 0°, 25°S–80°N. Not a live strike count, global coverage or a safety warning.',
               )
-            : t(
-                'GOES-19/18 longwave infrared Band 14 regional; NESDIS global longwave mosaic. Clouds only dims everything but bright, cold cloud tops; a brightness filter, not a cloud mask. Coverage and freshness differ by region.',
-              ),
+            : fi
+              ? t(
+                  "FMI Finnish radar composite: precipitation rate in mm/h every 5 minutes, in FMI's OPERA-style colours; faint dark blue is under 0.2 mm/h and grey marks no data. Not a forecast or a storm warning.",
+                )
+              : nl
+                ? t(
+                    'KNMI Dutch radar composite: precipitation rate in mm/h every 5 minutes on a 1 km grid, drawn smoothed by KNMI; under about 0.2 mm/h fades out. Not a forecast or a storm warning.',
+                  )
+                : de
+                  ? t(
+                      "DWD German radar composite (RV product): precipitation rate in mm/h every 5 minutes, about 1 km. Observed frames only; DWD's 2-hour nowcast is not shown. Grey shading marks areas outside radar range; no colour inside it means under 0.1 mm/h. Not a forecast or a storm warning.",
+                    )
+                  : imerg
+                    ? t(
+                        'NASA GPM IMERG Early multi-satellite precipitation estimate, not radar: each frame is the 30-minute average starting at its time, about 7 hours behind, so recent history has no frame. Rain and snow use separate colour ramps; under 0.1 mm/h is not shown. Light rain and snow tend to be underestimated. Not a forecast.',
+                      )
+                    : ca
+                      ? t(
+                          'ECCC North American 1 km radar composite classified by surface precipitation type and intensity, from dual-polarization radar, particle classification and model surface temperature; includes NOAA NEXRAD radars. Frames every 6 minutes; not a forecast or a storm warning.',
+                        )
+                      : radar
+                        ? t(
+                            'NOAA MRMS radar echoes indicate precipitation patterns, not rain rate, a storm warning or a future forecast. Native source approximately 1 km; display is limited to level 6. Frames use exact advertised observation times.',
+                          )
+                        : t(
+                            'GOES-19/18 longwave infrared Band 14 regional; NESDIS global longwave mosaic. Clouds only dims everything but bright, cold cloud tops; a brightness filter, not a cloud mask. Coverage and freshness differ by region.',
+                          ),
       };
+      if (ca || imerg || de) controls.legendCategorical = true;
       controls.summary.settings = [
+        ...(radar
+          ? [
+              {
+                id: 'source',
+                label: t('SOURCE'),
+                chips: controls.chips.filter(({ params }) => params.product),
+              },
+            ]
+          : []),
         ...(satellite
           ? [
               {
@@ -801,7 +1179,19 @@ export function createWeatherLayer({
         loading,
         error: error || rendering?.getDiagnostics().error || null,
         stale: Boolean(manifest?.stale || observationDelayed()),
-        source: 'NOAA nowCOAST',
+        source: eu
+          ? 'EUMETSAT EUMETView'
+          : product === 'radar-ca'
+            ? 'ECCC MSC GeoMet'
+            : product === 'precip-global'
+              ? 'NASA GIBS · GPM IMERG'
+              : product === 'radar-de'
+                ? 'DWD GeoServer'
+                : product === 'radar-fi'
+                  ? 'FMI open data'
+                  : product === 'radar-nl'
+                    ? 'KNMI'
+                    : 'NOAA nowCOAST',
         observedAt: shownTime(),
       };
     },

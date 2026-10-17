@@ -202,8 +202,8 @@ function encode(state) {
 
 test('production registry is exact, canonical, and rejects incomplete contracts', async () => {
   assert.equal(validateLayerStateRegistry(), true);
-  assert.equal(REGISTERED_LAYER_IDS.length, 31);
-  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 31);
+  assert.equal(REGISTERED_LAYER_IDS.length, 33);
+  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 33);
   assert.ok(REGISTERED_LAYER_IDS.includes('transit'));
   assert.deepEqual(REGISTERED_LAYER_IDS, [...REGISTERED_LAYER_IDS].sort());
   assert.deepEqual(LEGACY_LAYER_STATE_TOKENS, {
@@ -242,20 +242,18 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   for (const [id, token] of Object.entries(LEGACY_LAYER_STATE_TOKENS)) {
     assert.equal(LAYER_STATE_TOKEN_RESERVATIONS[id], token);
   }
-  assert.equal(nextLayerStateToken(), '5');
+  assert.equal(nextLayerStateToken(), '7');
   assert.equal(
     nextLayerStateToken({
       ...LAYER_STATE_TOKEN_RESERVATIONS,
-      alpha: '5',
-      bravo: '6',
+      alpha: '7',
+      bravo: '8',
     }),
-    '7',
+    '9',
   );
   const digitsExhausted = {
     ...LAYER_STATE_TOKEN_RESERVATIONS,
-    ...Object.fromEntries(
-      [...'56789'].map((digit) => [`prior-${digit}`, digit]),
-    ),
+    ...Object.fromEntries([...'789'].map((digit) => [`prior-${digit}`, digit])),
   };
   assert.equal(nextLayerStateToken(digitsExhausted), '00');
   assert.equal(
@@ -307,8 +305,8 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   assert.equal(
     validateLayerStateAllocations(LAYER_STATE_TOKEN_RESERVATIONS, {
       ...LAYER_STATE_TOKEN_RESERVATIONS,
-      future: '5',
-      next: '6',
+      future: '7',
+      next: '8',
     }),
     true,
   );
@@ -318,7 +316,7 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
         ...LAYER_STATE_TOKEN_RESERVATIONS,
         future: '00',
       }),
-    /next free token 5/,
+    /next free token 7/,
   );
   const beforeLastDigit = { ...digitsExhausted };
   delete beforeLastDigit['prior-9'];
@@ -341,10 +339,10 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   assert.throws(
     () =>
       validateLayerStateAllocations(
-        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '5' },
-        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '5', competing: '5' },
+        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '7' },
+        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '7', competing: '7' },
       ),
-    /next free token 6/,
+    /next free token 8/,
   );
   assert.throws(
     () => validateLayerStateAllocations({ future: '00' }, { future: '01' }),
@@ -2888,4 +2886,82 @@ test('local-firms shows static sources (grey) by default; hiding them round-trip
     decodeLayerStateParams(new URLSearchParams(encoded)).options['local-firms'],
     { hideStatic: true },
   );
+});
+
+test('rain radar source: NOAA by default (not encoded, old links unchanged); ECCC round-trips as v.p.c', () => {
+  assert.deepEqual(createDefaultLayerState().options['weather-radar'], {
+    opacity: 'strong',
+    product: 'radar',
+  });
+  const old = decodeLayerStateParams(
+    new URLSearchParams([
+      ['v', '2'],
+      ['l', 'v'],
+    ]),
+  );
+  assert.equal(old.options['weather-radar'].product, 'radar');
+  const us = createDefaultLayerState();
+  us.enabledLayerIds = ['weather-radar'];
+  assert.ok(!encode(us).includes('v.p.'), 'the default is not encoded');
+  const ca = createDefaultLayerState();
+  ca.enabledLayerIds = ['weather-radar'];
+  ca.options['weather-radar'] = { opacity: 'strong', product: 'radar-ca' };
+  const encoded = encode(ca);
+  assert.ok(encoded.includes('v.p.c'), encoded);
+  assert.equal(
+    decodeLayerStateParams(new URLSearchParams(encoded)).options[
+      'weather-radar'
+    ].product,
+    'radar-ca',
+  );
+});
+
+test('rain radar World source round-trips as v.p.g', () => {
+  const world = createDefaultLayerState();
+  world.enabledLayerIds = ['weather-radar'];
+  world.options['weather-radar'] = {
+    opacity: 'strong',
+    product: 'precip-global',
+  };
+  const encoded = encode(world);
+  assert.ok(encoded.includes('v.p.g'), encoded);
+  assert.equal(
+    decodeLayerStateParams(new URLSearchParams(encoded)).options[
+      'weather-radar'
+    ].product,
+    'precip-global',
+  );
+});
+
+test('rain radar Germany source round-trips as v.p.d', () => {
+  const germany = createDefaultLayerState();
+  germany.enabledLayerIds = ['weather-radar'];
+  germany.options['weather-radar'] = { opacity: 'strong', product: 'radar-de' };
+  const encoded = encode(germany);
+  assert.ok(encoded.includes('v.p.d'), encoded);
+  assert.equal(
+    decodeLayerStateParams(new URLSearchParams(encoded)).options[
+      'weather-radar'
+    ].product,
+    'radar-de',
+  );
+});
+
+test('rain radar Finland and Netherlands sources round-trip as v.p.f and v.p.n', () => {
+  for (const [product, token] of [
+    ['radar-fi', 'v.p.f'],
+    ['radar-nl', 'v.p.n'],
+  ]) {
+    const state = createDefaultLayerState();
+    state.enabledLayerIds = ['weather-radar'];
+    state.options['weather-radar'] = { opacity: 'strong', product };
+    const encoded = encode(state);
+    assert.ok(encoded.includes(token), encoded);
+    assert.equal(
+      decodeLayerStateParams(new URLSearchParams(encoded)).options[
+        'weather-radar'
+      ].product,
+      product,
+    );
+  }
 });

@@ -26,6 +26,7 @@ import { createApplicationAwareness } from './layers/militaryAwareness.js';
 import { createApplicationFirms } from './layers/firms.js';
 import { createApplicationEarthquakes } from './layers/earthquakes.js';
 import { createApplicationAirQuality } from './layers/airQuality.js';
+import { createApplicationAirSensors } from './layers/airSensors.js';
 import { createApplicationFirePerimeters } from './layers/perimeters.js';
 import { createApplicationGnssIntegrity } from './layers/gnss.js';
 import { createApplicationCables } from './layers/submarineCables.js';
@@ -123,6 +124,7 @@ export function createApplicationCatalog({
         createApplicationLocalMeshtastic(),
         createApplicationEarthquakes({ source: sources.earthquakes }),
         createApplicationAirQuality({ source: sources['air-quality'] }),
+        createApplicationAirSensors({ source: sources['air-sensors'] }),
         createApplicationFirePerimeters({
           source: sources['fire-perimeters'],
         }),
@@ -166,6 +168,11 @@ export function createApplicationCatalog({
         createWeatherLayer({
           feed: sources.weather,
           id: 'weather-lightning',
+          clock: weatherClock,
+        }),
+        createWeatherLayer({
+          feed: sources.weather,
+          id: 'lightning-eu',
           clock: weatherClock,
         }),
         createCyclonesLayer({ feed: sources.cyclones }),

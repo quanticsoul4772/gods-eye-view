@@ -2367,6 +2367,7 @@
       "src/layers/weather/infraredAlpha.js",
       "src/layers/weather/infraredImage.js",
       "src/layers/weather/source.js",
+      "src/layers/weather/coverage.js",
       "src/director/clock.js",
       "src/director/timeline.js",
       "src/scenes/shotPresentation.js",
@@ -2527,6 +2528,11 @@
       "src/layers/airQuality/index.js",
       "src/layers/airQuality/model.js",
       "src/layers/airQuality/source.js",
+      "src/app/layers/airSensors.js",
+      "src/layers/airSensors/cards.js",
+      "src/layers/airSensors/index.js",
+      "src/layers/airSensors/model.js",
+      "src/layers/airSensors/source.js",
       "src/ui/statusText.js"
     ],
     "external": [
@@ -2988,6 +2994,7 @@
       "src/layers/weather/infraredAlpha.js",
       "src/layers/weather/infraredImage.js",
       "src/layers/weather/source.js",
+      "src/layers/weather/coverage.js",
       "src/layers/weather/imageryOrder.js",
       "src/layers/weather/imageryHost.js",
       "src/layers/cyclones/index.js",
@@ -3106,6 +3113,11 @@
       "src/layers/airQuality/index.js",
       "src/layers/airQuality/model.js",
       "src/layers/airQuality/source.js",
+      "src/app/layers/airSensors.js",
+      "src/layers/airSensors/cards.js",
+      "src/layers/airSensors/index.js",
+      "src/layers/airSensors/model.js",
+      "src/layers/airSensors/source.js",
       "src/ui/statusText.js",
       "src/ui/layerNames.js"
     ],
@@ -3539,7 +3551,9 @@
       "src/layers/submarineCables/bundledSource.js",
       "src/layers/gnss/source.js",
       "src/layers/airQuality/model.js",
-      "src/layers/airQuality/source.js"
+      "src/layers/airQuality/source.js",
+      "src/layers/airSensors/model.js",
+      "src/layers/airSensors/source.js"
     ],
     "external": []
   },
@@ -3846,6 +3860,7 @@
       "src/sources/tle.js",
       "src/data/satellitePass.js",
       "src/tools/queries/atmosphere.js",
+      "src/layers/weather/coverage.js",
       "src/layers/wind/inspection.js",
       "src/layers/wind/model.js",
       "src/layers/wind/fields.js",
@@ -3950,6 +3965,7 @@
       "src/tools/catalog.js",
       "src/tools/schema.js",
       "src/layers/weather/source.js",
+      "src/layers/weather/coverage.js",
       "src/layers/wind/source.js",
       "src/sources/windBody.js",
       "src/layers/wind/fields.js",
@@ -4000,6 +4016,34 @@
     "modules": [
       "src/layers/airQuality/model.js",
       "src/layers/airQuality/source.js",
+      "src/sources/httpBody.js",
+      "src/i18n/marker.js"
+    ],
+    "external": []
+  },
+  "air-sensors": {
+    "exports": ["./layers/air-sensors"],
+    "modules": [
+      "src/layers/airSensors/cards.js",
+      "src/layers/airSensors/index.js",
+      "src/layers/airSensors/model.js",
+      "src/layers/airSensors/source.js",
+      "src/sources/httpBody.js",
+      "src/i18n/marker.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/es.json",
+      "src/i18n/locales/ru.json",
+      "src/ui/statusText.js",
+      "src/ui/layerNames.js"
+    ],
+    "external": ["cesium"]
+  },
+  "air-sensors-source": {
+    "exports": ["./layers/air-sensors/source"],
+    "modules": [
+      "src/layers/airSensors/model.js",
+      "src/layers/airSensors/source.js",
       "src/sources/httpBody.js",
       "src/i18n/marker.js"
     ],

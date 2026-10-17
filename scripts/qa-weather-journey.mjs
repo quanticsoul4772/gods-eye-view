@@ -39,7 +39,12 @@ const label = arg('--label', 'journey');
 const outDir = path.resolve(arg('--out', 'qa-shots/weather-journey'), label);
 mkdirSync(outDir, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const WEATHER = ['weather-radar', 'weather-satellite', 'weather-lightning'];
+const WEATHER = [
+  'weather-radar',
+  'weather-satellite',
+  'weather-lightning',
+  'lightning-eu',
+];
 
 const browser = await puppeteer.launch({
   headless: flag('--headless') ? 'new' : false,
@@ -308,6 +313,34 @@ try {
   await shot('globe-global-infrared', 'Satellite: global infrared mosaic');
   await clickChip('weather-satellite', 'clouds-regional');
   await waitReady(['weather-satellite']);
+  await clickChip('weather-radar', 'radar-ca');
+  await waitReady(['weather-radar']);
+  await sleep(2500);
+  await shot(
+    'globe-radar-north-america',
+    'Radar: ECCC precipitation type, North America',
+  );
+  await clickChip('weather-radar', 'precip-global');
+  await waitReady(['weather-radar']);
+  await sleep(2500);
+  await shot(
+    'globe-precip-world',
+    'Radar: NASA IMERG precipitation estimate, world',
+  );
+  await clickChip('weather-radar', 'radar-de');
+  await waitReady(['weather-radar']);
+  await sleep(2500);
+  await shot('globe-radar-germany', 'Radar: DWD rain rate, Germany');
+  await clickChip('weather-radar', 'radar-fi');
+  await waitReady(['weather-radar']);
+  await sleep(2500);
+  await shot('globe-radar-finland', 'Radar: FMI rain rate, Finland');
+  await clickChip('weather-radar', 'radar-nl');
+  await waitReady(['weather-radar']);
+  await sleep(2500);
+  await shot('globe-radar-netherlands', 'Radar: KNMI rain rate, Netherlands');
+  await clickChip('weather-radar', 'radar');
+  await waitReady(['weather-radar']);
 
   // 4. Follow a storm if there is one (advisories arrive a few seconds after enable).
   await page

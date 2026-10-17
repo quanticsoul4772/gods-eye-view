@@ -160,6 +160,31 @@ export const DATA_CREDITS = [
       '<a href="https://lpdaac.usgs.gov/products/hlss30v002/" target="_blank" rel="noopener">HLS product page</a>',
   },
   {
+    key: 'fmi-radar',
+    html:
+      'Rain radar (Finland): Finnish Meteorological Institute open data, ' +
+      '<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>',
+  },
+  {
+    key: 'knmi-radar',
+    html:
+      'Rain radar (Netherlands): KNMI radar precipitation, ' +
+      '<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>',
+  },
+  {
+    key: 'dwd-radar',
+    html:
+      'Rain radar (Germany): Deutscher Wetterdienst, radar composite RV, ' +
+      '<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>',
+  },
+  {
+    key: 'nasa-imerg',
+    html:
+      'Precipitation estimate (world): NASA GPM IMERG Early via NASA GIBS. We acknowledge the use of imagery provided by services from ' +
+      "NASA's Global Imagery Browse Services (GIBS), part of NASA's Earth Science Data and Information System (ESDIS). " +
+      '<a href="https://gpm.nasa.gov/data/imerg" target="_blank" rel="noopener">GPM IMERG</a>',
+  },
+  {
     key: 'wfigs',
     html:
       'Wildfire perimeters: ' +
@@ -170,11 +195,17 @@ export const DATA_CREDITS = [
   OSM_CREDIT,
   OPENMAPTILES_CREDIT,
   {
+    key: 'eccc-radar',
+    html:
+      'Precipitation type (North America): Data Source: Environment and Climate Change Canada and NOAA/NWS — MSC GeoMet ' +
+      '· <a href="https://eccc-msc.github.io/open-data/licence/readme_en/" target="_blank" rel="noopener">ECCC Data Services End-use Licence</a>',
+  },
+  {
     key: 'eccc-aqhi',
     html:
       'Air quality (AQHI): Environment and Climate Change Canada — MSC GeoMet ' +
       '(<a href="https://eccc-msc.github.io/open-data/" target="_blank" rel="noopener">eccc-msc.github.io/open-data</a>) ' +
-      '· <a href="https://eccc-msc.github.io/open-data/licence/readme_en/" target="_blank" rel="noopener">ECCC Data Servers End-use Licence</a>',
+      '· <a href="https://eccc-msc.github.io/open-data/licence/readme_en/" target="_blank" rel="noopener">ECCC Data Services End-use Licence</a>',
   },
   {
     key: 'overture-military-names',
@@ -367,6 +398,13 @@ export const DATA_CREDITS = [
     html: 'Lightning density: NOAA/NWS nowCOAST · derived from Vaisala NLDN/GLD360. <a href="https://ocean.weather.gov/lightning/lightning_pdd.php" target="_blank" rel="noopener">Public derived density product</a>, not raw detections.',
   },
   {
+    key: 'lightning-eu',
+    html:
+      'Satellite lightning: Contains modified EUMETSAT Meteosat product ' +
+      new Date().getUTCFullYear() +
+      ' (MTG Lightning Imager, via <a href="https://view.eumetsat.int/" target="_blank" rel="noopener">EUMETView</a>) · <a href="https://www-cdn.eumetsat.int/files/2026-01/45173%20-%20Data_Policy.pdf" target="_blank" rel="noopener">CC BY 4.0, EUMETSAT Data Policy</a>.',
+  },
+  {
     key: 'wind-gfs',
     html:
       'Wind: resampled NOAA Global Forecast System (GFS) 10 m wind via ' +
@@ -548,6 +586,29 @@ export function perimeterFeedCredit(feed) {
   return {
     key: `perimeters-${feed.id}`,
     html: credit.html.replace(/^Transit /, 'Fire perimeters '),
+  };
+}
+
+/**
+ * Credit for an air-quality sensor feed from the keyless source directory
+ * (Sensor.Community), registered the first time its readings draw. Its
+ * contents licence (DbCL 1.0) requires the ODbL for the database, so the
+ * ODbL is linked as well.
+ * @param {{ id: string, attribution?: string|null, licenseUrl?: string|null }} feed
+ * @returns {{ key: string, html: string }}
+ */
+export function airSensorFeedCredit(feed) {
+  const credit = transitFeedCredit({
+    id: feed.id,
+    attribution: feed.attribution || feed.id,
+    license: 'licence',
+    licenseUrl: feed.licenseUrl,
+  });
+  return {
+    key: `air-sensors-${feed.id}`,
+    html:
+      credit.html.replace(/^Transit /, 'Air quality ') +
+      ' · <a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener">ODbL 1.0</a>',
   };
 }
 
