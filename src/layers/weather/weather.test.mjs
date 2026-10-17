@@ -2365,6 +2365,7 @@ test('rain radar switches between NOAA (US) and ECCC precipitation type (North A
       ['radar', true],
       ['radar-ca', false],
       ['precip-global', false],
+      ['radar-de', false],
     ],
   );
   h.layer.setParams({ product: 'radar-ca' });
@@ -2444,5 +2445,33 @@ test('rain radar World source: NASA IMERG estimate with rain and snow legends, m
   assert.equal(controls.summary.label, 'Precipitation estimate · World');
   assert.match(controls.infoTitle, /not radar/);
   assert.equal(h.layer.getStats().source, 'NASA GIBS · GPM IMERG');
+  h.layer.destroy();
+});
+
+test('rain radar Germany source: DWD rain rate with its 15 classes, the outside-range row, mm/h and a 10-minute gap', () => {
+  const h = layerHarness({ id: 'weather-radar' });
+  h.layer.setParams({ product: 'radar-de' });
+  assert.deepEqual(h.layer.getParams(), {
+    product: 'radar-de',
+    opacity: 'strong',
+  });
+  const controls = h.layer.getRowControls();
+  assert.equal(controls.legendCategorical, true);
+  assert.equal(controls.legend.length, 16);
+  assert.deepEqual(controls.legend[0], {
+    label: '0.1–0.2 mm/h',
+    color: '#33FFFF',
+  });
+  assert.deepEqual(controls.legend[14], {
+    label: '150+ mm/h',
+    color: '#0000FE',
+  });
+  assert.equal(controls.legend.at(-1).label, 'Outside radar range');
+  assert.equal(controls.summary.units, 'mm/h');
+  assert.equal(controls.summary.label, 'Rain radar · Germany');
+  assert.equal(controls.summary.coverage, 'Germany (DWD radars)');
+  assert.equal(controls.summary.maxGapMinutes, 10);
+  assert.match(controls.infoTitle, /nowcast is not shown/);
+  assert.equal(h.layer.getStats().source, 'DWD GeoServer');
   h.layer.destroy();
 });

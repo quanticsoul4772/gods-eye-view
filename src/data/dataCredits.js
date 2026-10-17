@@ -160,6 +160,12 @@ export const DATA_CREDITS = [
       '<a href="https://lpdaac.usgs.gov/products/hlss30v002/" target="_blank" rel="noopener">HLS product page</a>',
   },
   {
+    key: 'dwd-radar',
+    html:
+      'Rain radar (Germany): Deutscher Wetterdienst, radar composite RV, ' +
+      '<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>',
+  },
+  {
     key: 'nasa-imerg',
     html:
       'Precipitation estimate (world): NASA GPM IMERG Early via NASA GIBS. We acknowledge the use of imagery provided by services from ' +

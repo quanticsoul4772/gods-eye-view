@@ -2932,3 +2932,17 @@ test('rain radar World source round-trips as v.p.g', () => {
     'precip-global',
   );
 });
+
+test('rain radar Germany source round-trips as v.p.d', () => {
+  const germany = createDefaultLayerState();
+  germany.enabledLayerIds = ['weather-radar'];
+  germany.options['weather-radar'] = { opacity: 'strong', product: 'radar-de' };
+  const encoded = encode(germany);
+  assert.ok(encoded.includes('v.p.d'), encoded);
+  assert.equal(
+    decodeLayerStateParams(new URLSearchParams(encoded)).options[
+      'weather-radar'
+    ].product,
+    'radar-de',
+  );
+});

@@ -16,6 +16,7 @@ export const WEATHER_SHELL_HEIGHTS = Object.freeze({
   // One radar source shows at a time.
   'radar-ca': 6_200,
   'precip-global': 6_200,
+  'radar-de': 6_200,
   // Under NOAA's lightning, as on the globe (different measures; NOAA's is
   // drawn on top where they overlap).
   'lightning-eu': 6_400,
