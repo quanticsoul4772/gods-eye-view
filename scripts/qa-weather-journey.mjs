@@ -320,6 +320,13 @@ try {
     'globe-radar-north-america',
     'Radar: ECCC precipitation type, North America',
   );
+  await clickChip('weather-radar', 'precip-global');
+  await waitReady(['weather-radar']);
+  await sleep(2500);
+  await shot(
+    'globe-precip-world',
+    'Radar: NASA IMERG precipitation estimate, world',
+  );
   await clickChip('weather-radar', 'radar');
   await waitReady(['weather-radar']);
 

@@ -160,6 +160,13 @@ export const DATA_CREDITS = [
       '<a href="https://lpdaac.usgs.gov/products/hlss30v002/" target="_blank" rel="noopener">HLS product page</a>',
   },
   {
+    key: 'nasa-imerg',
+    html:
+      'Precipitation estimate (world): NASA GPM IMERG Early via NASA GIBS. We acknowledge the use of imagery provided by services from ' +
+      "NASA's Global Imagery Browse Services (GIBS), part of NASA's Earth Science Data and Information System (ESDIS). " +
+      '<a href="https://gpm.nasa.gov/data/imerg" target="_blank" rel="noopener">GPM IMERG</a>',
+  },
+  {
     key: 'wfigs',
     html:
       'Wildfire perimeters: ' +
