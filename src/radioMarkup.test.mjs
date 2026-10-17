@@ -92,17 +92,18 @@ test('nearest-aircraft selection stays out of Contacts and Cockpit', () => {
   const text = voice.slice(start, voice.indexOf('\n', start));
   assert.match(text, /Turn on flights and select the closest aircraft to Austin/);
   assert.match(text, /call select_nearest_aircraft once/);
-  assert.match(text, /atomically turns on the requested aircraft layer first/);
-  assert.match(text, /waits for location arrival/);
-  assert.match(text, /refreshes that layer for the destination viewport/);
-  assert.match(text, /filters out landed\/on-ground records/);
-  assert.match(text, /nearest airborne result/);
-  assert.match(text, /healthy fallback feed is valid data/i);
   assert.match(text, /Do not also call fly_to_location, set_layer_visibility, analyst_query, track_entity/);
   assert.match(text, /SELECT\/FIND never implies Contacts or Cockpit/);
   assert.match(text, /set_context_mode, or control_cockpit/);
 
   const byName = new Map(realtimeTools().map((tool) => [tool.name, tool]));
+  // The tool states the steps, in the order gevActions runs them.
+  const nearestTool = byName.get('select_nearest_aircraft').description;
+  assert.match(
+    nearestTool,
+    /turn on Flights or Military Flights first, fly to the place and wait for arrival, refresh that layer for the destination viewport, exclude on-ground records, and select\/follow the nearest airborne aircraft/,
+  );
+  assert.match(nearestTool, /healthy fallback feed is valid data, never an enable failure/i);
   assert.match(byName.get('set_context_mode').description, /explicitly requests/);
   assert.match(byName.get('set_context_mode').description, /selecting an aircraft does not imply Context/i);
   assert.match(byName.get('control_cockpit').description, /explicitly requests Cockpit/);
@@ -116,7 +117,7 @@ test('nearest-aircraft selection stays out of Contacts and Cockpit', () => {
   assert.deepEqual(nearest.parameters.properties.layerId.enum, ['flights', 'military']);
   assert.match(nearest.description, /Atomically/);
   assert.match(nearest.description, /exclude on-ground records/);
-  assert.match(nearest.description, /fallback feeds remain usable/);
+  assert.match(nearest.description, /the result reports it/);
   assert.match(nearest.description, /does not open Contacts or Cockpit/);
 });
 
@@ -199,6 +200,10 @@ test('no unchanged Realtime tool definition drifts silently', () => {
     'track_entity',
     // Point-and-ask: 'pointer' sentinels and referent arguments.
     'annotate_map',
+    // Prompt room: a rule stated twice keeps one copy.
+    'move_camera',
+    'control_radio',
+    'clear_annotations',
   ]);
   const unchanged = realtimeTools()
     .filter((tool) => !TOUCHED.has(tool.name))
@@ -210,13 +215,13 @@ test('no unchanged Realtime tool definition drifts silently', () => {
   const hudLayout = unchanged.find((tool) => tool.name === 'set_hud').parameters.properties.layout;
   assert.deepEqual(hudLayout.enum, ['professional', 'tactical', 'operator', 'minimal', 'cyber']);
   hudLayout.enum = hudLayout.enum.filter((layout) => !['cyber', 'professional'].includes(layout));
-  assert.equal(unchanged.length, 14);
+  assert.equal(unchanged.length, 11);
   const digest = createHash('sha256')
     .update(JSON.stringify(unchanged))
     .digest('hex')
     .slice(0, 16);
   // Analyst additions and ISS wording correction are explicitly excluded above; all other tool definitions retain their pin.
-  assert.equal(digest, '25d1b902ecaa22fb', 'an unchanged Realtime tool definition drifted');
+  assert.equal(digest, '5426ad9ae70f93f1', 'an unchanged Realtime tool definition drifted');
 });
 
 test('Radio volume and mission speed share the Sharpen slider visual language', () => {

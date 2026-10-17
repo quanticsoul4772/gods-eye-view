@@ -346,17 +346,48 @@ test('deixis prompt lint: one short rule, and every sentinel it names exists in 
   // Budget: the whole Realtime prompt (instructions + tools), measured in
   // characters. It was 56,308 after the area/imagery/OSM merge; stating each
   // policy once (WHERE precedence, AREAS routing, AFTER TOOLS speech) brought
-  // it to 51,646. A new tool or rule has to fit under this ceiling.
+  // it to 51,646. New layers grew it to 51,989; keeping one copy of each rule
+  // stated twice (the tool or parameter the model reads when it decides)
+  // brought it to 49,257. A new tool or rule has to fit under this ceiling.
   const size = instructions.length + JSON.stringify(GEV_REALTIME_TOOLS).length;
   assert.ok(size <= 52000, `prompt size ${size}`);
 });
 
-
 test('after-tool speech allows returned items to answer requested lists and rankings', () => {
-  const rule = realtimeInstructions().split('\n').find(line => line.startsWith('AFTER TOOLS:'));
+  const rule = realtimeInstructions()
+    .split('\n')
+    .find((line) => line.startsWith('AFTER TOOLS:'));
   assert.match(rule, /requested analyst list or ranking/);
   assert.match(rule, /returned items.*returned values/);
   assert.match(rule, /keep their order/);
   assert.doesNotMatch(rule, /never adding to it/);
   assert.match(rule, /always preserve them/);
+});
+
+test('rules kept once live in the tool or parameter the model reads when it decides', () => {
+  const tool = (name) => GEV_REALTIME_TOOLS.find((t) => t.name === name);
+  const fly = tool('fly_to_location').parameters.properties;
+  assert.match(fly.rangeM.description, /a closer or wider view/);
+  const annotate = tool('annotate_map').parameters.properties;
+  assert.match(annotate.flyTo.description, /not already looking at the place/);
+  assert.match(
+    annotate.annotations.items.properties.type.description,
+    /park\/district\/boundary/,
+  );
+  const analyst = tool('analyst_query');
+  assert.match(analyst.description, /LAYER_OFF \(say so and offer to enable\)/);
+  assert.match(
+    analyst.parameters.properties.followUp.description,
+    /only the new filter\/sort \("which of those…"\)/,
+  );
+  assert.match(
+    tool('select_nearest_aircraft').description,
+    /turn on Flights or Military Flights first, fly to the place/,
+  );
+  const instructions = realtimeInstructions();
+  // Rules a fix deliberately states in more than one place stay in the
+  // instructions too.
+  assert.match(instructions, /Never invent center coordinates such as 0,0/);
+  assert.match(instructions, /A count does NOT fulfill a requested list/);
+  assert.match(instructions, /never invent a list from contactsWindow alone/);
 });

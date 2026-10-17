@@ -1009,10 +1009,11 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   // Air sensors (Sensor.Community PM) extend the manifest.
   // Satellite lightning (lightning-eu) extends it; two self-evident ids drop alias hints.
   // Plain "air quality" routes to air-sensors (AQHI keeps Canada); hints skip the id spelled with spaces.
-  assert.equal(block.length, 30906, 'serialized tool schema length drifted');
+  // Prompt room: a rule stated twice keeps one copy; ranges and "Optional" that the schema already says are dropped.
+  assert.equal(block.length, 30543, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    'f8788c85f6a90608193cc870c9868ff338abecd5c34a20391917be6aea25acd7',
+    '9e56584fa8514490ffbfe37197c0bb7dd28cfdba52b5ff0983d112546473d061',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
   const instructions = fs.readFileSync(
