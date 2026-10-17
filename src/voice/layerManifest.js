@@ -275,6 +275,25 @@ const layers = [
         observedMs: ['ms'],
       },
       timeField: 'observedMs',
+      caveat: 'Canada only (AQHI); elsewhere use air-sensors',
+    },
+  },
+  {
+    id: 'air-sensors',
+    aliases: ['air sensors', 'pm sensors', 'air quality europe', 'pm2.5'],
+    context: false,
+    query: {
+      fields: {
+        pm25: ['n', 'µg/m³'],
+        pm10: ['n', 'µg/m³'],
+        band: ['t'],
+        country: ['t'],
+        suspect: ['f'],
+        quality: ['t'],
+        observedMs: ['ms'],
+      },
+      timeField: 'observedMs',
+      caveat: 'indicative low-cost sensors; EEA bands, PM only',
     },
   },
   {

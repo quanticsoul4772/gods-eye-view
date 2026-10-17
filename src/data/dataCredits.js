@@ -551,6 +551,29 @@ export function perimeterFeedCredit(feed) {
   };
 }
 
+/**
+ * Credit for an air-quality sensor feed from the keyless source directory
+ * (Sensor.Community), registered the first time its readings draw. Its
+ * contents licence (DbCL 1.0) requires the ODbL for the database, so the
+ * ODbL is linked as well.
+ * @param {{ id: string, attribution?: string|null, licenseUrl?: string|null }} feed
+ * @returns {{ key: string, html: string }}
+ */
+export function airSensorFeedCredit(feed) {
+  const credit = transitFeedCredit({
+    id: feed.id,
+    attribution: feed.attribution || feed.id,
+    license: 'licence',
+    licenseUrl: feed.licenseUrl,
+  });
+  return {
+    key: `air-sensors-${feed.id}`,
+    html:
+      credit.html.replace(/^Transit /, 'Air quality ') +
+      ' · <a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener">ODbL 1.0</a>',
+  };
+}
+
 /** Registered when the Bhote Koshi event reconstruction activates. */
 export const BHOTE_KOSHI_CREDIT = {
   key: 'bhote-koshi-2026',

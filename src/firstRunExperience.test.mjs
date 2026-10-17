@@ -1006,10 +1006,11 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   // A derived field list prints whole when that is shorter than "as X minus".
   // Fire perimeters add provincial fields (hectares, status, source, times).
   // Active fires add static-source fields (known solar farms and industrial sites).
-  assert.equal(block.length, 30760, 'serialized tool schema length drifted');
+  // Air sensors (Sensor.Community PM) extend the manifest.
+  assert.equal(block.length, 30916, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    'fd132496424523946de58f29854f5bd175d3cc8fd0d755f2d58cf0bddabed7ad',
+    '0ae8d7a7d0e43bc51e6360f599c75227736b70fac40f686f580a6dde3b7e5c2a',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
   const instructions = fs.readFileSync(

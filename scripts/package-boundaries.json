@@ -2525,6 +2525,11 @@
       "src/layers/airQuality/index.js",
       "src/layers/airQuality/model.js",
       "src/layers/airQuality/source.js",
+      "src/app/layers/airSensors.js",
+      "src/layers/airSensors/cards.js",
+      "src/layers/airSensors/index.js",
+      "src/layers/airSensors/model.js",
+      "src/layers/airSensors/source.js",
       "src/ui/statusText.js"
     ],
     "external": [
@@ -3103,6 +3108,11 @@
       "src/layers/airQuality/index.js",
       "src/layers/airQuality/model.js",
       "src/layers/airQuality/source.js",
+      "src/app/layers/airSensors.js",
+      "src/layers/airSensors/cards.js",
+      "src/layers/airSensors/index.js",
+      "src/layers/airSensors/model.js",
+      "src/layers/airSensors/source.js",
       "src/ui/statusText.js",
       "src/ui/layerNames.js"
     ],
@@ -3536,7 +3546,9 @@
       "src/layers/submarineCables/bundledSource.js",
       "src/layers/gnss/source.js",
       "src/layers/airQuality/model.js",
-      "src/layers/airQuality/source.js"
+      "src/layers/airQuality/source.js",
+      "src/layers/airSensors/model.js",
+      "src/layers/airSensors/source.js"
     ],
     "external": []
   },
@@ -3996,6 +4008,34 @@
     "modules": [
       "src/layers/airQuality/model.js",
       "src/layers/airQuality/source.js",
+      "src/sources/httpBody.js",
+      "src/i18n/marker.js"
+    ],
+    "external": []
+  },
+  "air-sensors": {
+    "exports": ["./layers/air-sensors"],
+    "modules": [
+      "src/layers/airSensors/cards.js",
+      "src/layers/airSensors/index.js",
+      "src/layers/airSensors/model.js",
+      "src/layers/airSensors/source.js",
+      "src/sources/httpBody.js",
+      "src/i18n/marker.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/es.json",
+      "src/i18n/locales/ru.json",
+      "src/ui/statusText.js",
+      "src/ui/layerNames.js"
+    ],
+    "external": ["cesium"]
+  },
+  "air-sensors-source": {
+    "exports": ["./layers/air-sensors/source"],
+    "modules": [
+      "src/layers/airSensors/model.js",
+      "src/layers/airSensors/source.js",
       "src/sources/httpBody.js",
       "src/i18n/marker.js"
     ],
