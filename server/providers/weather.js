@@ -112,7 +112,7 @@ const PRODUCTS_BY_ID = {
     image: Object.freeze({ width: 4096, height: 2048 }),
   }),
   // NASA GPM IMERG Early (near-real-time) multi-satellite precipitation
-  // rate through NASA GIBS: a global estimate, not radar, about 6–7 h
+  // rate through NASA GIBS: a global estimate, not radar, about 7 h
   // behind. GIBS's WMS capabilities are 2.5 MB, so times come from WMTS
   // DescribeDomains (a few hundred bytes).
   'precip-global': Object.freeze({
@@ -126,7 +126,7 @@ const PRODUCTS_BY_ID = {
     coverage:
       'Global multi-satellite estimate; coverage thins toward the poles.',
     description:
-      'NASA GPM IMERG Early precipitation rate (mm/h), each frame the 30-minute average starting at its time, about 6–7 hours behind; rain and snow on separate colour ramps; not radar and not a forecast.',
+      'NASA GPM IMERG Early precipitation rate (mm/h), each frame the 30-minute average starting at its time, about 7 hours behind; rain and snow on separate colour ramps; not radar and not a forecast.',
     source: 'NASA GIBS · GPM IMERG',
     attribution: 'NASA GPM IMERG via NASA GIBS',
     metadataTtlMs: 600_000,
@@ -488,19 +488,22 @@ export function parseDescribeDomains(xml, product, nowMs = Date.now()) {
   if (!domain) throw failure('weather_observations_expired');
   const parts = domain.split(',');
   if (parts.length > 512) throw failure('invalid_weather_metadata');
-  const [start, end, period] = parts.at(-1).trim().split('/');
   const midnight = (value) =>
     /^\d{4}-\d{2}-\d{2}$/.test(value ?? '') ? `${value}T00:00:00Z` : value;
   const step = spec.historyStep ?? 1;
   const settle = spec.settleSteps ?? 0;
-  const advertised = intervalTimes(
-    `${midnight(start)}/${midnight(end)}/${period}`,
-    Math.max(26, 13 * step - (step - 1)) + settle,
-  );
+  const keep = Math.max(26, 13 * step - (step - 1)) + settle;
+  // A step GIBS lacks splits the domain into intervals; the steps before the
+  // gap are as good as those after it.
+  const expanded = parts.flatMap((part) => {
+    const [start, end, period] = part.trim().split('/');
+    return intervalTimes(`${midnight(start)}/${midnight(end)}/${period}`, keep);
+  });
   if (
-    advertised.some((value) => !value || Date.parse(value) > nowMs + 5 * 60_000)
+    expanded.some((value) => !value || Date.parse(value) > nowMs + 5 * 60_000)
   )
     throw failure('invalid_weather_metadata');
+  const advertised = [...new Set(expanded)].sort().slice(-keep);
   const times = advertised.slice(0, settle ? -settle : undefined);
   if (!times.length) throw failure('weather_observations_expired');
   const extent = spec.bounds ? { ...spec.bounds } : bounds;

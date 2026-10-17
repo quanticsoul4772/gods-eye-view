@@ -2421,7 +2421,7 @@ test('switching the radar source while the layer is on drops the NOAA frame and 
   h.layer.destroy();
 });
 
-test('rain radar World source: NASA IMERG estimate with rain and snow legends, mm/h and an 8 h delay threshold', () => {
+test('rain radar World source: NASA IMERG estimate with rain and snow legends, mm/h and a 9 h delay threshold', () => {
   const h = layerHarness({ id: 'weather-radar' });
   h.layer.setParams({ product: 'precip-global' });
   assert.deepEqual(h.layer.getParams(), {
