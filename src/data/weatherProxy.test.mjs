@@ -1275,12 +1275,78 @@ test('EUMETSAT lightning: fixed EUMETView URLs, source and dated attribution; a 
   assert.equal(refused.statusCode, 503);
   warning = `99 Nearest value used: time=${asked} ISO8601 (mtg_fd:li_afa)`;
   const fetchesBefore = calls.length;
-  await request(
+  const cooling = await request(
     tile({ product: 'lightning-eu', time: asked, z: 1, x: 1, y: 0 }),
+  );
+  assert.equal(
+    cooling.statusCode,
+    503,
+    'not served from a cache: the refused frame was never stored',
   );
   assert.equal(
     calls.length,
     fetchesBefore,
-    'a refused frame waits out the failure cooldown; it was never cached',
+    'the failure cooldown holds back the retry',
+  );
+});
+
+test('only interval products refuse a substituted time; NOAA frames ignore the warning', async () => {
+  const { request } = install({
+    fetchImpl: async (url) =>
+      url.includes('GetCapabilities')
+        ? new Response(xml())
+        : new Response(png(256, 256), {
+            headers: {
+              'Content-Type': 'image/png',
+              Warning: '99 Nearest value used: time=2026-09-16T01:00:00.000Z',
+            },
+          }),
+  });
+  assert.equal((await request(tile())).statusCode, 200);
+});
+
+test('a request waiting for a host slot is not timed out; EUMETView runs at most 4 at once', async () => {
+  let clock = NOW;
+  const started = [];
+  const release = [];
+  const { begin } = install({
+    now: () => clock,
+    timeoutMs: 50,
+    fetchImpl: async (url, { signal }) => {
+      if (url.includes('GetCapabilities')) return new Response(EU_XML);
+      started.push(url);
+      await new Promise((resolve, reject) => {
+        release.push(resolve);
+        signal.addEventListener('abort', () => reject(signal.reason), {
+          once: true,
+        });
+      });
+      return new Response(png(256, 256), {
+        headers: { 'Content-Type': 'image/png' },
+      });
+    },
+  });
+  // Warm the metadata so only tile requests compete for slots.
+  await begin('/manifest?product=lightning-eu').done;
+  const pendingTiles = Array.from({ length: 6 }, (_, x) =>
+    begin(
+      tile({ product: 'lightning-eu', time: EU_END, z: 3, x: 6 + x, y: 2 }),
+    ),
+  );
+  await nextTurn();
+  assert.equal(started.length, 4, 'a fifth request waits for a slot');
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  // The running four finish inside their 50 ms deadline; the queued two
+  // start at ~30 ms and finish at ~55 ms: past a deadline counted from
+  // queueing, inside one counted from their start.
+  await wait(30);
+  for (const finish of release.splice(0)) finish();
+  await wait(25);
+  assert.equal(started.length, 6);
+  for (const finish of release.splice(0)) finish();
+  const results = await Promise.all(pendingTiles.map(({ done }) => done));
+  assert.deepEqual(
+    results.map((res) => res.statusCode),
+    [200, 200, 200, 200, 200, 200],
   );
 });
