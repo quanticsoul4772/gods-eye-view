@@ -47,7 +47,8 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // A derived field list prints whole when that is shorter than "as X minus".
     // Fire perimeters add provincial fields (hectares, status, source, times).
     // Active fires add static-source fields (known solar farms and industrial sites).
-    'e4f46fe5c45319804ef04bde0e83630e306a2abf5d586c9ec0f64b753c3b6784',
+    // rangeM says a bare coordinate is a 250 m close-up, so a storm or fire gets a fitting range.
+    'c6ead21a181ecf067bdc1a2a34f51a70e3defc162195b2bd9e6e6ed43e80b70d',
   );
 });
 
