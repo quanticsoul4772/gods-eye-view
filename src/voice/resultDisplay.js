@@ -40,6 +40,7 @@ const LAYER_NOUNS = Object.freeze({
   'rocket-launches': 'launches',
   earthquakes: 'earthquakes',
   'local-firms': 'fires',
+  'air-sensors': 'air sensors',
 });
 
 /** Split "a; b" caveat text into separate notes. */
@@ -138,6 +139,8 @@ function shownCount(count, noun) {
       return tn(count, '{n} dams', '{n} dams', values);
     case 'air quality':
       return tn(count, '{n} air quality', '{n} air quality', values);
+    case 'air sensors':
+      return tn(count, '{n} air sensor', '{n} air sensors', values);
     case 'results':
       return tn(count, '{n} results', '{n} results', values);
     default:

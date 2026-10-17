@@ -14,6 +14,7 @@ export const EARTHQUAKES_DOMAIN = 'hazards.earthquakes';
 export const DISASTERS_DOMAIN = 'hazards.disasters';
 export const FIRES_DOMAIN = 'hazards.fires';
 export const PERIMETERS_DOMAIN = 'hazards.perimeters';
+export const AIRQUALITY_DOMAIN = 'airquality.sensors';
 
 /**
  * Largest plausible area per coverage class, [latitude, longitude] in degrees;
@@ -100,6 +101,16 @@ export const SOURCE_DOMAINS = Object.freeze([
     noun: 'fire perimeter feed',
     shown: true,
     coverage: 'regional',
+  }),
+  // Sensor.Community's volunteer particulate sensors (mostly Europe): the
+  // Air quality (PM sensors) layer's source.
+  Object.freeze({
+    domain: AIRQUALITY_DOMAIN,
+    format: 'json.sensor-community',
+    topic: 'environment',
+    noun: 'air-quality sensor feed',
+    shown: true,
+    coverage: 'global',
   }),
 ]);
 

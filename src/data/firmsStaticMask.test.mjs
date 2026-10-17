@@ -135,11 +135,11 @@ function install(plugin) {
   };
 }
 
-const today = new Date().toISOString().slice(0, 10);
-const hhmm = new Date(Date.now() - 3_600_000)
-  .toISOString()
-  .slice(11, 16)
-  .replace(':', '');
+// One hour ago, date and time from the same instant (between 00:00 and
+// 01:00 UTC, "today" with the earlier hour would be in the future).
+const hourAgo = new Date(Date.now() - 3_600_000).toISOString();
+const today = hourAgo.slice(0, 10);
+const hhmm = hourAgo.slice(11, 16).replace(':', '');
 const csv =
   'latitude,longitude,bright_ti4,acq_date,acq_time,satellite,confidence,frp,daynight\n' +
   `36.52,-114.76,340,${today},${hhmm},N21,n,80,D\n` +

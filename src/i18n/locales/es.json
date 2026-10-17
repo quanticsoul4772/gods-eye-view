@@ -2971,5 +2971,51 @@
     "one": "{count} detección en un parque solar conocido (reflejo solar diurno) o en un sitio industrial como un horno, una acería o una antorcha de gas. Normalmente no es un incendio forestal, por eso se muestra en gris. Desactívalo para ocultarla. Mapas de sitios: solares hasta 2024, industriales hasta 2021.",
     "many": "{count} detecciones en parques solares conocidos (reflejo solar diurno) y sitios industriales como hornos, acerías y antorchas de gas. Normalmente no son incendios forestales, por eso se muestran en gris. Desactívalo para ocultarlas. Mapas de sitios: solares hasta 2024, industriales hasta 2021.",
     "other": "{count} detecciones en parques solares conocidos (reflejo solar diurno) y sitios industriales como hornos, acerías y antorchas de gas. Normalmente no son incendios forestales, por eso se muestran en gris. Desactívalo para ocultarlas. Mapas de sitios: solares hasta 2024, industriales hasta 2021."
+  },
+  "eaqi|Good": "Buena",
+  "eaqi|Fair": "Razonablemente buena",
+  "eaqi|Moderate": "Regular",
+  "eaqi|Poor": "Desfavorable",
+  "eaqi|Very poor": "Muy desfavorable",
+  "eaqi|Extremely poor": "Extremadamente desfavorable",
+  "No reading": "Sin lectura",
+  "{band} · PM2.5 ≤{limit}": "{band} · PM2,5 ≤{limit}",
+  "{band} · PM2.5 >{limit}": "{band} · PM2,5 >{limit}",
+  "PM2.5 {value} µg/m³": "PM2,5 {value} µg/m³",
+  "PM10 {value} µg/m³": "PM10 {value} µg/m³",
+  "PM10 n/a": "PM10 s/d",
+  "{pm25} (1-h mean)": "{pm25} (media de 1 h)",
+  "Sensor #{id}": "Sensor n.º {id}",
+  "measured {age} ago": "medido hace {age}",
+  "Humidity {rh}% · may read high": "Humedad {rh} % · puede marcar de más",
+  "Implausibly high or far above nearby sensors · possibly faulty": "Muy alto o muy por encima de los sensores cercanos · posible avería",
+  "No nearby sensors to compare · unverified": "Sin sensores cercanos para comparar · sin verificar",
+  "Volunteer low-cost sensor, not an official monitor · EEA index bands, PM only": "Sensor voluntario de bajo coste, no una estación oficial · bandas del índice de la AEMA, solo partículas",
+  "Sensor.Community map ↗ · click card to open": "Mapa de Sensor.Community ↗ · haz clic en la tarjeta para abrirlo",
+  "AIR · {band}": "AIRE · {band}",
+  "Median of {count} sensors": {
+    "one": "Mediana de {count} sensor",
+    "many": "Mediana de {count} de sensores",
+    "other": "Mediana de {count} sensores"
+  },
+  "Zoom in for single sensors · EEA index bands, PM only": "Acerca el zoom para ver cada sensor · bandas del índice de la AEMA, solo partículas",
+  "Air sensor source unavailable": "Fuente de sensores de aire no disponible",
+  "Sensor.Community unreachable · showing earlier readings": "Sensor.Community no responde · se muestran lecturas anteriores",
+  "{count} sensors reporting": {
+    "one": "{count} sensor con datos",
+    "many": "{count} de sensores con datos",
+    "other": "{count} sensores con datos"
+  },
+  "Air quality (PM sensors)": "Calidad del aire (sensores de partículas)",
+  "Mostly Europe · Sensor.Community volunteer sensors · indicative": "Sobre todo Europa · sensores voluntarios de Sensor.Community · orientativo",
+  "EEA index bands, PM only · reads high in humid air": "Bandas del índice de la AEMA, solo partículas · marca de más con aire húmedo",
+  "Highest particulate readings in view": "Lecturas de partículas más altas a la vista",
+  "No verified air-sensor source yet": "Aún no hay una fuente verificada de sensores de aire",
+  "Malformed air-sensor snapshot": "Instantánea de sensores de aire mal formada",
+  "Air quality (Canada)": "Calidad del aire (Canadá)",
+  "{n} air sensors": {
+    "one": "{n} sensor de aire",
+    "many": "{n} de sensores de aire",
+    "other": "{n} sensores de aire"
   }
 }

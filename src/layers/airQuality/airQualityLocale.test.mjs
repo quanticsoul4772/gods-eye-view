@@ -49,9 +49,16 @@ const reading = {
 for (const locale of ['es', 'ru']) {
   test(`${locale}: the layer name is translated`, () => {
     inLocale(locale, () => {
-      assert.notEqual(t('Air quality'), 'Air quality', 'catalog has the entry');
-      assert.equal(layerNameForId('air-quality'), t('Air quality'));
-      assert.equal(localizeLayerName('Air quality'), t('Air quality'));
+      assert.notEqual(
+        t('Air quality (Canada)'),
+        'Air quality (Canada)',
+        'catalog has the entry',
+      );
+      assert.equal(layerNameForId('air-quality'), t('Air quality (Canada)'));
+      assert.equal(
+        localizeLayerName('Air quality (Canada)'),
+        t('Air quality (Canada)'),
+      );
     });
   });
 
