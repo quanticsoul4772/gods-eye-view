@@ -1311,7 +1311,7 @@ test('a request waiting for a host slot is not timed out; EUMETView runs at most
   const release = [];
   const { begin } = install({
     now: () => clock,
-    timeoutMs: 50,
+    timeoutMs: 400,
     fetchImpl: async (url, { signal }) => {
       if (url.includes('GetCapabilities')) return new Response(EU_XML);
       started.push(url);
@@ -1336,12 +1336,12 @@ test('a request waiting for a host slot is not timed out; EUMETView runs at most
   await nextTurn();
   assert.equal(started.length, 4, 'a fifth request waits for a slot');
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-  // The running four finish inside their 50 ms deadline; the queued two
-  // start at ~30 ms and finish at ~55 ms: past a deadline counted from
-  // queueing, inside one counted from their start.
-  await wait(30);
+  // The running four finish inside their 400 ms deadline; the queued two
+  // start at ~250 ms and finish at ~450 ms: past a deadline counted from
+  // queueing, inside one counted from their start (wide margins for slow CI).
+  await wait(250);
   for (const finish of release.splice(0)) finish();
-  await wait(25);
+  await wait(200);
   assert.equal(started.length, 6);
   for (const finish of release.splice(0)) finish();
   const results = await Promise.all(pendingTiles.map(({ done }) => done));
@@ -1427,8 +1427,9 @@ test('interval history: a newest step on the grid gives 13 grid frames; an inter
     '23:06:00Z',
     '23:03:00Z',
   );
+  // Steps off their own grid would leave history with one frame.
   assert.throws(
     () => parseWeatherCapabilities(offPhase, 'radar-ca', NOW),
-    'steps off their own grid would leave history with one frame',
+    /invalid_weather_metadata/,
   );
 });

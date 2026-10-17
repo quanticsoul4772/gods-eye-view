@@ -503,3 +503,81 @@ test('directory domain: shown under the environment topic, worldwide', () => {
   assert.equal(formatOfDomain('airquality.sensors'), 'json.sensor-community');
   assert.equal(isWorldwideReference('airquality.sensors'), true);
 });
+
+test('records: neighbours up to 10 km away east or west count at European latitudes', () => {
+  // At 52°N, 0.13° of longitude is about 8.9 km: two 0.1° cells over.
+  const at = (lon, p2) =>
+    pmRecord({ p1: p2 + 10, p2, lat: '52.0', lon: String(lon) });
+  const result = normalizeSensorCommunity(
+    [at(4.0, 120), at(4.13, 10), at(3.87, 12), at(4.06, 11)],
+    { now: NOW },
+  );
+  assert.equal(
+    result.rows[0][7],
+    1,
+    'compared with three neighbours: far above them',
+  );
+});
+
+test('records: a humid reading over 500 is never taken as corroborated smoke', () => {
+  const at = (lat, p2, locationId) =>
+    pmRecord({ p1: p2 + 20, p2, lat: String(lat), lon: '-121.0', locationId });
+  const result = normalizeSensorCommunity(
+    [
+      at(39.0, 600, 7001),
+      humidityRecord(7001, 96),
+      at(39.01, 250),
+      at(39.02, 300),
+      at(39.03, 350),
+    ],
+    { now: NOW },
+  );
+  assert.equal(result.rows[0][7], 1, 'fog inflates neighbours too');
+});
+
+test('cells: one with only possibly-faulty sensors gets no band', () => {
+  const readings = expandReadings(
+    payloadOf([[1, 48.1, 11.5, 900, 950, NOW, 0, 1, 'DE', null, 0]]),
+  );
+  const [cell] = aggregateCells(readings);
+  assert.equal(cell.band, -1);
+});
+
+test('proxy: earlier readings are served for 3 hours at most, and retries wait a minute', async (t) => {
+  t.mock.method(console, 'warn', () => {});
+  let clock = NOW;
+  let fail = false;
+  let fetches = 0;
+  const request = installProxy(
+    airSensorsProxy({
+      now: () => clock,
+      directory: { usable: () => [ENTRY] },
+      directoryFetch: async () => {
+        fetches++;
+        if (fail) return new Response('down', { status: 502 });
+        return new Response(
+          JSON.stringify([pmRecord({ p1: 10, p2: 6, minutesAgo: 10 })]),
+        );
+      },
+    }),
+  );
+  assert.equal((await request()).status, 200);
+  fail = true;
+  clock += 21 * 60_000;
+  const stale = await request();
+  assert.equal(stale.body.stale, true);
+  const before = fetches;
+  await request();
+  assert.equal(
+    fetches,
+    before,
+    'no new upstream attempt within a minute of a failure',
+  );
+  clock += 3 * 60 * 60_000;
+  const expired = await request();
+  assert.equal(
+    expired.status,
+    502,
+    'past 3 hours the earlier readings are not served',
+  );
+});

@@ -176,7 +176,13 @@ export const getWeatherMap = defineTool({
     // No area, and the product's image extent is padded wider than its data
     // (ECCC's 2:1 globe, EUMETSAT's disc): show the data box, not the padding.
     const coverage = weatherCoverage(snapshot);
-    if (!area && coverage && coverage !== snapshot.bounds) {
+    const padded =
+      coverage &&
+      snapshot.bounds &&
+      ['west', 'south', 'east', 'north'].some(
+        (edge) => coverage[edge] !== snapshot.bounds[edge],
+      );
+    if (!area && padded) {
       const lat = (coverage.south + coverage.north) / 2;
       const lon = (coverage.west + coverage.east) / 2;
       mapBox = weatherWindow(

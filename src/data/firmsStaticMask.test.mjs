@@ -42,18 +42,36 @@ test('mask index: boxes found in every cell they cover, antimeridian split, cell
     'bhadla',
     'an interior grid cell of a box wider than 0.1°',
   );
-  assert.equal(staticSourceOf(index, -16.55, 179.97, false)?.siteId, 'dateline');
-  assert.equal(staticSourceOf(index, -16.55, -179.97, false)?.siteId, 'dateline');
+  assert.equal(
+    staticSourceOf(index, -16.55, 179.97, false)?.siteId,
+    'dateline',
+  );
+  assert.equal(
+    staticSourceOf(index, -16.55, -179.97, false)?.siteId,
+    'dateline',
+  );
   assert.equal(staticSourceOf(index, -16.55, 0, false), null);
   // Irregular sites ship as 0.01° cells keyed "<latIndex>:<lonIndex>".
   const cellIndex = buildMaskIndex([
-    [SOLAR, `${Math.floor((10.005 + 90) / 0.01)}:${Math.floor((20.005 + 180) / 0.01)}`, 's'],
-    [INDUSTRIAL, `${Math.floor((10.005 + 90) / 0.01)}:${Math.floor((20.005 + 180) / 0.01)}`, 'k'],
+    [
+      SOLAR,
+      `${Math.floor((10.005 + 90) / 0.01)}:${Math.floor((20.005 + 180) / 0.01)}`,
+      's',
+    ],
+    [
+      INDUSTRIAL,
+      `${Math.floor((10.005 + 90) / 0.01)}:${Math.floor((20.005 + 180) / 0.01)}`,
+      'k',
+    ],
   ]);
-  assert.deepEqual(staticSourceOf(cellIndex, 10.005, 20.005, false), {
-    kind: 'industrial',
-    siteId: 'k',
-  }, 'industrial wins a shared cell');
+  assert.deepEqual(
+    staticSourceOf(cellIndex, 10.005, 20.005, false),
+    {
+      kind: 'industrial',
+      siteId: 'k',
+    },
+    'industrial wins a shared cell',
+  );
   assert.equal(staticSourceOf(index, 0, 0, false), null);
   assert.equal(staticSourceOf(buildMaskIndex([]), 36.52, -114.76, false), null);
   assert.equal(buildMaskIndex([[2, 0, 0, 1, 1, 'x'], ['bad'], null]).size, 0);
@@ -161,7 +179,12 @@ function keylessSetup(t, disk = null) {
   const directory = {
     usable: (domain) =>
       domain === 'hazards.fires'
-        ? [{ id: 'firms-viirs-noaa21-24h', access: { url: 'https://x.example/v.csv' } }]
+        ? [
+            {
+              id: 'firms-viirs-noaa21-24h',
+              access: { url: 'https://x.example/v.csv' },
+            },
+          ]
         : [],
   };
   return { directory, directoryFetch: async () => new Response(csv) };
@@ -172,7 +195,11 @@ test('proxy: payloads carry annotations, counts unchanged, status reports the ma
   const request = install(
     firmsProxy({
       ...options,
-      staticMask: () => ({ id: 'mask-a', index: buildMaskIndex(ROWS), escalation: {} }),
+      staticMask: () => ({
+        id: 'mask-a',
+        index: buildMaskIndex(ROWS),
+        escalation: {},
+      }),
     }),
   );
   const payload = (await request()).body;
@@ -189,7 +216,9 @@ test('proxy: payloads carry annotations, counts unchanged, status reports the ma
 });
 
 test('proxy: no mask means no annotation and maskAvailable false', async (t) => {
-  const request = install(firmsProxy({ ...keylessSetup(t), staticMask: () => null }));
+  const request = install(
+    firmsProxy({ ...keylessSetup(t), staticMask: () => null }),
+  );
   const payload = (await request()).body;
   assert.equal(payload.maskAvailable, false);
   assert.ok(payload.fires.every((f) => !('staticSource' in f)));
@@ -205,14 +234,31 @@ test('proxy: a disk cache from another mask is re-annotated with the current one
     staticFlagged: 1,
     sources: [{ source: 'firms-viirs-noaa21-24h', count: 2, ok: true }],
     fires: [
-      { lat: 10, lon: 10, daynight: 'D', acqDate: today, acqTime: hhmm, staticSource: 'industrial' },
-      { lat: 36.52, lon: -114.76, daynight: 'D', acqDate: today, acqTime: hhmm },
+      {
+        lat: 10,
+        lon: 10,
+        daynight: 'D',
+        acqDate: today,
+        acqTime: hhmm,
+        staticSource: 'industrial',
+      },
+      {
+        lat: 36.52,
+        lon: -114.76,
+        daynight: 'D',
+        acqDate: today,
+        acqTime: hhmm,
+      },
     ],
   };
   const request = install(
     firmsProxy({
       ...keylessSetup(t, disk),
-      staticMask: () => ({ id: 'mask-b', index: buildMaskIndex(ROWS), escalation: {} }),
+      staticMask: () => ({
+        id: 'mask-b',
+        index: buildMaskIndex(ROWS),
+        escalation: {},
+      }),
     }),
   );
   const payload = (await request()).body;
@@ -234,8 +280,15 @@ test('recurrence: unflagged daytime VIIRS cells per day, 7 days kept, 3+ days co
     day('2026-10-01', { instrument: 'MODIS', lat: 32 }),
   ]);
   assert.deepEqual(Object.keys(days), ['2026-10-01']);
-  assert.equal(days['2026-10-01'].length, 1, 'night, flagged and MODIS left out');
-  days = recordUnflaggedDays(days, [day('2026-10-03'), day('2026-10-03', { lat: -40 })]);
+  assert.equal(
+    days['2026-10-01'].length,
+    1,
+    'night, flagged and MODIS left out',
+  );
+  days = recordUnflaggedDays(days, [
+    day('2026-10-03'),
+    day('2026-10-03', { lat: -40 }),
+  ]);
   assert.equal(countRecurringCells(days), 0, 'two days is not enough');
   days = recordUnflaggedDays(days, [day('2026-10-07')]);
   assert.equal(countRecurringCells(days), 1);
@@ -255,23 +308,34 @@ test('proxy: status counts recurring unflagged cells from the stored history', a
   const stored = {
     maskId: 'mask-a',
     days: Object.fromEntries(
-      ['2026-10-14', '2026-10-15'].map((date) => [
-        date,
-        recordUnflaggedDays({}, [fire(10, 10, { acqDate: date })])[date],
-      ]),
+      [2, 1]
+        .map((days) =>
+          new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10),
+        )
+        .map((date) => [
+          date,
+          recordUnflaggedDays({}, [fire(10, 10, { acqDate: date })])[date],
+        ]),
     ),
   };
   const options = keylessSetup(t);
   const written = [];
   t.mock.method(fsp, 'readFile', async (file) => {
-    if (String(file).endsWith('firms-recurrence.json')) return JSON.stringify(stored);
+    if (String(file).endsWith('firms-recurrence.json'))
+      return JSON.stringify(stored);
     throw Error('no disk cache');
   });
-  t.mock.method(fsp, 'writeFile', async (file, text) => written.push([String(file), text]));
+  t.mock.method(fsp, 'writeFile', async (file, text) =>
+    written.push([String(file), text]),
+  );
   const request = install(
     firmsProxy({
       ...options,
-      staticMask: () => ({ id: 'mask-a', index: buildMaskIndex(ROWS), escalation: {} }),
+      staticMask: () => ({
+        id: 'mask-a',
+        index: buildMaskIndex(ROWS),
+        escalation: {},
+      }),
     }),
   );
   let status = (await request('/status')).body;
@@ -281,7 +345,9 @@ test('proxy: status counts recurring unflagged cells from the stored history', a
   status = (await request('/status')).body;
   assert.equal(status.unflaggedRecurringDays, 3);
   assert.equal(status.unflaggedRecurring, 1);
-  const history = written.find(([file]) => file.endsWith('firms-recurrence.json'));
+  const history = written.find(([file]) =>
+    file.endsWith('firms-recurrence.json'),
+  );
   assert.ok(history, 'the history is written next to the cache');
   assert.equal(JSON.parse(history[1]).maskId, 'mask-a');
 });
@@ -290,13 +356,20 @@ test('proxy: a history from another mask is not counted and is replaced', async 
   const options = keylessSetup(t);
   t.mock.method(fsp, 'readFile', async (file) => {
     if (String(file).endsWith('firms-recurrence.json'))
-      return JSON.stringify({ maskId: 'old', days: { '2026-10-14': [1], '2026-10-15': [1] } });
+      return JSON.stringify({
+        maskId: 'old',
+        days: { '2026-10-14': [1], '2026-10-15': [1] },
+      });
     throw Error('no disk cache');
   });
   const request = install(
     firmsProxy({
       ...options,
-      staticMask: () => ({ id: 'mask-a', index: buildMaskIndex(ROWS), escalation: {} }),
+      staticMask: () => ({
+        id: 'mask-a',
+        index: buildMaskIndex(ROWS),
+        escalation: {},
+      }),
     }),
   );
   let status = (await request('/status')).body;
@@ -304,6 +377,10 @@ test('proxy: a history from another mask is not counted and is replaced', async 
   assert.equal(status.unflaggedRecurringDays, 0);
   await request();
   status = (await request('/status')).body;
-  assert.equal(status.unflaggedRecurringDays, 1, 'started over under the current mask');
+  assert.equal(
+    status.unflaggedRecurringDays,
+    1,
+    'started over under the current mask',
+  );
   assert.equal(status.unflaggedRecurring, 0);
 });

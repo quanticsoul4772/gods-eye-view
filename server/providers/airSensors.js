@@ -9,6 +9,10 @@ const MIB = 1024 * 1024;
 const MAX_RESPONSE_BYTES = 24 * MIB;
 /** The file is rebuilt every few minutes but holds 1-hour means. */
 const REFRESH_MS = 20 * 60_000;
+/** Readings older than this are not air quality now (records.js drops them too). */
+const MAX_AGE_MS = 3 * 60 * 60 * 1000;
+/** After a failed refresh, the next upstream attempt waits this long. */
+const RETRY_MS = 60_000;
 /** How long a request waits for the directory's first live load. */
 const DIRECTORY_WAIT_MS = 15_000;
 /**
@@ -42,6 +46,7 @@ export function airSensorsProxy({
   /** @type {?{value: object, savedAt: number}} */
   let cached = null;
   const inFlight = new Map();
+  let failedAt = -Infinity;
   const allow = makeRateLimiter({ windowMs: 60_000, max: 60, globalMax: 1200 });
 
   async function usableEntries() {
@@ -110,7 +115,10 @@ export function airSensorsProxy({
     });
     const live = new Set(entries.map((entry) => entry.id));
     for (const id of sources.keys()) if (!live.has(id)) sources.delete(id);
-    if (!sources.size) throw new Error('upstream_unavailable');
+    // Every feed failed this round: not a fresh snapshot (the caller serves
+    // the previous one while it is under 3 hours old).
+    if (!sources.size || results.every((r) => r.status === 'rejected'))
+      throw new Error('upstream_unavailable');
     // Merge: re-index each feed's sensor types and its source position.
     const types = [];
     const typeIndex = new Map();
@@ -148,9 +156,26 @@ export function airSensorsProxy({
     };
   }
 
+  /** Rows older than the records' 3 h limit are dropped on every serve. */
+  function current(value) {
+    const cutoff = now() - MAX_AGE_MS;
+    const rows = value.rows.filter((row) => row[5] >= cutoff);
+    return rows.length === value.rows.length ? value : { ...value, rows };
+  }
+
+  /** Earlier readings while Sensor.Community fails, but never past 3 h. */
+  function staleOr(error) {
+    if (cached && now() - cached.value.fetchedAt <= MAX_AGE_MS)
+      return { value: current(cached.value), stale: true };
+    throw error;
+  }
+
   async function acquire() {
     if (cached && now() - cached.savedAt < REFRESH_MS)
-      return { value: cached.value, stale: false };
+      return { value: current(cached.value), stale: false };
+    // After a failure, wait before the next 8.7 MB attempt.
+    if (now() - failedAt < RETRY_MS)
+      return staleOr(new Error('upstream_unavailable'));
     try {
       const { promise } = coalesceProxyRequest(
         inFlight,
@@ -161,11 +186,11 @@ export function airSensorsProxy({
           return value;
         },
       );
-      return { value: await promise, stale: false };
+      return { value: current(await promise), stale: false };
     } catch (error) {
-      if (cached && error.status !== 503)
-        return { value: cached.value, stale: true };
-      throw error;
+      if (error.status === 503) throw error;
+      failedAt = now();
+      return staleOr(error);
     }
   }
 
