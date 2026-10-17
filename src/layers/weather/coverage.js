@@ -16,6 +16,18 @@ export const WEATHER_DATA_BOUNDS = Object.freeze({
   }),
   // DWD advertises its own box; this is the fallback (the 180 km range).
   'radar-de': Object.freeze({ west: 1, south: 45.4, east: 19.2, north: 56.5 }),
+  'radar-fi': Object.freeze({
+    west: 15.3,
+    south: 57.1,
+    east: 42.7,
+    north: 70.8,
+  }),
+  'radar-nl': Object.freeze({
+    west: 0,
+    south: 48.9,
+    east: 10.86,
+    north: 55.98,
+  }),
 });
 
 /** The box a snapshot has data in: its advertised data bounds, else its bounds. */

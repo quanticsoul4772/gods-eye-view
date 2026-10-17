@@ -1,11 +1,13 @@
 import { weatherCoverage, weatherTileUrl } from './source.js';
 
-/** Every Rain radar source (NOAA, ECCC, NASA IMERG, DWD) shares radar's place. */
+/** Every Rain radar source (NOAA, ECCC, NASA IMERG, DWD, FMI, KNMI) shares radar's place. */
 const isRadar = (product) =>
   product === 'radar' ||
   product === 'radar-ca' ||
   product === 'precip-global' ||
-  product === 'radar-de';
+  product === 'radar-de' ||
+  product === 'radar-fi' ||
+  product === 'radar-nl';
 import { orderWeatherImagery } from './imageryOrder.js';
 import { imageryHostStatus } from './imageryHost.js';
 import { createRasterTileProvider } from './rasterTiles.js';
@@ -353,15 +355,19 @@ function createGlobeRendering({
             ? 'NOAA/NWS lightning density · derived from Vaisala NLDN/GLD360'
             : snapshot.product === 'lightning-eu'
               ? `Contains modified EUMETSAT Meteosat product ${time.slice(0, 4)} · CC BY 4.0`
-              : snapshot.product === 'radar-de'
-                ? 'Deutscher Wetterdienst (CC BY 4.0)'
-                : snapshot.product === 'precip-global'
-                  ? 'NASA GPM IMERG via NASA GIBS'
-                  : snapshot.product === 'radar-ca'
-                    ? 'Data Source: Environment and Climate Change Canada and NOAA/NWS'
-                    : snapshot.product === 'radar'
-                      ? 'NOAA nowCOAST · NWS/OAR MRMS'
-                      : 'NOAA nowCOAST · NESDIS GOES / global satellite partners',
+              : snapshot.product === 'radar-fi'
+                ? 'Finnish Meteorological Institute (CC BY 4.0)'
+                : snapshot.product === 'radar-nl'
+                  ? 'KNMI (CC BY 4.0)'
+                  : snapshot.product === 'radar-de'
+                    ? 'Deutscher Wetterdienst (CC BY 4.0)'
+                    : snapshot.product === 'precip-global'
+                      ? 'NASA GPM IMERG via NASA GIBS'
+                      : snapshot.product === 'radar-ca'
+                        ? 'Data Source: Environment and Climate Change Canada and NOAA/NWS'
+                        : snapshot.product === 'radar'
+                          ? 'NOAA nowCOAST · NWS/OAR MRMS'
+                          : 'NOAA nowCOAST · NESDIS GOES / global satellite partners',
           false,
         );
         const provider = global

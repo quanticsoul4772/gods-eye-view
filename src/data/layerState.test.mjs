@@ -2946,3 +2946,22 @@ test('rain radar Germany source round-trips as v.p.d', () => {
     'radar-de',
   );
 });
+
+test('rain radar Finland and Netherlands sources round-trip as v.p.f and v.p.n', () => {
+  for (const [product, token] of [
+    ['radar-fi', 'v.p.f'],
+    ['radar-nl', 'v.p.n'],
+  ]) {
+    const state = createDefaultLayerState();
+    state.enabledLayerIds = ['weather-radar'];
+    state.options['weather-radar'] = { opacity: 'strong', product };
+    const encoded = encode(state);
+    assert.ok(encoded.includes(token), encoded);
+    assert.equal(
+      decodeLayerStateParams(new URLSearchParams(encoded)).options[
+        'weather-radar'
+      ].product,
+      product,
+    );
+  }
+});

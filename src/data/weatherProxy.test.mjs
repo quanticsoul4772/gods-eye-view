@@ -1698,3 +1698,94 @@ test('IMERG DescribeDomains: a step GIBS lacks near the newest splits the domain
     assert.equal(parsed.allowedTimes.at(-1), settled[after - 1], `${after}`);
   }
 });
+
+// FMI and KNMI: plain WMS intervals whose default is the newest step.
+const NORDIC_END = '2026-09-16T02:10:00.000Z';
+const nordicXml = (name, box, extra = '') =>
+  `<WMS_Capabilities><Capability><Layer><Title>WMS</Title><Layer queryable="1" opaque="1"><Name>${name}</Name><Title>${name}</Title>${box}<Dimension name="time" units="ISO8601" default="2026-09-16T02:10:00Z" multipleValues="1" nearestValue="0" current="1">2024-12-05T13:35:00Z/2026-09-16T02:10:00Z/PT5M</Dimension>${extra}<Style><Name>style</Name><Title>style</Title></Style></Layer></Layer></Capability></WMS_Capabilities>`;
+const exBox = (w, e, s, n) =>
+  `<EX_GeographicBoundingBox><westBoundLongitude>${w}</westBoundLongitude><eastBoundLongitude>${e}</eastBoundLongitude><southBoundLatitude>${s}</southBoundLatitude><northBoundLatitude>${n}</northBoundLatitude></EX_GeographicBoundingBox>`;
+const FI_XML = nordicXml(
+  'radar_finland_cappi_rate',
+  exBox(15.3, 42.7, 57.1, 70.8),
+  '<Dimension name="elevation" default="600.0" units="Meters">600.0</Dimension><Dimension name="FILTER" default="filtered" units="">filtered</Dimension>',
+);
+const NL_XML = nordicXml(
+  'RAD_NL25_PCP_CM',
+  exBox(0, 10.856454, 48.895305, 55.973601),
+);
+
+test('FMI and KNMI radar: 13 frames on a 10-minute grid ending at the newest step, advertised data boxes, padded 2:1 bounds', () => {
+  for (const [xml, product, data, bounds] of [
+    [
+      FI_XML,
+      'radar-fi',
+      { west: 15.3, south: 57.1, east: 42.7, north: 70.8 },
+      { west: 14, south: 56.5, east: 44, north: 71.5 },
+    ],
+    [
+      NL_XML,
+      'radar-nl',
+      { west: 0, south: 48.895305, east: 10.856454, north: 55.973601 },
+      { west: -5.5, south: 47, east: 16.5, north: 58 },
+    ],
+  ]) {
+    const parsed = parseWeatherCapabilities(xml, product, NOW);
+    assert.equal(parsed.allowedTimes.length, 26, product);
+    assert.equal(parsed.times.length, 13, product);
+    assert.equal(parsed.times.at(-1), NORDIC_END);
+    for (const time of parsed.times.slice(0, -1))
+      assert.equal(Date.parse(time) % (10 * 60_000), 0, time);
+    assert.deepEqual(parsed.dataBounds, data);
+    assert.deepEqual(parsed.bounds, bounds);
+    assert.equal(
+      (bounds.east - bounds.west) / (bounds.north - bounds.south),
+      2,
+    );
+  }
+});
+
+test('KNMI radar proxy: the fixed dataset query reaches both capabilities and GetMap; FMI uses its OPERA style', async () => {
+  const calls = [];
+  const { request } = install({
+    fetchImpl: async (url) => {
+      calls.push(new URL(url));
+      if (url.includes('GetCapabilities'))
+        return new Response(url.includes('knmi') ? NL_XML : FI_XML);
+      return image(png(256, 256));
+    },
+  });
+  for (const product of ['radar-nl', 'radar-fi']) {
+    const manifest = body(await request(`/manifest?product=${product}`));
+    assert.equal(manifest.latest, NORDIC_END, product);
+    const ok = await request(
+      tile({ product, time: NORDIC_END, z: 5, x: 16, y: 9 }),
+    );
+    assert.equal(ok.statusCode, 200, product);
+  }
+  const knmi = calls.filter((url) => url.host === 'geoservices.knmi.nl');
+  assert.ok(knmi.length >= 2);
+  for (const url of knmi)
+    assert.equal(url.searchParams.get('dataset'), 'RADAR');
+  const knmiMap = knmi.find(
+    (url) => url.searchParams.get('request') === 'GetMap',
+  );
+  assert.equal(knmiMap.searchParams.get('layers'), 'RAD_NL25_PCP_CM');
+  assert.equal(
+    knmiMap.searchParams.get('styles'),
+    'precipitation_mm_extranetten_v1',
+  );
+  assert.equal(knmiMap.searchParams.get('time'), NORDIC_END);
+  const fmiMap = calls.find(
+    (url) =>
+      url.host === 'openwms.fmi.fi' &&
+      url.searchParams.get('request') === 'GetMap',
+  );
+  assert.equal(fmiMap.pathname, '/geoserver/Radar/wms');
+  assert.equal(fmiMap.searchParams.get('styles'), 'radar_rate_opera');
+  assert.ok(
+    calls.every((url) =>
+      ['geoservices.knmi.nl', 'openwms.fmi.fi'].includes(url.host),
+    ),
+  );
+});

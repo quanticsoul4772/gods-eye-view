@@ -355,3 +355,25 @@ test('radar_germany maps to the DWD radar around a German city', async () => {
   assert.equal(maps.requests[0].product, 'radar-de');
   assert.ok(maps.requests[0].bbox, 'a window around Berlin');
 });
+
+test('radar_finland and radar_netherlands map to the FMI and KNMI radars', async () => {
+  for (const [map, product, lat, lon] of [
+    ['radar_finland', 'radar-fi', 60.17, 24.94],
+    ['radar_netherlands', 'radar-nl', 52.37, 4.9],
+  ]) {
+    const maps = weatherMaps({
+      bounds: { west: -180, south: -90, east: 180, north: 90 },
+      dataBounds: { west: -180, south: -90, east: 180, north: 90 },
+      coverage: map,
+    });
+    const catalog = composeCatalog({
+      tools: coreTools,
+      services: { weatherMaps: maps },
+    });
+    await catalog.call('get_weather_map', {
+      map,
+      area: { lat, lon, radius_km: 100 },
+    });
+    assert.equal(maps.requests[0].product, product);
+  }
+});

@@ -2366,6 +2366,8 @@ test('rain radar switches between NOAA (US) and ECCC precipitation type (North A
       ['radar-ca', false],
       ['precip-global', false],
       ['radar-de', false],
+      ['radar-fi', false],
+      ['radar-nl', false],
     ],
   );
   h.layer.setParams({ product: 'radar-ca' });
@@ -2473,5 +2475,48 @@ test('rain radar Germany source: DWD rain rate with its 15 classes, the outside-
   assert.equal(controls.summary.maxGapMinutes, 10);
   assert.match(controls.infoTitle, /nowcast is not shown/);
   assert.equal(h.layer.getStats().source, 'DWD GeoServer');
+  h.layer.destroy();
+});
+
+test('rain radar Finland and Netherlands sources: FMI and KNMI rain-rate ramps in mm/h with a 10-minute gap', () => {
+  const h = layerHarness({ id: 'weather-radar' });
+  for (const [product, first, last, count, label, source] of [
+    [
+      'radar-fi',
+      ['0.2', '#002896'],
+      ['200', '#8B0000'],
+      12,
+      'Rain radar · Finland',
+      'FMI open data',
+    ],
+    [
+      'radar-nl',
+      ['0.2', '#ACE4FF'],
+      ['40', '#8D01DA'],
+      8,
+      'Rain radar · Netherlands',
+      'KNMI',
+    ],
+  ]) {
+    h.layer.setParams({ product });
+    assert.equal(h.layer.getParams().product, product);
+    const controls = h.layer.getRowControls();
+    assert.notEqual(controls.legendCategorical, true, product);
+    assert.deepEqual(
+      [controls.legend[0].label, controls.legend[0].color],
+      first,
+    );
+    assert.deepEqual(
+      [controls.legend.at(-1).label, controls.legend.at(-1).color],
+      last,
+    );
+    assert.equal(controls.legend.length, count);
+    assert.match(controls.legend[0].blurb, /mm\/h rain rate/);
+    assert.equal(controls.summary.units, 'mm/h');
+    assert.equal(controls.summary.label, label);
+    assert.equal(controls.summary.maxGapMinutes, 10);
+    assert.match(controls.infoTitle, /Not a forecast/);
+    assert.equal(h.layer.getStats().source, source);
+  }
   h.layer.destroy();
 });

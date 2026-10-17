@@ -331,6 +331,14 @@ try {
   await waitReady(['weather-radar']);
   await sleep(2500);
   await shot('globe-radar-germany', 'Radar: DWD rain rate, Germany');
+  await clickChip('weather-radar', 'radar-fi');
+  await waitReady(['weather-radar']);
+  await sleep(2500);
+  await shot('globe-radar-finland', 'Radar: FMI rain rate, Finland');
+  await clickChip('weather-radar', 'radar-nl');
+  await waitReady(['weather-radar']);
+  await sleep(2500);
+  await shot('globe-radar-netherlands', 'Radar: KNMI rain rate, Netherlands');
   await clickChip('weather-radar', 'radar');
   await waitReady(['weather-radar']);
 
