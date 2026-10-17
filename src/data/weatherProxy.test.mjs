@@ -1442,7 +1442,7 @@ const DOMAINS = (
 ) =>
   `<Domains xmlns:ows='http://www.opengis.net/ows/1.1'><SpaceDomain><BoundingBox ${box}/></SpaceDomain><DimensionDomain><ows:Identifier>time</ows:Identifier>${domain === null ? '' : `<Domain>${domain}</Domain>`}<Size>${domain === null ? 0 : 1}</Size></DimensionDomain></Domains>`;
 
-test('IMERG DescribeDomains: last interval, attributes in any order, midnight as a bare date, empty and malformed', () => {
+test('IMERG DescribeDomains: intervals merged, attributes in any order, midnight as a bare date, empty and malformed', () => {
   const at = Date.parse('2026-09-16T12:00:00Z');
   const parsed = parseDescribeDomains(
     DOMAINS('2026-09-15T12:30:00Z/2026-09-16T06:30:00Z/PT30M'),
@@ -1477,7 +1477,7 @@ test('IMERG DescribeDomains: last interval, attributes in any order, midnight as
       at,
     ).allowedTimes[0],
     '2026-09-16T00:00:00.000Z',
-    'a bare date is midnight, and only the last interval counts (no earlier steps than its start)',
+    'a bare date is midnight; an interval older than 24 h adds no frames',
   );
   assert.equal(
     parseDescribeDomains(
@@ -1669,4 +1669,32 @@ test('DWD radar proxy: per-layer capabilities, TIME passed through, the REFERENC
   );
   assert.notEqual(future.statusCode, 200, 'nowcast frames are not served');
   assert.ok(calls.every((url) => url.host === 'maps.dwd.de'));
+});
+
+test('IMERG DescribeDomains: a step GIBS lacks near the newest splits the domain; steps on both sides count', () => {
+  const at = Date.parse('2026-09-16T12:00:00Z');
+  for (const after of [1, 2, 3]) {
+    // Full history to 04:00, a missing 04:30, then `after` steps from 05:00.
+    const last = new Date(
+      Date.parse('2026-09-16T05:00:00Z') + (after - 1) * 30 * 60_000,
+    )
+      .toISOString()
+      .replace('.000Z', 'Z');
+    const parsed = parseDescribeDomains(
+      DOMAINS(
+        `2026-09-15T12:30:00Z/2026-09-16T04:00:00Z/PT30M,2026-09-16T05:00:00Z/${last}/PT30M`,
+      ),
+      'precip-global',
+      at,
+    );
+    assert.equal(parsed.times.length, 13, `${after} after the gap`);
+    assert.ok(!parsed.allowedTimes.includes('2026-09-16T04:30:00.000Z'));
+    const settled = [
+      '2026-09-16T03:30:00.000Z',
+      '2026-09-16T04:00:00.000Z',
+      '2026-09-16T05:00:00.000Z',
+    ];
+    // The two newest advertised steps are held back to settle.
+    assert.equal(parsed.allowedTimes.at(-1), settled[after - 1], `${after}`);
+  }
 });

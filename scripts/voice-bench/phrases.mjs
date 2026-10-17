@@ -125,6 +125,7 @@ export const CORE_PHRASES = Object.freeze([
   { phrase: 'Which ships are headed to Oakland?', expect: 'analyst_query', typedArgs: [where('analyst_query', (a) => (a.layers || []).includes('ais-live-vessels') && (a.filters || []).some((f) => f.field === 'destination' && /oakland/i.test(String(f.value))))] },
   { phrase: 'What is the biggest fire near Los Angeles?', expect: 'analyst_query', typedArgs: [where('analyst_query', (a) => (a.layers || []).includes('local-firms') && ['frp', 'acres'].includes(a.sortBy) && a.sortDir !== 'asc')] },
   { phrase: "How's the air in Paris?", expect: 'analyst_query', typedArgs: [where('analyst_query', (a) => (a.layers || []).includes('air-sensors') && !(a.layers || []).includes('air-quality'))] },
+  { phrase: "How's the air in Toronto?", expect: 'analyst_query', typedArgs: [where('analyst_query', (a) => (a.layers || []).includes('air-quality'))] },
   { phrase: "What's the AQHI in Toronto?", expect: 'analyst_query', typedArgs: [where('analyst_query', (a) => (a.layers || []).includes('air-quality'))] },
   { phrase: 'Is anything flying above forty thousand feet?', expect: 'analyst_query', typedArgs: [where('analyst_query', (a) => (a.layers || []).some((l) => l === 'flights' || l === 'military') && (a.filters || []).some((f) => f.field === 'altitudeM' && (f.op === 'gt' || f.op === 'gte') && Math.abs(Number(f.value) - 12192) <= 50))] },
 

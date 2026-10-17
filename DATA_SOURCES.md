@@ -41,7 +41,7 @@ How to read this:
 | **Environment and Climate Change Canada** (MSC GeoMet OGC API) | Air quality (AQHI) — Canadian station observations | [ECCC Data Services End-use Licence](https://eccc-msc.github.io/open-data/licence/readme_en/) (open, attribution required, no endorsement implied) | "Contains information licensed under the Environment and Climate Change Canada Data Services End-use Licence" |
 | **Sensor.Community** (`data.1h.json`) | Air quality (PM sensors) layer: volunteer low-cost particulate sensors (PM2.5, PM10, 1-hour means), mostly in Europe | Contents under the [Open Data Commons Database Contents License 1.0](https://opendatacommons.org/licenses/dbcl/1-0/) (the site footer's "DB Contents License"), which requires complying with the [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/) for the database; Sensor.Community does not name the ODbL itself. Listed by the [gev-open-sources](https://quanticsoul4772.github.io/gev-open-sources/) directory (`airquality.sensors`) and fetched keyless through `/api/air-sensors` at most every 20 minutes, with a User-Agent that names this project as their API asks. Indicative only: uncalibrated, not official monitors | "Air quality: Sensor.Community (contents DbCL 1.0, database per ODbL 1.0)" with the ODbL linked |
 | **DWD** radar composite (WMS `maps.dwd.de/geoserver/dwd/wms`, layer `dwd:Niederschlagsradar`, the RV product) | Rain radar's Germany source: precipitation rate in mm/h, 1 km, every 5 minutes, observed frames only | CC BY 4.0 (Deutscher Wetterdienst); keyless | "Deutscher Wetterdienst (CC BY 4.0)" |
-| **NASA GPM IMERG** via **NASA GIBS** (WMS `gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi`, layer `IMERG_Precipitation_Rate_30min`; times from WMTS DescribeDomains) | Rain radar's World source: IMERG Early multi-satellite precipitation rate, global, 30-minute steps about 6–7 hours behind | U.S. public domain (NASA data); keyless | "NASA GPM IMERG Early via NASA GIBS" with the GIBS acknowledgement |
+| **NASA GPM IMERG** via **NASA GIBS** (WMS `gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi`, layer `IMERG_Precipitation_Rate_30min`; times from WMTS DescribeDomains) | Rain radar's World source: IMERG Early multi-satellite precipitation rate, global, 30-minute steps about 7 hours behind | U.S. public domain (NASA data); keyless | "NASA GPM IMERG Early via NASA GIBS" with the GIBS acknowledgement |
 | **NASA GIBS** (WMTS tiles + Worldview Snapshots) and **NASA CMR** (granule catalog) | Recent Imagery layer: HLS S30/L30 (Sentinel-2, Landsat 8/9) and VIIRS true-colour tiles draped on the map, per-day thumbnails and PNG exports; the HLS granule catalog (dates, cloud, footprints) for a selected box | U.S. public domain (NASA data); keyless, browser-direct (CORS `*`); no bulk use — one 30-day catalog query per box, tiles bounded to the box, six tile requests in flight | "We acknowledge the use of imagery provided by services from NASA's Global Imagery Browse Services (GIBS), part of NASA's Earth Science Data and Information System (ESDIS)." — [gibs.earthdata.nasa.gov](https://gibs.earthdata.nasa.gov), [HLS](https://lpdaac.usgs.gov/products/hlss30v002/) |
 | **NIFC WFIGS** (Wildland Fire Interagency Geospatial Services, ArcGIS feature service) | Fire Perimeters layer: current interagency wildfire incident perimeters, containment, and incident facts | U.S. public domain (interagency wildland-fire data published through the [NIFC Open Data portal](https://data-nifc.opendata.arcgis.com/)); fetched keyless through `/api/fire-perimeters` (5-minute server cache) with `exceededTransferLimit` paging | "Wildfire perimeters: National Interagency Fire Center (WFIGS)" |
 | **BC Wildfire Service** (BCWS_FirePerimeters_PublicView, ArcGIS Online) | Fire Perimeters layer: British Columbia's current-season wildfire perimeters, size in hectares, stage of control (Out of Control / Being Held / Under Control / Out) and the BC Wildfire incident page | [Open Government Licence – British Columbia 2.0](https://www2.gov.bc.ca/gov/content/data/policy-standards/data-policies/open-data/open-government-licence-bc), plus BC's API Terms of Use (identify the client; limits may change without notice). Listed by the [gev-open-sources](https://quanticsoul4772.github.io/gev-open-sources/) directory (`hazards.perimeters`, verified there) and fetched keyless through `/api/fire-perimeters` at most every 15 minutes; simplified at the source (about 20 m). For reference only; no provincial logos or official status implied | "BC Wildfire Service. Contains information licensed under the Open Government Licence – British Columbia." |
@@ -364,8 +364,8 @@ found. Its presentation is not a weather-data source for this implementation.
   frames there. A past `TIME` returns that step's analysis whatever `REFERENCE_TIME` says (checked
   across a reference rollover), so cached frames stay valid. Every map carries a
   `Warning: 99 Default value used: REFERENCE_TIME=…` header, which is expected. An off-grid `TIME`
-  is a ServiceException. 13 frames are shown on a 10-minute grid (2 hours); the newest is about
-  4–5 minutes old.
+  is a ServiceException. 13 frames are shown on a 10-minute grid (about 2 hours); the newest is about
+  4–10 minutes old.
 - **Extent:** the layer advertises only CRS boxes (EPSG:4326 in lat/lon order), which the proxy
   reads. The whole-image extent is 2°W–22°E, 45–57°N (2:1). It leaves room for the scan range
   growing from 150 to 180 km on 2026-11-24, when DWD's advertised box grows slightly under the same
@@ -383,15 +383,18 @@ found. Its presentation is not a weather-data source for this implementation.
   (green→red and cyan→purple, colormap `GPM_Precipitation_Rate` v1.3); under 0.1 mm/h is not drawn.
   The legend lists light (0.1–1), moderate (1–5) and heavy (5+) for each, in each ramp's own colours.
   Light rain and snow tend to be underestimated. Not a forecast.
-- **Timing:** steps every 30 minutes. GIBS lists a new step about 5 hours after it, but its servers
+- **Timing:** steps every 30 minutes. GIBS lists a new step about 5½ hours after it, but its servers
   take about an hour to agree on it (on 2026-10-17 the two newest steps alternated between the image
   and a blank one, while older steps were consistent), so the proxy holds back the two newest. The
-  newest frame shown is therefore about 6–7 hours old, and in shared-clock history the last ~6 hours
-  have no frame. 13 frames (6.5 hours) are shown. The delayed warning starts at 8 hours.
+  newest frame shown is therefore about 7 hours old (6h53m measured on 2026-10-17, up to about 7½
+  hours before the next step is listed), and in shared-clock history the last ~7 hours have no
+  frame. 13 frames (6.5 hours) are shown. The delayed warning starts at 9 hours.
 - **Metadata:** GIBS's WMS capabilities are 2.5 MB (1,609 layers), too big for the proxy, so times
   come from WMTS **DescribeDomains** for the last 24 hours (a few hundred bytes), the window floored
-  to 30 minutes so GIBS's own cache answers repeats. The proxy takes the last `start/end/PT30M`
-  interval; GIBS writes a step at midnight as a bare date, which the proxy reads as 00:00Z. GIBS
+  to 30 minutes so GIBS's own cache answers repeats. A step GIBS lacks splits the domain into
+  several `start/end/PT30M` intervals (single missing steps exist, e.g. 2026-02-10T00:30Z); the proxy
+  expands and merges them all. GIBS writes a step at midnight as a bare date, which the proxy reads
+  as 00:00Z. GIBS
   rejects fractional seconds in `TIME`, and answers a gap or a future time with a blank image rather
   than an error, so only the advertised steps are requested.
 - **Images:** whole images are 2048×1024 (IMERG's grid is 0.1°); tiles as for the other products.

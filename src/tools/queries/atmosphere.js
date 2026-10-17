@@ -132,7 +132,7 @@ export const getWeatherMap = defineTool({
   description:
     'The latest weather map image over an area: NOAA precipitation radar ' +
     '(contiguous US), ECCC precipitation type (radar_north_america: Canada and the US), ' +
-    'a worldwide NASA IMERG satellite precipitation estimate about 6-7 h old (precipitation_global), ' +
+    'a worldwide NASA IMERG satellite precipitation estimate about 7 h old (precipitation_global), ' +
     'DWD radar rain rate over Germany (radar_germany), ' +
     'regional or global infrared satellite clouds, or ' +
     'lightning (NOAA in the Americas, EUMETSAT in Europe/Africa). Returns the image itself.',

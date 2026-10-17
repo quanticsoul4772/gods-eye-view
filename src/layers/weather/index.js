@@ -240,7 +240,7 @@ export function createWeatherLayer({
       (product === 'clouds'
         ? 240
         : product === 'precip-global'
-          ? 480
+          ? 540
           : eu
             ? 35
             : lightning
@@ -788,7 +788,7 @@ export function createWeatherLayer({
         ? de
           ? t('Germany · grey = outside radar range')
           : imerg
-            ? t('Global · satellite estimate, about 6–7 h behind')
+            ? t('Global · satellite estimate, about 7 h behind')
             : ca
               ? t('Canada + US · gaps ≠ no precipitation')
               : t('Contiguous US · gaps ≠ no rain')
@@ -882,7 +882,7 @@ export function createWeatherLayer({
                       )
                     : value === 'precip-global'
                       ? t(
-                          'NASA GPM IMERG satellite precipitation estimate, worldwide, every 30 minutes, about 6–7 hours behind',
+                          'NASA GPM IMERG satellite precipitation estimate, worldwide, every 30 minutes, about 7 hours behind',
                         )
                       : value === 'radar-ca'
                         ? t(
@@ -962,7 +962,8 @@ export function createWeatherLayer({
                 label: `${label} mm/h`,
                 color,
               })),
-              { label: t('Outside radar range'), color: '#7E7E7E' },
+              // DWD's veil is this grey at 30 % opacity.
+              { label: t('Outside radar range'), color: '#7E7E7E4D' },
             ]
           : imerg
             ? IMERG_CLASSES.map(([type, color]) => ({
@@ -1019,7 +1020,7 @@ export function createWeatherLayer({
                 )
               : imerg
                 ? t(
-                    'NASA GPM IMERG Early multi-satellite precipitation estimate, not radar: each frame is the 30-minute average starting at its time, about 6–7 hours behind, so recent history has no frame. Rain and snow use separate colour ramps; under 0.1 mm/h is not shown. Light rain and snow tend to be underestimated. Not a forecast.',
+                    'NASA GPM IMERG Early multi-satellite precipitation estimate, not radar: each frame is the 30-minute average starting at its time, about 7 hours behind, so recent history has no frame. Rain and snow use separate colour ramps; under 0.1 mm/h is not shown. Light rain and snow tend to be underestimated. Not a forecast.',
                   )
                 : ca
                   ? t(
