@@ -1172,12 +1172,12 @@ test('EUMETSAT lightning: the last PT5M interval expands to 37 steps; every thir
   assert.equal(parsed.allowedTimes.at(-1), EU_END);
   assert.equal(parsed.allowedTimes[0], '2026-09-15T23:05:00.000Z');
   assert.equal(parsed.times.length, 13, 'every third of 37 steps');
-  assert.equal(parsed.times[0], parsed.allowedTimes[0]);
   assert.equal(parsed.times.at(-1), EU_END, 'the newest step is always shown');
-  assert.equal(
-    Date.parse(parsed.times.at(-1)) - Date.parse(parsed.times.at(-2)),
-    15 * 60_000,
-  );
+  // The others sit on a 15-minute grid of the clock, so they stay the same
+  // frames (and cache entries) as new steps arrive.
+  for (const time of parsed.times.slice(0, -1))
+    assert.equal(Date.parse(time) % (15 * 60_000), 0, time);
+  assert.equal(parsed.times[0], '2026-09-15T23:15:00.000Z');
   assert.deepEqual(parsed.bounds, {
     west: -140,
     south: -70,
@@ -1349,4 +1349,65 @@ test('a request waiting for a host slot is not timed out; EUMETView runs at most
     results.map((res) => res.statusCode),
     [200, 200, 200, 200, 200, 200],
   );
+});
+
+// ECCC precipitation type: a PT6M interval on GeoMet, which rejects
+// fractional seconds and advertises the whole northern band.
+const CA_END = '2026-09-16T02:06:00.000Z';
+const CA_XML = `<WMS_Capabilities><Capability><Layer><Title>GeoMet</Title><Layer><Name>Radar_1km_SfcPrecipType</Name><EX_GeographicBoundingBox><westBoundLongitude>-180</westBoundLongitude><eastBoundLongitude>180</eastBoundLongitude><southBoundLatitude>18.354306</southBoundLatitude><northBoundLatitude>90</northBoundLatitude></EX_GeographicBoundingBox><Dimension name="time" units="ISO8601" default="2026-09-16T02:06:00Z" nearestValue="0">2026-09-15T23:06:00Z/2026-09-16T02:06:00Z/PT6M</Dimension></Layer></Layer></Capability></WMS_Capabilities>`;
+
+test('ECCC precipitation type: 12-minute grid of 6-minute steps, data box override, GeoMet query kept, seconds-only TIME', async () => {
+  const parsed = parseWeatherCapabilities(CA_XML, 'radar-ca', NOW);
+  assert.equal(parsed.allowedTimes.at(-1), CA_END);
+  assert.equal(parsed.times.at(-1), CA_END);
+  for (const time of parsed.times.slice(0, -1))
+    assert.equal(Date.parse(time) % (12 * 60_000), 0, time);
+  assert.equal(parsed.times.length, 13);
+  assert.deepEqual(parsed.bounds, {
+    west: -180,
+    south: -90,
+    east: 180,
+    north: 90,
+  });
+  assert.deepEqual(parsed.dataBounds, {
+    west: -171,
+    south: 16,
+    east: -49,
+    north: 72,
+  });
+  const calls = [];
+  const { request } = install({
+    fetchImpl: async (url) => {
+      calls.push(new URL(url));
+      return url.includes('GetCapabilities')
+        ? new Response(CA_XML)
+        : image(png(256, 256));
+    },
+  });
+  const manifest = body(await request('/manifest?product=radar-ca'));
+  assert.equal(manifest.source, 'ECCC MSC GeoMet');
+  assert.equal(
+    manifest.attribution,
+    'Data Source: Environment and Climate Change Canada and NOAA/NWS',
+  );
+  const caps = calls[0];
+  assert.equal(caps.origin + caps.pathname, 'https://geo.weather.gc.ca/geomet');
+  assert.equal(
+    caps.searchParams.get('layer'),
+    'Radar_1km_SfcPrecipType',
+    'the fixed query is kept',
+  );
+  assert.equal(caps.searchParams.get('request'), 'GetCapabilities');
+  const ok = await request(
+    tile({ product: 'radar-ca', time: CA_END, z: 2, x: 1, y: 0 }),
+  );
+  assert.equal(ok.statusCode, 200);
+  const map = calls.at(-1);
+  assert.equal(map.searchParams.get('layers'), 'Radar_1km_SfcPrecipType');
+  assert.equal(
+    map.searchParams.get('time'),
+    '2026-09-16T02:06:00Z',
+    'no fractional seconds',
+  );
+  assert.ok(calls.every((url) => url.host === 'geo.weather.gc.ca'));
 });

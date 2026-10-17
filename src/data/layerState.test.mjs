@@ -253,9 +253,7 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   );
   const digitsExhausted = {
     ...LAYER_STATE_TOKEN_RESERVATIONS,
-    ...Object.fromEntries(
-      [...'789'].map((digit) => [`prior-${digit}`, digit]),
-    ),
+    ...Object.fromEntries([...'789'].map((digit) => [`prior-${digit}`, digit])),
   };
   assert.equal(nextLayerStateToken(digitsExhausted), '00');
   assert.equal(
@@ -2887,5 +2885,33 @@ test('local-firms shows static sources (grey) by default; hiding them round-trip
   assert.deepEqual(
     decodeLayerStateParams(new URLSearchParams(encoded)).options['local-firms'],
     { hideStatic: true },
+  );
+});
+
+test('rain radar source: NOAA by default (not encoded, old links unchanged); ECCC round-trips as v.p.c', () => {
+  assert.deepEqual(createDefaultLayerState().options['weather-radar'], {
+    opacity: 'strong',
+    product: 'radar',
+  });
+  const old = decodeLayerStateParams(
+    new URLSearchParams([
+      ['v', '2'],
+      ['l', 'v'],
+    ]),
+  );
+  assert.equal(old.options['weather-radar'].product, 'radar');
+  const us = createDefaultLayerState();
+  us.enabledLayerIds = ['weather-radar'];
+  assert.ok(!encode(us).includes('v.p.'), 'the default is not encoded');
+  const ca = createDefaultLayerState();
+  ca.enabledLayerIds = ['weather-radar'];
+  ca.options['weather-radar'] = { opacity: 'strong', product: 'radar-ca' };
+  const encoded = encode(ca);
+  assert.ok(encoded.includes('v.p.c'), encoded);
+  assert.equal(
+    decodeLayerStateParams(new URLSearchParams(encoded)).options[
+      'weather-radar'
+    ].product,
+    'radar-ca',
   );
 });

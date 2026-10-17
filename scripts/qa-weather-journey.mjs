@@ -313,6 +313,15 @@ try {
   await shot('globe-global-infrared', 'Satellite: global infrared mosaic');
   await clickChip('weather-satellite', 'clouds-regional');
   await waitReady(['weather-satellite']);
+  await clickChip('weather-radar', 'radar-ca');
+  await waitReady(['weather-radar']);
+  await sleep(2500);
+  await shot(
+    'globe-radar-north-america',
+    'Radar: ECCC precipitation type, North America',
+  );
+  await clickChip('weather-radar', 'radar');
+  await waitReady(['weather-radar']);
 
   // 4. Follow a storm if there is one (advisories arrive a few seconds after enable).
   await page

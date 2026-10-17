@@ -21,6 +21,7 @@ import {
 /** Map names offered to callers, and the weather products behind them. */
 const MAPS = {
   radar: 'radar',
+  radar_north_america: 'radar-ca',
   satellite: 'clouds-regional',
   global_satellite: 'clouds',
   lightning: 'lightning',
@@ -32,6 +33,7 @@ const PRODUCT_LAYERS = {
   clouds: 'weather-satellite',
   lightning: 'weather-lightning',
   'lightning-eu': 'lightning-eu',
+  'radar-ca': 'weather-radar',
 };
 
 /** NOAA's lightning: 110°E across the dateline to 0°, 25°S–80°N. */
@@ -78,7 +80,17 @@ export function weatherWindow(area, bounds) {
     MIN_HALF_HEIGHT_DEGREES,
     areaRadiusKm(area) / KM_PER_DEGREE,
   );
-  const height = snapUp(halfHeight * 2);
+  // Tall enough for the area's own box (wider in longitude away from the
+  // equator), plus one grid step: snapping the edges to 0.25° must not
+  // uncover part of the area.
+  const height =
+    snapUp(
+      Math.max(
+        halfHeight * 2,
+        area.north - area.south,
+        (area.east - area.west) / 2,
+      ),
+    ) + SNAP_DEGREES;
   const width = height * 2;
   if (width > bounds.east - bounds.west || height > bounds.north - bounds.south)
     return null;
@@ -113,7 +125,8 @@ export const getWeatherMap = defineTool({
   title: 'Weather map',
   description:
     'The latest weather map image over an area: NOAA precipitation radar ' +
-    '(contiguous US), regional or global infrared satellite clouds, or ' +
+    '(contiguous US), ECCC precipitation type (radar_north_america: Canada and the US), ' +
+    'regional or global infrared satellite clouds, or ' +
     'lightning (NOAA in the Americas, EUMETSAT in Europe/Africa). Returns the image itself.',
   inputSchema: {
     type: 'object',

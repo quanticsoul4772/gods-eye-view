@@ -1,4 +1,7 @@
 import { weatherCoverage, weatherTileUrl } from './source.js';
+
+/** NOAA's reflectivity and ECCC's precipitation type share radar's place. */
+const isRadar = (product) => product === 'radar' || product === 'radar-ca';
 import { orderWeatherImagery } from './imageryOrder.js';
 import { imageryHostStatus } from './imageryHost.js';
 import { createRasterTileProvider } from './rasterTiles.js';
@@ -254,7 +257,7 @@ function createGlobeRendering({
             ? 3
             : snapshot.product === 'lightning-eu'
               ? 2.5
-              : snapshot.product === 'radar'
+              : isRadar(snapshot.product)
                 ? 2
                 : 1,
         product: snapshot.product,
@@ -346,9 +349,11 @@ function createGlobeRendering({
             ? 'NOAA/NWS lightning density · derived from Vaisala NLDN/GLD360'
             : snapshot.product === 'lightning-eu'
               ? `Contains modified EUMETSAT Meteosat product ${time.slice(0, 4)} · CC BY 4.0`
-              : snapshot.product === 'radar'
-                ? 'NOAA nowCOAST · NWS/OAR MRMS'
-                : 'NOAA nowCOAST · NESDIS GOES / global satellite partners',
+              : snapshot.product === 'radar-ca'
+                ? 'Data Source: Environment and Climate Change Canada and NOAA/NWS'
+                : snapshot.product === 'radar'
+                  ? 'NOAA nowCOAST · NWS/OAR MRMS'
+                  : 'NOAA nowCOAST · NESDIS GOES / global satellite partners',
           false,
         );
         const provider = global
