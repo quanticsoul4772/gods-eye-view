@@ -16,7 +16,12 @@
  * Usage:
  *   node scripts/qa-ask-live.mjs                 every prompt
  *   node scripts/qa-ask-live.mjs --only dubai,iss ids containing either
+ *   node scripts/qa-ask-live.mjs --group smoke,regression  whole suite sections
+ *   node scripts/qa-ask-live.mjs --list          print the suite and exit
  *   node scripts/qa-ask-live.mjs --gpu           real GPU (default SwiftShader)
+ *
+ * The suite and its sections are in scripts/ask-live/prompts.mjs and, for a
+ * person at the keyboard, docs/ASK-CLAUDE-TESTS.md.
  *
  * Output (gitignored): qa-shots/ask-live/<stamp>/results.jsonl, report.md and
  * one screenshot per prompt. Exit code 1 when any machine check fails.
@@ -24,12 +29,41 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { launchProbeBrowser } from './qa-renderProbe.mjs';
-import { PROMPTS } from './ask-live/prompts.mjs';
+import { GROUPS, PROMPTS } from './ask-live/prompts.mjs';
 
 const appUrl = process.env.QA_BASE_URL || 'http://localhost:4173';
 const argv = process.argv.slice(2);
 const only = argv.includes('--only') ? argv[argv.indexOf('--only') + 1] : '';
 const gpu = argv.includes('--gpu');
+const groupArg = argv.includes('--group')
+  ? argv[argv.indexOf('--group') + 1] || ''
+  : '';
+const groups = groupArg.split(',').filter(Boolean);
+const unknownGroups = groups.filter(
+  (group) => !GROUPS.some(([id]) => id === group),
+);
+if (unknownGroups.length) {
+  console.error(
+    `Unknown --group ${unknownGroups.join(', ')}; groups: ${GROUPS.map(([id]) => id).join(', ')}`,
+  );
+  process.exit(2);
+}
+const selected = (p) =>
+  (!groups.length || groups.includes(p.group)) &&
+  (!only || only.split(',').some((part) => p.id.includes(part)));
+if (argv.includes('--list')) {
+  for (const [group, title] of GROUPS) {
+    const rows = PROMPTS.filter((p) => p.group === group && selected(p));
+    if (!rows.length) continue;
+    console.log(`
+${group} — ${title} (${rows.length})`);
+    for (const p of rows)
+      console.log(
+        `  ${p.id.padEnd(34)} ${p.prompt}${p.then ? ` → ${p.then.join(' → ')}` : ''}`,
+      );
+  }
+  process.exit(0);
+}
 const TURN_TIMEOUT_MS = 150_000;
 const DEFAULT_START = { lat: 20, lon: 0, height: 12_000_000, pitch: -90 };
 
@@ -66,9 +100,7 @@ const resultFailed = (text, block) => {
   }
 };
 
-const prompts = PROMPTS.filter(
-  (p) => !only || only.split(',').some((part) => p.id.includes(part)),
-);
+const prompts = PROMPTS.filter(selected);
 const browser = await launchProbeBrowser({ gpu });
 const page = await browser.newPage();
 await page.setViewport({ width: 1440, height: 900 });
@@ -136,6 +168,9 @@ async function resetApp(start) {
     const gev = window.__godsEyeView;
     const v = gev.viewer;
     v.trackedEntity = undefined;
+    // A route flight, orbit or dolly runs until the user touches the map; a
+    // zero wheel is that touch, so it cannot carry into the next prompt.
+    v.scene.canvas.dispatchEvent(new WheelEvent('wheel', { deltaY: 0 }));
     v.camera.cancelFlight();
     gev.styleManager.setHudLayout?.('professional');
     gev.annotations?.clear?.();
@@ -395,6 +430,7 @@ try {
     await page.screenshot({ path: path.join(outDir, shot) });
     const row = {
       id: item.id,
+      group: item.group,
       prompt: item.prompt,
       totalMs,
       modelMs,
@@ -431,11 +467,11 @@ const md = [
   '',
   `${results.length} prompts, ${results.filter((r) => r.failures.length).length} with failed checks.`,
   '',
-  '| id | s | model s | rounds | tools | checks |',
-  '|---|---|---|---|---|---|',
+  '| group | id | s | model s | rounds | tools | checks |',
+  '|---|---|---|---|---|---|---|',
   ...results.map(
     (r) =>
-      `| ${r.id} | ${(r.totalMs / 1000).toFixed(1)} | ${(r.modelMs / 1000).toFixed(1)} | ${r.rounds} | ${r.calls.map((c) => c.name + (c.failed ? '!' : '')).join(', ')} | ${r.failures.join('; ') || 'ok'} |`,
+      `| ${r.group} | ${r.id} | ${(r.totalMs / 1000).toFixed(1)} | ${(r.modelMs / 1000).toFixed(1)} | ${r.rounds} | ${r.calls.map((c) => c.name + (c.failed ? '!' : '')).join(', ')} | ${r.failures.join('; ') || 'ok'} |`,
   ),
   '',
   ...results.flatMap((r) => [
