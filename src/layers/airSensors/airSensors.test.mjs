@@ -138,8 +138,37 @@ test('records: implausible or far-above-neighbours readings are unconfirmed, lon
   assert.deepEqual(
     flags,
     [1, 0, 0, 0, 2, 1],
-    'far above its neighbours: unconfirmed; alone: isolated; over 500: unconfirmed anyway',
+    'far above its neighbours: unconfirmed; alone: isolated; over 500 alone: unconfirmed',
   );
+});
+
+test('records: over 500 is kept as real when the sensors around it agree (smoke), not when alone (fog)', () => {
+  const at = (lat, lon, p2) =>
+    pmRecord({ p1: p2 + 20, p2, lat: String(lat), lon: String(lon) });
+  const smoke = normalizeSensorCommunity(
+    [
+      at(39.0, -121.0, 600),
+      at(39.01, -121.0, 250),
+      at(39.02, -121.0, 300),
+      at(39.0, -121.02, 350),
+    ],
+    { now: NOW },
+  );
+  assert.deepEqual(
+    smoke.rows.map((row) => row[7]),
+    [0, 0, 0, 0],
+    'a 600 among 250–350 is smoke: ranked, not greyed',
+  );
+  const fog = normalizeSensorCommunity(
+    [
+      at(52.0, 5.0, 600),
+      at(52.01, 5.0, 12),
+      at(52.02, 5.0, 15),
+      at(52.0, 5.02, 10),
+    ],
+    { now: NOW },
+  );
+  assert.equal(fog.rows[0][7], 1, 'a 600 among clean sensors is a fault');
 });
 
 test('bands: EEA 1-hour limits, rounded to integers, the worse of PM2.5 and PM10', () => {

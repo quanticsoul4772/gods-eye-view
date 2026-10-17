@@ -14,11 +14,14 @@
  * all-zero rows (a dead sensor), and readings older than 3 h.
  *
  * Kept but flagged unconfirmed (drawn, never ranked): a PM value over
- * 500 µg/m³ (an hourly mean that high outdoors is almost always a sensor
- * fogged or failing, not air), and a PM2.5 over 50 µg/m³ that is over 3× the
- * median of at least 3 sensors within 10 km. A PM2.5 over 50 with fewer than
- * 3 sensors within 10 km can't be compared: flagged isolated, still ranked,
- * and its card says it is unverified.
+ * 500 µg/m³ that its neighbours don't back up (an hourly mean that high is
+ * almost always a sensor fogged or failing; wildfire smoke raises the
+ * sensors around it too), and a PM2.5 over 50 µg/m³ that is over 3× the
+ * median of at least 3 sensors within 10 km. Over 500 counts as backed up
+ * when at least 3 sensors within 10 km report the same measure with a median
+ * of at least a third of it. A PM2.5 over 50 (and not over 500) with fewer
+ * than 3 sensors within 10 km can't be compared: flagged isolated, still
+ * ranked, and its card says it is unverified.
  */
 import { FLAG_ISOLATED, FLAG_UNCONFIRMED } from './model.js';
 
@@ -168,18 +171,13 @@ function flagUnconfirmed(readings) {
   const cellOf = (lat, lon) =>
     `${Math.floor(lat / GRID_DEG)}:${Math.floor(lon / GRID_DEG)}`;
   for (const reading of readings) {
-    if (reading.pm25 === null) continue;
     const key = cellOf(reading.lat, reading.lon);
     const list = grid.get(key);
     if (list) list.push(reading);
     else grid.set(key, [reading]);
   }
-  for (const reading of readings) {
-    if (reading.pm25 > 500 || reading.pm10 > 500) {
-      reading.flags |= FLAG_UNCONFIRMED;
-      continue;
-    }
-    if (!(reading.pm25 > 50)) continue;
+  /** Median of one measure over the sensors within 10 km, and how many. */
+  const neighbours = (reading, measure) => {
     const latIndex = Math.floor(reading.lat / GRID_DEG);
     const lonIndex = Math.floor(reading.lon / GRID_DEG);
     const cosLat = Math.cos((reading.lat * Math.PI) / 180);
@@ -187,19 +185,32 @@ function flagUnconfirmed(readings) {
     for (let a = -1; a <= 1; a++)
       for (let b = -1; b <= 1; b++)
         for (const other of grid.get(`${latIndex + a}:${lonIndex + b}`) || []) {
-          if (other === reading) continue;
+          if (other === reading || other[measure] === null) continue;
           const dy = (other.lat - reading.lat) * 111.2;
           const dx = (other.lon - reading.lon) * 111.2 * cosLat;
-          if (Math.hypot(dx, dy) <= NEIGHBOUR_KM) near.push(other.pm25);
+          if (Math.hypot(dx, dy) <= NEIGHBOUR_KM) near.push(other[measure]);
         }
-    if (near.length < 3) {
-      reading.flags |= FLAG_ISOLATED;
-      continue;
-    }
+    if (!near.length) return { count: 0, median: null };
     near.sort((x, y) => x - y);
     const mid = near.length >> 1;
-    const median =
-      near.length % 2 ? near[mid] : (near[mid - 1] + near[mid]) / 2;
-    if (reading.pm25 > 3 * median) reading.flags |= FLAG_UNCONFIRMED;
+    return {
+      count: near.length,
+      median: near.length % 2 ? near[mid] : (near[mid - 1] + near[mid]) / 2,
+    };
+  };
+  for (const reading of readings) {
+    const extreme =
+      reading.pm25 > 500 ? 'pm25' : reading.pm10 > 500 ? 'pm10' : null;
+    if (extreme) {
+      // Smoke raises the sensors around it; a fogged or failing sensor is alone.
+      const { count, median } = neighbours(reading, extreme);
+      if (count < 3 || median * 3 < reading[extreme])
+        reading.flags |= FLAG_UNCONFIRMED;
+      continue;
+    }
+    if (!(reading.pm25 > 50)) continue;
+    const { count, median } = neighbours(reading, 'pm25');
+    if (count < 3) reading.flags |= FLAG_ISOLATED;
+    else if (reading.pm25 > 3 * median) reading.flags |= FLAG_UNCONFIRMED;
   }
 }
