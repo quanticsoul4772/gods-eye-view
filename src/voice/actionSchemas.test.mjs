@@ -49,7 +49,8 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // Active fires add static-source fields (known solar farms and industrial sites).
     // Air sensors (Sensor.Community PM) extend the manifest.
     // Satellite lightning (lightning-eu) extends it; two self-evident ids drop alias hints.
-    '13649cce89a25107d975a0e94e2b5326609f009367a5609d27ddbcd96ff8f8f4',
+    // Plain "air quality" routes to air-sensors (AQHI keeps Canada); hints skip the id spelled with spaces.
+    '4299fbc045236e9c09504cd77310b1d262a01a46649bd2287295df4096393e88',
   );
 });
 

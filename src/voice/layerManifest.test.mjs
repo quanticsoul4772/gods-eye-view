@@ -10,7 +10,10 @@ import {
   VOICE_CONTEXT_LAYER_IDS,
   VOICE_QUERY_LAYER_IDS,
   voiceLayerAliasMap,
+  voiceLayerAliasHint,
+  voiceQueryFieldHint,
 } from './layerManifest.js';
+import { analystNounFor } from './resultDisplay.js';
 
 const catalogIds = APPLICATION_LAYER_METADATA.map((layer) => layer.id);
 const manifestIds = VOICE_LAYER_MANIFEST.map((entry) => entry.id);
@@ -111,4 +114,37 @@ test('spoken aliases resolve to real layers, keep every legacy phrase and never 
       assert.ok(!claimed.has(alias), `"${alias}" claimed by ${claimed.get(alias)} and ${entry.id}`);
       claimed.set(alias, entry.id);
     }
+});
+
+test('plain "air quality" routes to the worldwide air sensors; AQHI stays the Canada layer', () => {
+  const aliases = voiceLayerAliasMap();
+  for (const phrase of ['air quality', 'air pollution', 'smog', 'pm2.5'])
+    assert.equal(aliases.get(phrase), 'air-sensors', phrase);
+  for (const phrase of ['aqhi', 'canada air quality', 'air quality canada'])
+    assert.equal(aliases.get(phrase), 'air-quality', phrase);
+  const hint = voiceLayerAliasHint();
+  assert.match(hint, /aqhi\/canada air quality→air-quality/);
+  assert.match(hint, /air quality\/air pollution→air-sensors/);
+  assert.match(
+    voiceQueryFieldHint(),
+    /air-quality \(Canada only\): value\(AQHI\)/,
+  );
+  assert.match(
+    tool('analyst_query').parameters.properties.layers.description,
+    /air quality → air-sensors \(Canada AQHI: air-quality\)/,
+  );
+  assert.equal(analystNounFor(['air-quality']), 'air quality');
+});
+
+test('the alias hint leaves out the id spelled with spaces', () => {
+  const hint = voiceLayerAliasHint();
+  for (const spoken of [
+    'fire perimeters',
+    'weather radar',
+    'rocket launches',
+    'local adsb',
+  ])
+    assert.doesNotMatch(hint, new RegExp(`(^|[/; ])${spoken}[/→]`), spoken);
+  assert.match(hint, /wildfire perimeters→fire-perimeters/);
+  assert.match(hint, /radar→weather-radar/);
 });

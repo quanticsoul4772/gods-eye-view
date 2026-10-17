@@ -49,6 +49,7 @@ export const CORE_PHRASES = Object.freeze([
   { phrase: 'Open the data layers menu', expect: 'show_data_layers_menu' },
   { phrase: 'Show me the datacenter layers', expect: 'show_data_layers_menu', typedArgs: [where('show_data_layers_menu', (a) => a.layerId === 'local-datacenters')] },
   { phrase: 'Turn on the datacenters layer', expect: 'set_layer_visibility', typedArgs: [where('set_layer_visibility', (a) => a.layerId === 'local-datacenters' && a.enabled === true)] },
+  { phrase: 'Turn on air quality', expect: 'set_layer_visibility', typedArgs: [where('set_layer_visibility', (a) => a.layerId === 'air-sensors' && a.enabled === true)] },
 
   // — visual styles & post-fx —
   { phrase: 'Give me night vision', expect: 'set_visual_style', typedArgs: [where('set_visual_style', (a) => a.style === 'surveillance')] },
@@ -123,6 +124,8 @@ export const CORE_PHRASES = Object.freeze([
   { phrase: 'How many flights are over Texas right now?', expect: 'analyst_query', typedArgs: [where('analyst_query', (a) => (a.layers || []).includes('flights') && a.scope?.kind === 'region' && /texas/i.test(a.scope?.name || ''))] },
   { phrase: 'Which ships are headed to Oakland?', expect: 'analyst_query', typedArgs: [where('analyst_query', (a) => (a.layers || []).includes('ais-live-vessels') && (a.filters || []).some((f) => f.field === 'destination' && /oakland/i.test(String(f.value))))] },
   { phrase: 'What is the biggest fire near Los Angeles?', expect: 'analyst_query', typedArgs: [where('analyst_query', (a) => (a.layers || []).includes('local-firms') && ['frp', 'acres'].includes(a.sortBy) && a.sortDir !== 'asc')] },
+  { phrase: "How's the air in Paris?", expect: 'analyst_query', typedArgs: [where('analyst_query', (a) => (a.layers || []).includes('air-sensors') && !(a.layers || []).includes('air-quality'))] },
+  { phrase: "What's the AQHI in Toronto?", expect: 'analyst_query', typedArgs: [where('analyst_query', (a) => (a.layers || []).includes('air-quality'))] },
   { phrase: 'Is anything flying above forty thousand feet?', expect: 'analyst_query', typedArgs: [where('analyst_query', (a) => (a.layers || []).some((l) => l === 'flights' || l === 'military') && (a.filters || []).some((f) => f.field === 'altitudeM' && (f.op === 'gt' || f.op === 'gte') && Math.abs(Number(f.value) - 12192) <= 50))] },
 
   // — negative controls: conversation must NOT tool-call —
