@@ -4,12 +4,14 @@
  *   id       short stable name (report rows, --only)
  *   prompt   what is typed into the composer
  *   start    optional camera before the turn: { lat, lon, height, pitch }
+ *   then     optional follow-up prompts typed into the same conversation
  *   checks   optional machine checks, all must hold:
  *     tools        every listed tool is called at least once
  *     noTools      none of the listed tools is called
  *     answer       regex the final answer must match
  *     answerNot    regex the final answer must not match
  *     cameraNear   { lat, lon, km } the camera ends within km of the point
+ *     minHeightM   the camera ends at least this high (a storm, not the sea)
  *     layersOn     layer ids enabled at the end
  *     layersOff    layer ids that must NOT be enabled at the end
  *     hudLayout    the HUD layout at the end
@@ -658,6 +660,157 @@ export const PROMPTS = Object.freeze([
     id: 'space-missions-named',
     prompt: 'Open Space Missions.',
     checks: { layersOn: ['rocket-launches'] },
+  },
+  // — a general tour, one prompt per area of the app (2026-10-17) —
+  {
+    id: 'tour-denver-flights',
+    prompt: 'Fly to Denver and turn on flights',
+    checks: {
+      layersOn: ['flights'],
+      cameraNear: { lat: 39.74, lon: -104.99, km: 60 },
+    },
+  },
+  {
+    id: 'tour-night-vision',
+    prompt: 'Switch to night vision',
+    checks: { tools: ['set_visual_style'] },
+  },
+  {
+    id: 'tour-whole-globe',
+    prompt: 'Zoom out to the whole globe',
+    start: LONDON,
+  },
+  {
+    id: 'tour-what-am-i-looking-at',
+    prompt: 'What am I looking at right now?',
+    start: LONDON,
+    checks: { answer: /London/i },
+  },
+  {
+    id: 'tour-track-highest-plane',
+    prompt: 'Track the highest plane in view',
+    start: { lat: 39.74, lon: -104.99, height: 400_000, pitch: -90 },
+  },
+  {
+    id: 'tour-track-nearest-aircraft',
+    prompt: 'Track the nearest aircraft to the center of the map',
+    start: { lat: 39.74, lon: -104.99, height: 400_000, pitch: -90 },
+  },
+  {
+    id: 'tour-track-iss',
+    prompt: 'Find the ISS and track it',
+  },
+  {
+    id: 'tour-iss-pass-seattle',
+    prompt: 'When is the next ISS pass over Seattle?',
+    checks: { answer: /\d/ },
+  },
+  {
+    id: 'tour-stop-tracking',
+    prompt: 'Find the ISS and track it',
+    then: ['Stop tracking'],
+  },
+  {
+    id: 'tour-texas-by-country',
+    prompt:
+      'How many aircraft are over Texas right now, broken down by country?',
+    checks: { tools: ['aircraft_in_area'], answer: /United States/i },
+  },
+  {
+    id: 'tour-london-types',
+    prompt: 'What aircraft types are flying over London right now?',
+  },
+  {
+    id: 'tour-texas-alt-speed',
+    prompt: "What's the average altitude and speed of aircraft over Texas?",
+    checks: { tools: ['aircraft_in_area'] },
+  },
+  {
+    id: 'tour-singapore-ship-types',
+    prompt: 'How many ships are near Singapore, by ship type?',
+    checks: { tools: ['vessels_in_area'], answerNot: /\b0 \(\d+\)|type 0\b/ },
+  },
+  {
+    id: 'tour-rotterdam-destinations',
+    prompt: 'Which destinations are the ships near Rotterdam headed to?',
+    checks: { tools: ['vessels_in_area'] },
+  },
+  {
+    id: 'tour-california-fires',
+    prompt: 'Show active fires in California and fly to the biggest one',
+    checks: { layersOn: ['local-firms'] },
+  },
+  {
+    id: 'tour-earthquakes-m5',
+    prompt: 'Any earthquakes over magnitude 5 in the last day?',
+  },
+  // A bare storm coordinate used to land a 250 m close-up over open sea.
+  {
+    id: 'tour-cyclones',
+    prompt: 'Are there any active cyclones? Fly to the strongest one',
+    checks: { tools: ['get_cyclones'], minHeightM: 100_000 },
+  },
+  {
+    id: 'tour-chicago-weather',
+    prompt: "What's the weather and wind in Chicago right now?",
+    checks: { answer: /°|degrees|mph|km\/h|m\/s|knots/i },
+  },
+  {
+    id: 'tour-situation-brief',
+    prompt: 'Give me a situation brief for the area in view',
+    start: LONDON,
+  },
+  {
+    id: 'tour-taipei-news',
+    prompt: "What's the regional news for Taipei?",
+  },
+  {
+    id: 'tour-times-square-cctv',
+    prompt: 'Find CCTV cameras near Times Square and show me one',
+    checks: { layersOn: ['cctv'] },
+  },
+  {
+    id: 'tour-oakland-san-jose-route',
+    prompt: 'Plan a route from Oakland to San Jose and fly along it',
+    checks: { tools: ['fly_route'] },
+  },
+  {
+    id: 'tour-houston-circle',
+    prompt: 'Draw a 50 km circle around Houston',
+    checks: { tools: ['annotate_map'] },
+  },
+  {
+    id: 'tour-clear-drawings',
+    prompt: 'Draw a 50 km circle around Houston',
+    then: ['Clear the drawings'],
+    checks: { tools: ['clear_annotations'] },
+  },
+  {
+    id: 'tour-hide-hud',
+    prompt: 'Hide the HUD',
+    checks: { tools: ['set_hud'] },
+  },
+  // A drawing that frames itself takes the camera from a running route
+  // flight, which used to keep flying the old route.
+  {
+    id: 'tour-route-then-circle',
+    prompt: 'Plan a route from Oakland to San Jose and fly along it',
+    then: ['Draw a circle around Houston and fly there'],
+    checks: { cameraNear: { lat: 29.76, lon: -95.37, km: 80 } },
+  },
+  {
+    id: 'tour-singapore-tankers',
+    prompt: 'How many tankers are near Singapore?',
+    checks: {
+      tools: ['vessels_in_area'],
+      answerNot: /\bno tankers\b|\b0 tankers\b/i,
+    },
+  },
+  {
+    id: 'tour-la-ships-track-largest',
+    prompt: 'Turn on ships and fly to the Port of Los Angeles',
+    then: ['Track the largest one there'],
+    checks: { layersOn: ['ais-live-vessels'] },
   },
   // Built-in scene with photo cards. Last: a playing scene holds the view
   // and would swallow the next prompt.
