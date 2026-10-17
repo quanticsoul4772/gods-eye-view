@@ -187,6 +187,57 @@ test('zoom to globe adopts the shared visible reset route and returns its result
   assert.equal(calls, 1);
 });
 
+test('annotate_map with flyTo takes the camera before framing the drawing', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const { order, styleManager, viewer } = createVoiceNavigationHarness();
+  const calls = [];
+  const annotations = {
+    list: () => [],
+    async annotate(requests, options) {
+      calls.push(options.flyTo);
+      order.push(`annotate:${options.flyTo}`);
+      return { drawn: requests.length, failed: 0, results: [] };
+    },
+  };
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager,
+    annotations,
+    dataManager: { layers: new Map(), getAll: () => [] },
+  });
+  const spec = { type: 'pin', target: 'Houston, Texas' };
+  await runner('annotate_map', { annotations: [spec], flyTo: true });
+  assert.deepEqual(order, ['stamp:annotation', 'release', 'cancel', 'annotate:true']);
+  assert.equal(viewer.trackedEntity, undefined, 'a follow camera is released');
+  order.length = 0;
+  await runner('annotate_map', { annotations: [spec] });
+  assert.deepEqual(order, ['annotate:false'], 'drawing without flyTo leaves the camera alone');
+  assert.deepEqual(calls, [true, false]);
+});
+
+test('annotate_map does not frame the drawing when the camera cannot be taken', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const { styleManager, viewer } = createVoiceNavigationHarness({ cockpitActive: true });
+  const calls = [];
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager,
+    annotations: {
+      list: () => [],
+      async annotate(requests, options) {
+        calls.push(options.flyTo);
+        return { drawn: requests.length, failed: 0, results: [] };
+      },
+    },
+    dataManager: { layers: new Map(), getAll: () => [] },
+  });
+  await runner('annotate_map', {
+    annotations: [{ type: 'pin', target: 'Houston, Texas' }],
+    flyTo: true,
+  });
+  assert.deepEqual(calls, [false]);
+});
+
 test('dependent voice navigation waits for the destination viewport to arrive', async () => {
   globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
   const { viewer, styleManager } = createVoiceNavigationHarness();
