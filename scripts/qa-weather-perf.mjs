@@ -80,7 +80,12 @@ const scale = Number(arg('--scale', '1')) || 1;
 const outDir = path.resolve(arg('--out', 'qa-shots/weather-perf'), label);
 mkdirSync(outDir, { recursive: true });
 
-const WEATHER = ['weather-radar', 'weather-satellite', 'weather-lightning'];
+const WEATHER = [
+  'weather-radar',
+  'weather-satellite',
+  'weather-lightning',
+  'lightning-eu',
+];
 const AUSTIN = { lon: -97.7431, lat: 30.2672 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

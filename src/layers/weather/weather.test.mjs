@@ -1330,6 +1330,7 @@ for (const [id, product] of [
   ['weather-satellite', 'clouds-regional'],
   ['weather-satellite', 'clouds'],
   ['weather-lightning', 'lightning'],
+  ['lightning-eu', 'lightning-eu'],
 ]) {
   test(`${product} shows on 3D Tiles at street level and keeps its history through host changes`, async (t) => {
     t.mock.timers.enable({ apis: ['setTimeout'] });
@@ -1933,6 +1934,7 @@ test('observed descriptors keep configuration only and label satellite clouds by
     ['weather-radar', 'CONUS'],
     ['weather-satellite', 'North America'],
     ['weather-lightning', 'Americas + Pacific'],
+    ['lightning-eu', 'Europe · Africa · Atlantic'],
   ]) {
     const h = layerHarness({ id });
     const controls = h.layer.getRowControls();
@@ -2311,3 +2313,35 @@ for (const product of ['radar', 'clouds-regional', 'lightning']) {
     assert.equal(h.viewer.camera.moveEnd.size, 0);
   });
 }
+
+test('satellite lightning (EUMETSAT) is a lightning layer with its own source, legend, units and coverage', () => {
+  const h = layerHarness({ id: 'lightning-eu' });
+  assert.equal(h.layer.name, 'Satellite lightning (EUMETSAT)');
+  assert.equal(h.layer.source, 'EUMETSAT EUMETView · OBSERVED');
+  assert.equal(h.layer.updateInterval, 300_000);
+  assert.deepEqual(h.layer.getParams(), {
+    product: 'lightning-eu',
+    opacity: 'strong',
+  });
+  const controls = h.layer.getRowControls();
+  assert.deepEqual(
+    controls.legend.map(({ label, color }) => [label, color]),
+    [
+      ['1', '#FFFFC9'],
+      ['10', '#FD8339'],
+      ['20+', '#8C0026'],
+    ],
+  );
+  assert.match(
+    controls.legend[0].blurb,
+    /flashes per ~2 km pixel in 5 minutes/,
+  );
+  assert.equal(controls.summary.units, 'flashes/5 min');
+  assert.match(controls.infoTitle, /EUMETSAT MTG Lightning Imager/);
+  assert.equal(
+    controls.chips.find(({ id }) => id === 'coverage').label,
+    'View Europe & Africa',
+  );
+  assert.equal(h.layer.getStats().source, 'EUMETSAT EUMETView');
+  h.layer.destroy();
+});

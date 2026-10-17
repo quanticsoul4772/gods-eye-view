@@ -48,7 +48,8 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // Fire perimeters add provincial fields (hectares, status, source, times).
     // Active fires add static-source fields (known solar farms and industrial sites).
     // Air sensors (Sensor.Community PM) extend the manifest.
-    '3b602ba988329f272b38a4047e74c03954b241eec5aee79b37a612fc2bd26ee6',
+    // Satellite lightning (lightning-eu) extends it; two self-evident ids drop alias hints.
+    '13649cce89a25107d975a0e94e2b5326609f009367a5609d27ddbcd96ff8f8f4',
   );
 });
 

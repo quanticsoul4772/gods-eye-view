@@ -170,6 +170,11 @@ export function createApplicationCatalog({
           id: 'weather-lightning',
           clock: weatherClock,
         }),
+        createWeatherLayer({
+          feed: sources.weather,
+          id: 'lightning-eu',
+          clock: weatherClock,
+        }),
         createCyclonesLayer({ feed: sources.cyclones }),
         ...createInfrastructureLayers(localGeoJsonServices),
         createApplicationCables({ source: sources.cables }),

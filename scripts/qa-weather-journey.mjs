@@ -39,7 +39,12 @@ const label = arg('--label', 'journey');
 const outDir = path.resolve(arg('--out', 'qa-shots/weather-journey'), label);
 mkdirSync(outDir, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const WEATHER = ['weather-radar', 'weather-satellite', 'weather-lightning'];
+const WEATHER = [
+  'weather-radar',
+  'weather-satellite',
+  'weather-lightning',
+  'lightning-eu',
+];
 
 const browser = await puppeteer.launch({
   headless: flag('--headless') ? 'new' : false,

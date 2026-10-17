@@ -13,6 +13,10 @@ import {
   resolvePoint,
 } from '../area.js';
 import { toBase64 } from '../results.js';
+import {
+  WEATHER_DATA_BOUNDS,
+  weatherCoverage,
+} from '../../layers/weather/coverage.js';
 
 /** Map names offered to callers, and the weather products behind them. */
 const MAPS = {
@@ -21,13 +25,35 @@ const MAPS = {
   global_satellite: 'clouds',
   lightning: 'lightning',
 };
-/** The app layer that shows each map. */
-const MAP_LAYERS = {
+/** The app layer that shows each product. */
+const PRODUCT_LAYERS = {
   radar: 'weather-radar',
-  satellite: 'weather-satellite',
-  global_satellite: 'weather-satellite',
+  'clouds-regional': 'weather-satellite',
+  clouds: 'weather-satellite',
   lightning: 'weather-lightning',
+  'lightning-eu': 'lightning-eu',
 };
+
+/** NOAA's lightning: 110°E across the dateline to 0°, 25°S–80°N. */
+const inNoaaLightning = ({ lat, lon }) =>
+  lat >= -25 && lat <= 80 && (lon >= 110 || lon <= 0);
+const inside = (box, { lat, lon }) =>
+  lat >= box.south && lat <= box.north && lon >= box.west && lon <= box.east;
+
+/**
+ * The product behind a map for an area: lightning is NOAA's (Americas and
+ * Pacific) unless the area's centre is only in EUMETSAT's (Europe, Africa,
+ * the Atlantic).
+ */
+export function weatherProductFor(map, area) {
+  const product = MAPS[map];
+  if (product !== 'lightning' || !area) return product;
+  const center = areaCenter(area);
+  return !inNoaaLightning(center) &&
+    inside(WEATHER_DATA_BOUNDS['lightning-eu'], center)
+    ? 'lightning-eu'
+    : product;
+}
 const IMAGE_SIZE = { width: 1024, height: 512 };
 const SNAP_DEGREES = 0.25;
 const MIN_HALF_HEIGHT_DEGREES = 0.5;
@@ -86,9 +112,9 @@ export const getWeatherMap = defineTool({
   name: 'get_weather_map',
   title: 'Weather map',
   description:
-    'The latest NOAA weather map image over an area: precipitation radar ' +
+    'The latest weather map image over an area: NOAA precipitation radar ' +
     '(contiguous US), regional or global infrared satellite clouds, or ' +
-    'lightning density (the Americas). Returns the image itself.',
+    'lightning (NOAA in the Americas, EUMETSAT in Europe/Africa). Returns the image itself.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -100,7 +126,10 @@ export const getWeatherMap = defineTool({
   },
   requires: ['weatherMaps'],
   async run(args, { services, signal }) {
-    const product = MAPS[args.map];
+    const area = args.area
+      ? await resolveArea(args.area, { services, signal })
+      : null;
+    const product = weatherProductFor(args.map, area);
     const snapshot = await services.weatherMaps.getSnapshot({
       product,
       signal,
@@ -110,12 +139,10 @@ export const getWeatherMap = defineTool({
         'unavailable',
         `The ${args.map} map is unavailable right now`,
       );
-    const area = args.area
-      ? await resolveArea(args.area, { services, signal })
-      : null;
     let mapBox = null;
     if (area) {
-      const { bounds } = snapshot;
+      // Where the product has data (EUMETSAT's extent is padded to 2:1).
+      const bounds = weatherCoverage(snapshot);
       const center = areaCenter(area);
       if (
         center.lon < bounds.west ||
@@ -147,14 +174,14 @@ export const getWeatherMap = defineTool({
         view: suggestView(
           services,
           area
-            ? { area, layers: [MAP_LAYERS[args.map]] }
+            ? { area, layers: [PRODUCT_LAYERS[product]] }
             : {
                 point: {
                   lat: (snapshot.bounds.south + snapshot.bounds.north) / 2,
                   lon: (snapshot.bounds.west + snapshot.bounds.east) / 2,
                 },
                 altitudeM: 8_000_000,
-                layers: [MAP_LAYERS[args.map]],
+                layers: [PRODUCT_LAYERS[product]],
               },
         ),
         map: args.map,

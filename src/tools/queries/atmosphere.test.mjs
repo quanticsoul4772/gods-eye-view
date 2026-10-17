@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { composeCatalog, coreTools } from '../index.js';
-import { weatherWindow } from './atmosphere.js';
+import { weatherProductFor, weatherWindow } from './atmosphere.js';
 import { resolveArea } from '../area.js';
 
 const CONUS = { west: -130, south: 20, east: -60, north: 55 };
@@ -171,4 +171,41 @@ test('a weather window that cannot cover the area falls back to the whole map', 
   assert.ok(box.west <= Math.max(edge.west, conus.west));
   assert.ok(box.east >= edge.east);
   assert.ok(box.south <= edge.south && box.north >= edge.north);
+});
+
+test('lightning: EUMETSAT where only it covers the area (Europe, Africa), NOAA elsewhere and over their overlap', () => {
+  const box = (lat, lon) => ({
+    west: lon - 1,
+    south: lat - 1,
+    east: lon + 1,
+    north: lat + 1,
+    label: 'x',
+  });
+  assert.equal(
+    weatherProductFor('lightning', box(48, 11)),
+    'lightning-eu',
+    'Munich',
+  );
+  assert.equal(
+    weatherProductFor('lightning', box(6, 3)),
+    'lightning-eu',
+    'Lagos',
+  );
+  assert.equal(
+    weatherProductFor('lightning', box(30, -90)),
+    'lightning',
+    'Gulf of Mexico',
+  );
+  assert.equal(
+    weatherProductFor('lightning', box(10, -40)),
+    'lightning',
+    'mid-Atlantic overlap stays NOAA',
+  );
+  assert.equal(
+    weatherProductFor('lightning', box(20, 80)),
+    'lightning',
+    'India: neither covers it; NOAA reports the gap',
+  );
+  assert.equal(weatherProductFor('lightning', null), 'lightning');
+  assert.equal(weatherProductFor('radar', box(48, 11)), 'radar');
 });

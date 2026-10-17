@@ -1007,10 +1007,11 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   // Fire perimeters add provincial fields (hectares, status, source, times).
   // Active fires add static-source fields (known solar farms and industrial sites).
   // Air sensors (Sensor.Community PM) extend the manifest.
-  assert.equal(block.length, 30916, 'serialized tool schema length drifted');
+  // Satellite lightning (lightning-eu) extends it; two self-evident ids drop alias hints.
+  assert.equal(block.length, 30910, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    '0ae8d7a7d0e43bc51e6360f599c75227736b70fac40f686f580a6dde3b7e5c2a',
+    'a0ef43d1f9ef222670f4a986a388ef7f15cae8e0292b7e0858a86ffdd5e561c5',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
   const instructions = fs.readFileSync(

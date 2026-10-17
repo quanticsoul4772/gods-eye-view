@@ -1159,3 +1159,128 @@ test('large tile validation checks requested dimensions and bounded compressed b
   });
   assert.equal((await request(`${tile()}&size=1024`)).statusCode, 200);
 });
+
+// EUMETSAT MTG lightning: one PT5M interval on the per-layer endpoint.
+const EU_END = '2026-09-16T02:05:00.000Z';
+const euLeaf = (interval, def = EU_END) =>
+  `<WMS_Capabilities><Capability><Layer><Title>Parent</Title><Layer><Name>li_afa</Name><EX_GeographicBoundingBox><westBoundLongitude>-70</westBoundLongitude><eastBoundLongitude>70</eastBoundLongitude><southBoundLatitude>-70</southBoundLatitude><northBoundLatitude>70</northBoundLatitude></EX_GeographicBoundingBox><Dimension name="time" default="${def}" units="ISO8601" nearestValue="1">${interval}</Dimension></Layer></Layer></Capability></WMS_Capabilities>`;
+const EU_XML = euLeaf(`2025-05-30T15:00:00.000Z/${EU_END}/PT5M`);
+
+test('EUMETSAT lightning: the last PT5M interval expands to 37 steps; every third is shown (13, 3 h); padded and data bounds', () => {
+  const parsed = parseWeatherCapabilities(EU_XML, 'lightning-eu', NOW);
+  assert.equal(parsed.allowedTimes.length, 37);
+  assert.equal(parsed.allowedTimes.at(-1), EU_END);
+  assert.equal(parsed.allowedTimes[0], '2026-09-15T23:05:00.000Z');
+  assert.equal(parsed.times.length, 13, 'every third of 37 steps');
+  assert.equal(parsed.times[0], parsed.allowedTimes[0]);
+  assert.equal(parsed.times.at(-1), EU_END, 'the newest step is always shown');
+  assert.equal(
+    Date.parse(parsed.times.at(-1)) - Date.parse(parsed.times.at(-2)),
+    15 * 60_000,
+  );
+  assert.deepEqual(parsed.bounds, {
+    west: -140,
+    south: -70,
+    east: 140,
+    north: 70,
+  });
+  assert.deepEqual(parsed.dataBounds, {
+    west: -70,
+    south: -70,
+    east: 70,
+    north: 70,
+  });
+  // A comma list uses its last interval.
+  assert.equal(
+    parseWeatherCapabilities(
+      euLeaf(
+        `2025-01-01T00:00:00.000Z/2025-02-01T00:00:00.000Z/PT5M,2025-05-30T15:00:00.000Z/${EU_END}/PT5M`,
+      ),
+      'lightning-eu',
+      NOW,
+    ).allowedTimes.at(-1),
+    EU_END,
+  );
+  for (const text of [
+    euLeaf(
+      `2025-05-30T15:00:00.000Z/${EU_END}/PT5M`,
+      '2026-09-16T02:00:00.000Z',
+    ),
+    euLeaf(`2025-05-30T15:01:00.000Z/${EU_END}/PT5M`),
+    euLeaf(
+      '2025-05-30T15:00:00.000Z/2026-09-17T00:00:00.000Z/PT5M',
+      '2026-09-17T00:00:00.000Z',
+    ),
+    euLeaf(`2025-05-30T15:00:00.000Z/${EU_END}/PT90M`),
+    EU_XML.replace('<eastBoundLongitude>70', '<eastBoundLongitude>150'),
+  ])
+    assert.throws(() => parseWeatherCapabilities(text, 'lightning-eu', NOW));
+  assert.throws(
+    () =>
+      parseWeatherCapabilities(
+        xml([`2025-05-30T15:00:00.000Z/${EU_END}/PT5M`]),
+        'lightning',
+        NOW,
+      ),
+    'NOAA products still refuse intervals',
+  );
+});
+
+test('EUMETSAT lightning: fixed EUMETView URLs, source and dated attribution; a substituted frame is refused, not cached', async () => {
+  const calls = [];
+  let warning = `99 Nearest value used: time=${EU_END} ISO8601 (mtg_fd:li_afa)`;
+  const { request } = install({
+    fetchImpl: async (url) => {
+      calls.push(new URL(url));
+      if (url.includes('GetCapabilities')) return new Response(EU_XML);
+      return new Response(png(256, 256), {
+        headers: { 'Content-Type': 'image/png', Warning: warning },
+      });
+    },
+  });
+  const manifest = body(await request('/manifest?product=lightning-eu'));
+  assert.equal(manifest.source, 'EUMETSAT EUMETView');
+  assert.equal(
+    manifest.attribution,
+    'Contains modified EUMETSAT Meteosat product 2026',
+  );
+  assert.deepEqual(manifest.dataBounds, {
+    west: -70,
+    south: -70,
+    east: 70,
+    north: 70,
+  });
+  assert.equal(
+    calls[0].href.split('?')[0],
+    'https://view.eumetsat.int/geoserver/mtg_fd/li_afa/ows',
+  );
+  const ok = await request(
+    tile({ product: 'lightning-eu', time: EU_END, z: 1, x: 1, y: 0 }),
+  );
+  assert.equal(ok.statusCode, 200);
+  const map = calls.at(-1);
+  assert.equal(
+    map.origin + map.pathname,
+    'https://view.eumetsat.int/geoserver/ows',
+  );
+  assert.equal(map.searchParams.get('layers'), 'mtg_fd:li_afa');
+  assert.equal(map.searchParams.get('time'), EU_END);
+  assert.ok(calls.every((url) => url.host === 'view.eumetsat.int'));
+  // The server answered a missing step with its neighbour: refused.
+  const asked = '2026-09-16T02:00:00.000Z';
+  warning = `99 Nearest value used: time=2026-09-16T01:55:00.000Z ISO8601 (mtg_fd:li_afa)`;
+  const refused = await request(
+    tile({ product: 'lightning-eu', time: asked, z: 1, x: 1, y: 0 }),
+  );
+  assert.equal(refused.statusCode, 503);
+  warning = `99 Nearest value used: time=${asked} ISO8601 (mtg_fd:li_afa)`;
+  const fetchesBefore = calls.length;
+  await request(
+    tile({ product: 'lightning-eu', time: asked, z: 1, x: 1, y: 0 }),
+  );
+  assert.equal(
+    calls.length,
+    fetchesBefore,
+    'a refused frame waits out the failure cooldown; it was never cached',
+  );
+});

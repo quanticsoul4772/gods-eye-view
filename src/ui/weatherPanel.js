@@ -11,10 +11,17 @@ const ORDER = [
   'weather-radar',
   'weather-satellite',
   'weather-lightning',
+  'lightning-eu',
   'air-quality',
   'air-sensors',
 ];
-const OBSERVED = new Set(ORDER.slice(2, 5));
+// Products on the shared observation timeline.
+const OBSERVED = new Set([
+  'weather-radar',
+  'weather-satellite',
+  'weather-lightning',
+  'lightning-eu',
+]);
 const utc = (time) =>
   Number.isFinite(Date.parse(time))
     ? `${formatUtcDayMonth(time)} ${utcClock(time)}`
@@ -145,6 +152,7 @@ export function createWeatherPanel({
       'weather-radar': t('Rain radar'),
       'weather-satellite': t('Satellite clouds'),
       'weather-lightning': t('Lightning density'),
+      'lightning-eu': t('Satellite lightning'),
     };
     set(scope, 'textContent', observed.map(({ id }) => names[id]).join(' · '));
     set(timelineHost, 'hidden', !showTimeline);

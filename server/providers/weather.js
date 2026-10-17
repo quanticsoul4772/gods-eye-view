@@ -2,8 +2,9 @@ import { readResponseTextCapped } from './common/http.js';
 import { readWindBody as readBytesCapped } from '../../src/sources/windBody.js';
 
 const BASE = 'https://nowcoast.noaa.gov/geoserver/observations/';
+const EUMETVIEW = 'https://view.eumetsat.int/geoserver/';
 const HOUR = 3600_000;
-const PRODUCTS = Object.freeze({
+const PRODUCTS_BY_ID = {
   lightning: Object.freeze({
     service: 'lightning_detection',
     layer: 'ldn_lightning_strike_density',
@@ -50,7 +51,52 @@ const PRODUCTS = Object.freeze({
       'GOES-19/18 longwave infrared Band 14 cloud and surface temperature patterns, approximately 2 km and 5-minute updates. Not a cloud-only mask.',
     image: Object.freeze({ width: 4096, height: 2048 }),
   }),
-});
+  // EUMETSAT's MTG-I Lightning Imager, Accumulated Flash Area: "Core" data,
+  // Free and Unrestricted under CC BY 4.0 (EUMETSAT Data Policy, Articles 4,
+  // 5.1 and 6.3). Capabilities come from the per-layer endpoint (a few KB),
+  // which names the layer without its workspace.
+  'lightning-eu': Object.freeze({
+    capabilitiesUrl: `${EUMETVIEW}mtg_fd/li_afa/ows`,
+    mapUrl: `${EUMETVIEW}ows`,
+    layer: 'mtg_fd:li_afa',
+    capabilitiesName: 'li_afa',
+    style: 'mtg_li_afa',
+    title: 'Satellite lightning · 5 min',
+    coverage:
+      'Meteosat 0° disc: Europe, Africa, the Atlantic and eastern South America, 70°W–70°E, 70°S–70°N; not global coverage.',
+    description:
+      'MTG-I Lightning Imager accumulated flash area: optical total lightning (cloud and ground flashes) seen from geostationary orbit, as flashes per ~2 km pixel per 5 minutes. Not ground-sensor strikes.',
+    source: 'EUMETSAT EUMETView',
+    attribution: 'Contains modified EUMETSAT Meteosat product',
+    attributionYear: true,
+    metadataTtlMs: 300_000,
+    // The data box is 140°×140°; whole images and shells need 2:1, so the
+    // product's extent is padded (transparent outside the data).
+    bounds: Object.freeze({ west: -140, south: -70, east: 140, north: 70 }),
+    times: 'interval',
+    historyStep: 3,
+    maxConcurrent: 4,
+    image: Object.freeze({ width: 4096, height: 2048 }),
+  }),
+};
+// Every product reads from fixed upstream URLs; nothing in a request chooses
+// the destination.
+const PRODUCTS = Object.freeze(
+  Object.fromEntries(
+    Object.entries(PRODUCTS_BY_ID).map(([id, spec]) => [
+      id,
+      Object.freeze({
+        ...spec,
+        capabilitiesUrl: spec.capabilitiesUrl ?? `${BASE}${spec.service}/ows`,
+        mapUrl: spec.mapUrl ?? `${BASE}${spec.service}/ows`,
+        capabilitiesName: spec.capabilitiesName ?? spec.layer,
+        source: spec.source ?? 'NOAA nowCOAST',
+        attribution: spec.attribution ?? 'NOAA/NWS/NESDIS nowCOAST',
+        maxConcurrent: spec.maxConcurrent ?? 8,
+      }),
+    ]),
+  ),
+);
 
 // Whole-extent images: 2:1 sizes up to each product's largest (the default).
 const IMAGE_SIZES = Object.freeze(['1024x512', '2048x1024', '4096x2048']);
@@ -63,7 +109,11 @@ function failure(code, status = 503) {
   return Object.assign(new Error(code), { code, status });
 }
 
-/** Canonicalize only explicit UTC observations; never expand time intervals. */
+/**
+ * Canonicalize only explicit UTC observations. Intervals are expanded only
+ * for products that opt in (`times: 'interval'`), and each frame fetched from
+ * one is checked against the server's own time (see `upstream`).
+ */
 function observationTime(value) {
   if (
     typeof value !== 'string' ||
@@ -106,7 +156,7 @@ export function parseWeatherCapabilities(xml, product, nowMs = Date.now()) {
       const name = candidate
         .match(/<(?:[\w.-]+:)?Name\s*>([^<]+)<\/(?:[\w.-]+:)?Name>/)?.[1]
         ?.trim();
-      if (name === spec.layer) {
+      if (name === spec.capabilitiesName) {
         if (leaf !== null) throw failure('invalid_weather_metadata');
         leaf = candidate;
       }
@@ -140,6 +190,16 @@ export function parseWeatherCapabilities(xml, product, nowMs = Date.now()) {
     bounds.south >= bounds.north
   )
     throw failure('invalid_weather_metadata');
+  // A padded product extent must hold everything the service advertises.
+  if (
+    spec.bounds &&
+    (bounds.west < spec.bounds.west ||
+      bounds.south < spec.bounds.south ||
+      bounds.east > spec.bounds.east ||
+      bounds.north > spec.bounds.north)
+  )
+    throw failure('invalid_weather_metadata');
+  const extent = spec.bounds ? { ...spec.bounds } : bounds;
   const dimensions = [
     ...leaf.matchAll(
       /<(?:[\w.-]+:)?Dimension\b([^>]*)>([^<]*)<\/(?:[\w.-]+:)?Dimension>/g,
@@ -153,20 +213,60 @@ export function parseWeatherCapabilities(xml, product, nowMs = Date.now()) {
   const raw = dimensions[0][2].trim().split(',');
   if (!raw.length || raw.length > 512)
     throw failure('invalid_weather_metadata');
-  const times = raw.map((value) => observationTime(value.trim()));
+  // History keeps 13 shown frames; a product showing every n-th step needs
+  // 13·n − (n − 1) steps (26 for one-step products, as before).
+  const step = spec.historyStep ?? 1;
+  const keep = Math.max(26, 13 * step - (step - 1));
+  const times =
+    spec.times === 'interval'
+      ? intervalTimes(raw.at(-1).trim(), keep)
+      : raw.map((value) => observationTime(value.trim()));
   if (times.some((value) => !value || Date.parse(value) > nowMs + 5 * 60_000))
     throw failure('invalid_weather_metadata');
   const defaultTime = observationTime(
     dimensions[0][1].match(/\bdefault\s*=\s*["']([^"']+)["']/)?.[1],
   );
-  if (!defaultTime || !times.includes(defaultTime))
+  if (
+    !defaultTime ||
+    !times.includes(defaultTime) ||
+    (spec.times === 'interval' && defaultTime !== times.at(-1))
+  )
     throw failure('invalid_weather_metadata');
   const recent = [...new Set(times)]
     .filter((value) => nowMs - Date.parse(value) <= 24 * HOUR)
     .sort()
-    .slice(-26);
+    .slice(-keep);
   if (!recent.length) throw failure('weather_observations_expired');
-  return { bounds, times: recent.slice(-13), allowedTimes: recent };
+  // Products with fine steps show every n-th step, newest kept, so 13 frames
+  // span about as long as the other products' history.
+  const shown = recent.filter(
+    (_, index) => (recent.length - 1 - index) % step === 0,
+  );
+  return {
+    bounds: extent,
+    dataBounds: bounds,
+    times: shown.slice(-13),
+    allowedTimes: recent,
+  };
+}
+
+/**
+ * The last `keep` steps of one `start/end/PT{n}M` interval, oldest first, or
+ * `[null]` when it is malformed: n from 1 to 60, the end on the step grid.
+ */
+function intervalTimes(value, keep) {
+  const match = /^([^/]+)\/([^/]+)\/PT([1-9]\d?)M$/.exec(value) ?? [];
+  const start = observationTime(match[1]);
+  const end = observationTime(match[2]);
+  const minutes = Number(match[3]);
+  if (!start || !end || !(minutes <= 60)) return [null];
+  const step = minutes * 60_000;
+  const span = Date.parse(end) - Date.parse(start);
+  if (span < 0 || span % step !== 0) return [null];
+  const count = Math.min(keep, span / step + 1);
+  return Array.from({ length: count }, (_, index) =>
+    new Date(Date.parse(end) - (count - 1 - index) * step).toISOString(),
+  );
 }
 
 /** A detail window `west,south,east,north` in degrees, rounded to 0.25° so cache
@@ -249,22 +349,38 @@ export function weatherProxy({
   let tileBytes = 0;
   let active = 0;
 
+  /** Requests in flight per upstream host, held to the product's limit. */
+  const activeByHost = new Map();
   function pump() {
     while (active < 8 && pending.length) {
-      const operation = pending.shift();
+      const index = pending.findIndex(
+        (operation) =>
+          operation.controller.signal.aborted ||
+          (activeByHost.get(operation.host) ?? 0) < operation.limit,
+      );
+      if (index < 0) return;
+      const [operation] = pending.splice(index, 1);
       if (operation.controller.signal.aborted) continue;
       active++;
+      activeByHost.set(
+        operation.host,
+        (activeByHost.get(operation.host) ?? 0) + 1,
+      );
       operation.started = true;
       Promise.resolve()
         .then(() => operation.work(operation.controller.signal))
         .then(operation.resolve, operation.reject)
         .finally(() => {
           active--;
+          activeByHost.set(
+            operation.host,
+            activeByHost.get(operation.host) - 1,
+          );
           pump();
         });
     }
   }
-  async function shared(key, work, clientSignal) {
+  async function shared(key, work, clientSignal, spec) {
     clientSignal.throwIfAborted();
     let operation = operations.get(key);
     if (operation?.controller.signal.aborted) {
@@ -275,7 +391,14 @@ export function weatherProxy({
       if (operations.size >= 120 || pending.length >= 96)
         throw failure('weather_busy', 429);
       const controller = new AbortController();
-      operation = { controller, work, waiters: 0, started: false };
+      operation = {
+        controller,
+        work,
+        waiters: 0,
+        started: false,
+        host: new URL(spec.mapUrl).host,
+        limit: spec.maxConcurrent,
+      };
       operation.promise = new Promise((resolve, reject) => {
         operation.resolve = resolve;
         operation.reject = reject;
@@ -325,6 +448,15 @@ export function weatherProxy({
       await response.body?.cancel();
       throw failure('weather_upstream_unavailable');
     }
+    // A nearestValue WMS answers a missing step with a neighbour and says so
+    // ("99 Nearest value used: time=…"): never show it under the asked time.
+    if (image?.time) {
+      const used = /time=([^\s,]+)/.exec(response.headers.get('warning') || '');
+      if (used && observationTime(used[1]) !== image.time) {
+        await response.body?.cancel();
+        throw failure('weather_frame_missing');
+      }
+    }
     const value = image
       ? validatePng(
           await readBytesCapped(response, image.maxBytes, signal),
@@ -344,15 +476,16 @@ export function weatherProxy({
     try {
       if (
         now() - (attempts.get(product) ?? -Infinity) < 30_000 &&
-        !operations.has(`metadata:${spec.service}`)
+        !operations.has(`metadata:${spec.capabilitiesUrl}`)
       )
         throw failure('weather_upstream_unavailable');
       attempts.set(product, now());
-      const url = `${BASE}${spec.service}/ows?service=WMS&version=1.3.0&request=GetCapabilities`;
+      const url = `${spec.capabilitiesUrl}?service=WMS&version=1.3.0&request=GetCapabilities`;
       const xml = await shared(
-        `metadata:${spec.service}`,
+        `metadata:${spec.capabilitiesUrl}`,
         (activeSignal) => upstream(url, activeSignal),
         signal,
+        spec,
       );
       const value = {
         ...parseWeatherCapabilities(xml, product, now()),
@@ -388,9 +521,13 @@ export function weatherProxy({
       title: spec.title,
       coverage: spec.coverage,
       description: spec.description,
-      source: 'NOAA nowCOAST',
-      attribution: spec.attribution ?? 'NOAA/NWS/NESDIS nowCOAST',
+      source: spec.source,
+      attribution:
+        spec.attributionYear && time
+          ? `${spec.attribution} ${time.slice(0, 4)}`
+          : spec.attribution,
       bounds: value?.bounds ?? null,
+      dataBounds: value?.dataBounds ?? null,
       times: value?.times ?? [],
       latest: time,
       time,
@@ -525,6 +662,7 @@ export function weatherProxy({
       const imageShape = {
         width,
         height,
+        time,
         maxBytes: wholeImage
           ? MAX_IMAGE_BYTES
           : Math.max(1024 * 1024, width ** 2 * 4 + 65_536),
@@ -543,7 +681,7 @@ export function weatherProxy({
         if (now() - (tileFailures.get(key) ?? -Infinity) < 30_000)
           throw failure('weather_upstream_unavailable');
         const spec = PRODUCTS[product];
-        const upstreamUrl = new URL(`${BASE}${spec.service}/ows`);
+        const upstreamUrl = new URL(spec.mapUrl);
         upstreamUrl.search = new URLSearchParams({
           service: 'WMS',
           version: '1.1.1',
@@ -563,6 +701,7 @@ export function weatherProxy({
             `image:${key}`,
             (signal) => upstream(upstreamUrl.href, signal, imageShape),
             controller.signal,
+            spec,
           );
           rememberTile(key, bytes);
           cached = { bytes };
