@@ -402,8 +402,9 @@ test('layer: points when zoomed in, cells far out, credit once, records carry th
   const snapshot = {
     readings: expandReadings(
       payloadOf([
-        [1, 48.1, 11.5, 8, 12, NOW - 600_000, 0, 0, 'DE', null, 0],
-        [2, 48.2, 11.6, 60, 70, NOW - 600_000, 0, 0, 'DE', null, 0],
+        // The layer judges staleness on the real clock.
+        [1, 48.1, 11.5, 8, 12, Date.now() - 600_000, 0, 0, 'DE', null, 0],
+        [2, 48.2, 11.6, 60, 70, Date.now() - 600_000, 0, 0, 'DE', null, 0],
       ]),
     ),
     sources: payloadOf([]).sources,
