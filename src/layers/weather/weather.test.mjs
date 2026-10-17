@@ -2334,7 +2334,7 @@ test('satellite lightning (EUMETSAT) is a lightning layer with its own source, l
   );
   assert.match(
     controls.legend[0].blurb,
-    /flashes per ~2 km pixel in 5 minutes/,
+    /Flashes per ~2 km pixel in 5 minutes: 1 /,
   );
   assert.equal(controls.summary.units, 'flashes/5 min');
   assert.match(controls.infoTitle, /EUMETSAT MTG Lightning Imager/);

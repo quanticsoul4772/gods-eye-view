@@ -69,6 +69,8 @@ const PRODUCTS_BY_ID = {
     source: 'EUMETSAT EUMETView',
     attribution: 'Contains modified EUMETSAT Meteosat product',
     attributionYear: true,
+    // A nearestValue WMS answers a missing step with a neighbour; refuse it.
+    strictTime: true,
     metadataTtlMs: 300_000,
     // The data box is 140°×140°; whole images and shells need 2:1, so the
     // product's extent is padded (transparent outside the data).
@@ -367,6 +369,11 @@ export function weatherProxy({
         (activeByHost.get(operation.host) ?? 0) + 1,
       );
       operation.started = true;
+      // The deadline covers the request itself, not its wait for a slot.
+      operation.timer = setTimeout(
+        () => operation.controller.abort(),
+        timeoutMs,
+      );
       Promise.resolve()
         .then(() => operation.work(operation.controller.signal))
         .then(operation.resolve, operation.reject)
@@ -409,9 +416,8 @@ export function weatherProxy({
         operation.reject(failure('weather_request_cancelled'));
       };
       controller.signal.addEventListener('abort', cancel, { once: true });
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
       operation.promise = operation.promise.finally(() => {
-        clearTimeout(timer);
+        clearTimeout(operation.timer);
         controller.signal.removeEventListener('abort', cancel);
         if (operations.get(key) === operation) operations.delete(key);
       });
@@ -450,7 +456,7 @@ export function weatherProxy({
     }
     // A nearestValue WMS answers a missing step with a neighbour and says so
     // ("99 Nearest value used: time=…"): never show it under the asked time.
-    if (image?.time) {
+    if (image?.strictTime) {
       const used = /time=([^\s,]+)/.exec(response.headers.get('warning') || '');
       if (used && observationTime(used[1]) !== image.time) {
         await response.body?.cancel();
@@ -663,6 +669,7 @@ export function weatherProxy({
         width,
         height,
         time,
+        strictTime: PRODUCTS[product].strictTime === true,
         maxBytes: wholeImage
           ? MAX_IMAGE_BYTES
           : Math.max(1024 * 1024, width ** 2 * 4 + 65_536),

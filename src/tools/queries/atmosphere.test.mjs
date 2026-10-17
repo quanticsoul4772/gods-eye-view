@@ -209,3 +209,23 @@ test('lightning: EUMETSAT where only it covers the area (Europe, Africa), NOAA e
   assert.equal(weatherProductFor('lightning', null), 'lightning');
   assert.equal(weatherProductFor('radar', box(48, 11)), 'radar');
 });
+
+test('lightning where neither NOAA nor EUMETSAT covers the area is refused, not an empty map', async () => {
+  const maps = weatherMaps({
+    bounds: { west: -180, south: -25, east: 180, north: 80 },
+    coverage: 'Pacific and Americas',
+  });
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: { weatherMaps: maps },
+  });
+  await assert.rejects(
+    catalog.call('get_weather_map', {
+      map: 'lightning',
+      area: { lat: 19.1, lon: 72.9, radius_km: 50 },
+    }),
+    /outside the lightning map's coverage/,
+    'Mumbai: NOAA advertises a global box but has no data from 0° to 110°E',
+  );
+  assert.equal(maps.requests.length, 0);
+});

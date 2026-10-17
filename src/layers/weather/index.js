@@ -615,7 +615,9 @@ export function createWeatherLayer({
       const overlap =
         lightning &&
         camera &&
-        shared?.products?.some((entry) => entry.id === otherLightning) &&
+        shared?.products?.some(
+          (entry) => entry.id === otherLightning && !entry.suspended,
+        ) &&
         lon >= LIGHTNING_OVERLAP.west &&
         lon <= LIGHTNING_OVERLAP.east &&
         lat >= LIGHTNING_OVERLAP.south &&
@@ -789,7 +791,7 @@ export function createWeatherLayer({
                 color,
                 blurb: eu
                   ? t(
-                      '{value} flashes per ~2 km pixel in 5 minutes (EUMETSAT colours, approximate)',
+                      'Flashes per ~2 km pixel in 5 minutes: {value} (EUMETSAT colours, approximate)',
                       {
                         value: formatScaleLabel(label),
                       },
@@ -808,7 +810,7 @@ export function createWeatherLayer({
           : `${infoHeading}\n${infoTime}${missing ? `\n${missing}` : ''}${manifest?.stale ? `\n${t('STALE · cached source metadata')}` : ''}${shownProblem ? `\n${shownProblem}` : ''}\n${infoCoverage}${overlap ? `\n${t('Overlap 70°W–0°: NOAA and EUMETSAT lightning measure different things; colours are not comparable')}` : ''}${outside ? `\n${t('Map center is outside source coverage')}` : ''}${infoMotion ? `\n${infoMotion}` : ''}`,
         infoTitle: eu
           ? t(
-              "EUMETSAT MTG Lightning Imager accumulated flash area: a satellite camera sees the light of every flash, cloud-to-cloud and cloud-to-ground, about 15–20 minutes after it. Colours are EUMETSAT's; values approximate. Positions can drift after satellite manoeuvres and in eclipse season. Coverage 70°W–70°E, 70°S–70°N. Not a safety warning.",
+              "EUMETSAT MTG Lightning Imager accumulated flash area: a satellite camera sees the light of most flashes, cloud-to-cloud and cloud-to-ground; each 5-minute image is shown about 15–20 minutes later. Colours are EUMETSAT's; values approximate. Positions can drift after satellite manoeuvres and in eclipse season. Coverage 70°W–70°E, 70°S–70°N. Not a safety warning.",
             )
           : lightning
             ? t(

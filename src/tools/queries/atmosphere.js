@@ -148,7 +148,9 @@ export const getWeatherMap = defineTool({
         center.lon < bounds.west ||
         center.lon > bounds.east ||
         center.lat < bounds.south ||
-        center.lat > bounds.north
+        center.lat > bounds.north ||
+        // NOAA advertises a global box but has no data from 0° to 110°E.
+        (product === 'lightning' && !inNoaaLightning(center))
       )
         throw new ToolError(
           'invalid_arguments',
