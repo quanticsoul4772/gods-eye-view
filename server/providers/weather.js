@@ -102,7 +102,8 @@ const PRODUCTS_BY_ID = {
     // ECCC advertises the whole northern band (180°W–180°E, 18°N–90°N);
     // whole images use the 2:1 globe and coverage uses where radars are.
     bounds: Object.freeze({ west: -180, south: -90, east: 180, north: 90 }),
-    dataBounds: Object.freeze({ west: -171, south: 16, east: -49, north: 72 }),
+    // Where ECCC's radar coverage mask has data (170.1°W–50°W, 16.1°N–67°N).
+    dataBounds: Object.freeze({ west: -171, south: 16, east: -49, north: 68 }),
     times: 'interval',
     historyStep: 2,
     // GeoMet rejects fractional seconds in TIME.
@@ -304,7 +305,10 @@ function intervalTimes(value, keep) {
   if (!start || !end || !(minutes <= 60)) return [null];
   const step = minutes * 60_000;
   const span = Date.parse(end) - Date.parse(start);
-  if (span < 0 || span % step !== 0) return [null];
+  // The steps must sit on the clock grid of their own period: history shows
+  // a coarser grid of them, which an off-phase interval would never meet.
+  if (span < 0 || span % step !== 0 || Date.parse(end) % step !== 0)
+    return [null];
   const count = Math.min(keep, span / step + 1);
   return Array.from({ length: count }, (_, index) =>
     new Date(Date.parse(end) - (count - 1 - index) * step).toISOString(),

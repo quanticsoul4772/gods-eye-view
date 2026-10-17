@@ -81,8 +81,9 @@ export function weatherWindow(area, bounds) {
     areaRadiusKm(area) / KM_PER_DEGREE,
   );
   // Tall enough for the area's own box (wider in longitude away from the
-  // equator), plus one grid step: snapping the edges to 0.25° must not
-  // uncover part of the area.
+  // equator), plus two grid steps: snapping the south edge down to 0.25° can
+  // move the box up to one step away from the area, so one step of margin
+  // can still uncover its north edge.
   const height =
     snapUp(
       Math.max(
@@ -90,7 +91,8 @@ export function weatherWindow(area, bounds) {
         area.north - area.south,
         (area.east - area.west) / 2,
       ),
-    ) + SNAP_DEGREES;
+    ) +
+    2 * SNAP_DEGREES;
   const width = height * 2;
   if (width > bounds.east - bounds.west || height > bounds.north - bounds.south)
     return null;
@@ -171,6 +173,17 @@ export const getWeatherMap = defineTool({
         );
       mapBox = weatherWindow(area, bounds);
     }
+    // No area, and the product's image extent is padded wider than its data
+    // (ECCC's 2:1 globe, EUMETSAT's disc): show the data box, not the padding.
+    const coverage = weatherCoverage(snapshot);
+    if (!area && coverage && coverage !== snapshot.bounds) {
+      const lat = (coverage.south + coverage.north) / 2;
+      const lon = (coverage.west + coverage.east) / 2;
+      mapBox = weatherWindow(
+        { ...coverage, center: { lat, lon, radiusKm: 0 } },
+        snapshot.bounds,
+      );
+    }
     const image = await services.weatherMaps.getImage({
       product,
       time: snapshot.latest,
@@ -192,8 +205,8 @@ export const getWeatherMap = defineTool({
             ? { area, layers: [PRODUCT_LAYERS[product]] }
             : {
                 point: {
-                  lat: (snapshot.bounds.south + snapshot.bounds.north) / 2,
-                  lon: (snapshot.bounds.west + snapshot.bounds.east) / 2,
+                  lat: (coverage.south + coverage.north) / 2,
+                  lon: (coverage.west + coverage.east) / 2,
                 },
                 altitudeM: 8_000_000,
                 layers: [PRODUCT_LAYERS[product]],
