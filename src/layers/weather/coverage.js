@@ -8,6 +8,12 @@
 export const WEATHER_DATA_BOUNDS = Object.freeze({
   'lightning-eu': Object.freeze({ west: -70, south: -70, east: 70, north: 70 }),
   'radar-ca': Object.freeze({ west: -171, south: 16, east: -49, north: 68 }),
+  'precip-global': Object.freeze({
+    west: -180,
+    south: -90,
+    east: 180,
+    north: 90,
+  }),
 });
 
 /** The box a snapshot has data in: its advertised data bounds, else its bounds. */

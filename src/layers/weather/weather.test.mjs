@@ -2364,6 +2364,7 @@ test('rain radar switches between NOAA (US) and ECCC precipitation type (North A
     [
       ['radar', true],
       ['radar-ca', false],
+      ['precip-global', false],
     ],
   );
   h.layer.setParams({ product: 'radar-ca' });
@@ -2416,5 +2417,32 @@ test('switching the radar source while the layer is on drops the NOAA frame and 
   await flush();
   assert.deepEqual(asked, ['radar', 'radar-ca']);
   assert.equal(h.layer.getParams().product, 'radar-ca');
+  h.layer.destroy();
+});
+
+test('rain radar World source: NASA IMERG estimate with rain and snow legends, mm/h and an 8 h delay threshold', () => {
+  const h = layerHarness({ id: 'weather-radar' });
+  h.layer.setParams({ product: 'precip-global' });
+  assert.deepEqual(h.layer.getParams(), {
+    product: 'precip-global',
+    opacity: 'strong',
+  });
+  const controls = h.layer.getRowControls();
+  assert.equal(controls.legendCategorical, true);
+  assert.deepEqual(
+    controls.legend.map(({ label }) => label),
+    [
+      'Rain · 0.1–1 mm/h',
+      'Rain · 1–5 mm/h',
+      'Rain · 5+ mm/h',
+      'Snow · 0.1–1 mm/h',
+      'Snow · 1–5 mm/h',
+      'Snow · 5+ mm/h',
+    ],
+  );
+  assert.equal(controls.summary.units, 'mm/h');
+  assert.equal(controls.summary.label, 'Precipitation estimate · World');
+  assert.match(controls.infoTitle, /not radar/);
+  assert.equal(h.layer.getStats().source, 'NASA GIBS · GPM IMERG');
   h.layer.destroy();
 });

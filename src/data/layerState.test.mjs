@@ -2915,3 +2915,20 @@ test('rain radar source: NOAA by default (not encoded, old links unchanged); ECC
     'radar-ca',
   );
 });
+
+test('rain radar World source round-trips as v.p.g', () => {
+  const world = createDefaultLayerState();
+  world.enabledLayerIds = ['weather-radar'];
+  world.options['weather-radar'] = {
+    opacity: 'strong',
+    product: 'precip-global',
+  };
+  const encoded = encode(world);
+  assert.ok(encoded.includes('v.p.g'), encoded);
+  assert.equal(
+    decodeLayerStateParams(new URLSearchParams(encoded)).options[
+      'weather-radar'
+    ].product,
+    'precip-global',
+  );
+});

@@ -111,6 +111,40 @@ const PRODUCTS_BY_ID = {
     maxConcurrent: 4,
     image: Object.freeze({ width: 4096, height: 2048 }),
   }),
+  // NASA GPM IMERG Early (near-real-time) multi-satellite precipitation
+  // rate through NASA GIBS: a global estimate, not radar, about 6–7 h
+  // behind. GIBS's WMS capabilities are 2.5 MB, so times come from WMTS
+  // DescribeDomains (a few hundred bytes).
+  'precip-global': Object.freeze({
+    metadata: 'describeDomains',
+    domainsUrl:
+      'https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/1.0.0/IMERG_Precipitation_Rate_30min/default/2km/all/',
+    mapUrl: 'https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi',
+    layer: 'IMERG_Precipitation_Rate_30min',
+    style: '',
+    title: 'Precipitation estimate · World',
+    coverage:
+      'Global multi-satellite estimate; coverage thins toward the poles.',
+    description:
+      'NASA GPM IMERG Early precipitation rate (mm/h), each frame the 30-minute average starting at its time, about 6–7 hours behind; rain and snow on separate colour ramps; not radar and not a forecast.',
+    source: 'NASA GIBS · GPM IMERG',
+    attribution: 'NASA GPM IMERG via NASA GIBS',
+    metadataTtlMs: 600_000,
+    bounds: Object.freeze({ west: -180, south: -90, east: 180, north: 90 }),
+    times: 'interval',
+    historyStep: 1,
+    // GIBS rejects fractional seconds in TIME.
+    timeFormat: 'seconds',
+    // No strictTime: GIBS answers a gap or future time with a blank PNG and
+    // no warning, so the advertised allowedTimes are the only guard.
+    // GIBS's servers take about an hour to agree on a new step: the two
+    // newest alternate between the image and a blank one (2026-10-17), so
+    // they are held back until they settle.
+    settleSteps: 2,
+    maxConcurrent: 4,
+    // Near IMERG's 0.1° grid; 13 frames stay well inside the shared cache.
+    image: Object.freeze({ width: 2048, height: 1024 }),
+  }),
 };
 // Every product reads from fixed upstream URLs; nothing in a request chooses
 // the destination.
@@ -265,6 +299,13 @@ export function parseWeatherCapabilities(xml, product, nowMs = Date.now()) {
     (spec.times === 'interval' && defaultTime !== times.at(-1))
   )
     throw failure('invalid_weather_metadata');
+  return history(spec, times, nowMs, extent, bounds);
+}
+
+/** The recent, shown and allowed frames of a product's advertised times. */
+function history(spec, times, nowMs, extent, bounds) {
+  const step = spec.historyStep ?? 1;
+  const keep = Math.max(26, 13 * step - (step - 1));
   const recent = [...new Set(times)]
     .filter((value) => nowMs - Date.parse(value) <= 24 * HOUR)
     .sort()
@@ -313,6 +354,65 @@ function intervalTimes(value, keep) {
   return Array.from({ length: count }, (_, index) =>
     new Date(Date.parse(end) - (count - 1 - index) * step).toISOString(),
   );
+}
+
+/**
+ * Read a GIBS WMTS DescribeDomains document: the bounding box (attributes
+ * in any order) and the last `start/end/PT{n}M` interval of the time
+ * domain. GIBS writes a step at midnight as a bare date (`2026-10-17`).
+ * No time domain (`<Size>0</Size>`) means no recent observations.
+ */
+export function parseDescribeDomains(xml, product, nowMs = Date.now()) {
+  const spec = PRODUCTS[product];
+  if (
+    !spec ||
+    typeof xml !== 'string' ||
+    xml.length > 512 * 1024 ||
+    /<!DOCTYPE|<!ENTITY/i.test(xml)
+  )
+    throw failure('invalid_weather_metadata');
+  const box = xml.match(/<(?:[\w.-]+:)?BoundingBox\b([^>]*)\/?>/)?.[1] ?? '';
+  const attr = (name) =>
+    Number(box.match(new RegExp(`\\b${name}\\s*=\\s*["']([^"']+)["']`))?.[1]);
+  const bounds = {
+    west: attr('minx'),
+    south: attr('miny'),
+    east: attr('maxx'),
+    north: attr('maxy'),
+  };
+  if (
+    !Object.values(bounds).every(Number.isFinite) ||
+    bounds.west < -180 ||
+    bounds.east > 180 ||
+    bounds.south < -90 ||
+    bounds.north > 90 ||
+    bounds.west >= bounds.east ||
+    bounds.south >= bounds.north
+  )
+    throw failure('invalid_weather_metadata');
+  const domain = xml
+    .match(/<(?:[\w.-]+:)?Domain\s*>([^<]*)<\/(?:[\w.-]+:)?Domain>/)?.[1]
+    ?.trim();
+  if (!domain) throw failure('weather_observations_expired');
+  const parts = domain.split(',');
+  if (parts.length > 512) throw failure('invalid_weather_metadata');
+  const [start, end, period] = parts.at(-1).trim().split('/');
+  const midnight = (value) =>
+    /^\d{4}-\d{2}-\d{2}$/.test(value ?? '') ? `${value}T00:00:00Z` : value;
+  const step = spec.historyStep ?? 1;
+  const settle = spec.settleSteps ?? 0;
+  const advertised = intervalTimes(
+    `${midnight(start)}/${midnight(end)}/${period}`,
+    Math.max(26, 13 * step - (step - 1)) + settle,
+  );
+  if (
+    advertised.some((value) => !value || Date.parse(value) > nowMs + 5 * 60_000)
+  )
+    throw failure('invalid_weather_metadata');
+  const times = advertised.slice(0, settle ? -settle : undefined);
+  if (!times.length) throw failure('weather_observations_expired');
+  const extent = spec.bounds ? { ...spec.bounds } : bounds;
+  return history(spec, times, nowMs, extent, bounds);
 }
 
 /** A detail window `west,south,east,north` in degrees, rounded to 0.25° so cache
@@ -524,29 +624,44 @@ export function weatherProxy({
     if (old && now() - old.fetchedAt < (spec.metadataTtlMs ?? 120_000))
       return { ...old, stale: false };
     try {
+      const domains = spec.metadata === 'describeDomains';
+      const sharedKey = domains
+        ? `metadata:${product}`
+        : `metadata:${spec.capabilitiesUrl}`;
       if (
         now() - (attempts.get(product) ?? -Infinity) < 30_000 &&
-        !operations.has(`metadata:${spec.capabilitiesUrl}`)
+        !operations.has(sharedKey)
       )
         throw failure('weather_upstream_unavailable');
       attempts.set(product, now());
-      // A fixed URL that may carry its own query (GeoMet's `layer=`).
-      const capabilities = new URL(spec.capabilitiesUrl);
-      for (const [key, value] of Object.entries({
-        service: 'WMS',
-        version: '1.3.0',
-        request: 'GetCapabilities',
-      }))
-        capabilities.searchParams.set(key, value);
-      const url = capabilities.href;
+      let url;
+      if (domains) {
+        // The last 24 h, floored to 30 minutes so GIBS's own 30-minute
+        // cache answers repeats; the host and path are fixed.
+        const end = Math.floor(now() / (30 * 60_000)) * (30 * 60_000);
+        const iso = (ms) => new Date(ms).toISOString().replace('.000Z', 'Z');
+        url = `${spec.domainsUrl}${iso(end - 24 * HOUR)}--${iso(end)}.xml`;
+      } else {
+        // A fixed URL that may carry its own query (GeoMet's `layer=`).
+        const capabilities = new URL(spec.capabilitiesUrl);
+        for (const [key, value] of Object.entries({
+          service: 'WMS',
+          version: '1.3.0',
+          request: 'GetCapabilities',
+        }))
+          capabilities.searchParams.set(key, value);
+        url = capabilities.href;
+      }
       const xml = await shared(
-        `metadata:${spec.capabilitiesUrl}`,
+        sharedKey,
         (activeSignal) => upstream(url, activeSignal),
         signal,
         spec,
       );
       const value = {
-        ...parseWeatherCapabilities(xml, product, now()),
+        ...(domains
+          ? parseDescribeDomains(xml, product, now())
+          : parseWeatherCapabilities(xml, product, now())),
         fetchedAt: now(),
       };
       metadata.set(product, value);

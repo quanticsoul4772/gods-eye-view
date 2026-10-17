@@ -3053,5 +3053,19 @@
   "ECCC North American composite: precipitation type and intensity, every 6 minutes": "Mosaico norteamericano de ECCC: tipo e intensidad de la precipitación, cada 6 minutos",
   "NOAA MRMS reflectivity, contiguous US, about every 4 minutes": "Reflectividad MRMS de NOAA, EE. UU. contiguos, cada 4 minutos aprox.",
   "View North America": "Ver Norteamérica",
-  "ECCC North American 1 km radar composite classified by surface precipitation type and intensity, from dual-polarization radar, particle classification and model surface temperature; includes NOAA NEXRAD radars. Frames every 6 minutes; not a forecast or a storm warning.": "Mosaico radar norteamericano de 1 km de ECCC clasificado por tipo e intensidad de la precipitación en superficie, a partir de radar de doble polarización, clasificación de partículas y temperatura en superficie de un modelo; incluye radares NEXRAD de NOAA. Imágenes cada 6 minutos; no es un pronóstico ni un aviso de tormenta."
+  "ECCC North American 1 km radar composite classified by surface precipitation type and intensity, from dual-polarization radar, particle classification and model surface temperature; includes NOAA NEXRAD radars. Frames every 6 minutes; not a forecast or a storm warning.": "Mosaico radar norteamericano de 1 km de ECCC clasificado por tipo e intensidad de la precipitación en superficie, a partir de radar de doble polarización, clasificación de partículas y temperatura en superficie de un modelo; incluye radares NEXRAD de NOAA. Imágenes cada 6 minutos; no es un pronóstico ni un aviso de tormenta.",
+  "Rain · 0.1–1 mm/h": "Lluvia · 0,1–1 mm/h",
+  "Rain · 1–5 mm/h": "Lluvia · 1–5 mm/h",
+  "Rain · 5+ mm/h": "Lluvia · 5+ mm/h",
+  "Snow · 0.1–1 mm/h": "Nieve · 0,1–1 mm/h",
+  "Snow · 1–5 mm/h": "Nieve · 1–5 mm/h",
+  "Snow · 5+ mm/h": "Nieve · 5+ mm/h",
+  "SATELLITE PRECIPITATION · 30 min": "PRECIPITACIÓN POR SATÉLITE · 30 min",
+  "Global · satellite estimate, about 6–7 h behind": "Mundial · estimación por satélite, con 6–7 h de retraso",
+  "Precipitation estimate · World": "Estimación de precipitación · Mundo",
+  "Global (satellite)": "Mundial (satélite)",
+  "World · NASA IMERG": "Mundo · NASA IMERG",
+  "NASA GPM IMERG satellite precipitation estimate, worldwide, every 30 minutes, about 6–7 hours behind": "Estimación de precipitación por satélite NASA GPM IMERG, mundial, cada 30 minutos, con unas 6–7 horas de retraso",
+  "View world": "Ver el mundo",
+  "NASA GPM IMERG Early multi-satellite precipitation estimate, not radar: each frame is the 30-minute average starting at its time, about 6–7 hours behind, so recent history has no frame. Rain and snow use separate colour ramps; under 0.1 mm/h is not shown. Light rain and snow tend to be underestimated. Not a forecast.": "Estimación de precipitación multisatélite NASA GPM IMERG Early, no es radar: cada imagen es la media de 30 minutos que empieza a su hora, con unas 6–7 horas de retraso, así que el historial reciente no tiene imagen. La lluvia y la nieve usan escalas de color distintas; no se muestra por debajo de 0,1 mm/h. La lluvia y la nieve débiles tienden a subestimarse. No es un pronóstico."
 }

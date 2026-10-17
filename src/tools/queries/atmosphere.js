@@ -22,6 +22,7 @@ import {
 const MAPS = {
   radar: 'radar',
   radar_north_america: 'radar-ca',
+  precipitation_global: 'precip-global',
   satellite: 'clouds-regional',
   global_satellite: 'clouds',
   lightning: 'lightning',
@@ -34,6 +35,7 @@ const PRODUCT_LAYERS = {
   lightning: 'weather-lightning',
   'lightning-eu': 'lightning-eu',
   'radar-ca': 'weather-radar',
+  'precip-global': 'weather-radar',
 };
 
 /** NOAA's lightning: 110°E across the dateline to 0°, 25°S–80°N. */
@@ -128,6 +130,7 @@ export const getWeatherMap = defineTool({
   description:
     'The latest weather map image over an area: NOAA precipitation radar ' +
     '(contiguous US), ECCC precipitation type (radar_north_america: Canada and the US), ' +
+    'a worldwide NASA IMERG satellite precipitation estimate about 6-7 h old (precipitation_global), ' +
     'regional or global infrared satellite clouds, or ' +
     'lightning (NOAA in the Americas, EUMETSAT in Europe/Africa). Returns the image itself.',
   inputSchema: {

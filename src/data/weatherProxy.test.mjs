@@ -4,6 +4,7 @@ import { EventEmitter } from 'node:events';
 import {
   weatherProxy,
   parseWeatherCapabilities,
+  parseDescribeDomains,
   weatherImageBbox,
   weatherTileBounds,
 } from '../../server/providers/weather.js';
@@ -1432,4 +1433,124 @@ test('interval history: a newest step on the grid gives 13 grid frames; an inter
     () => parseWeatherCapabilities(offPhase, 'radar-ca', NOW),
     /invalid_weather_metadata/,
   );
+});
+
+// NASA IMERG through GIBS: times from WMTS DescribeDomains.
+const DOMAINS = (
+  domain,
+  box = "maxy='90' crs='urn:ogc:def:crs:OGC:2:84' maxx='180' miny='-90' minx='-180'",
+) =>
+  `<Domains xmlns:ows='http://www.opengis.net/ows/1.1'><SpaceDomain><BoundingBox ${box}/></SpaceDomain><DimensionDomain><ows:Identifier>time</ows:Identifier>${domain === null ? '' : `<Domain>${domain}</Domain>`}<Size>${domain === null ? 0 : 1}</Size></DimensionDomain></Domains>`;
+
+test('IMERG DescribeDomains: last interval, attributes in any order, midnight as a bare date, empty and malformed', () => {
+  const at = Date.parse('2026-09-16T12:00:00Z');
+  const parsed = parseDescribeDomains(
+    DOMAINS('2026-09-15T12:30:00Z/2026-09-16T06:30:00Z/PT30M'),
+    'precip-global',
+    at,
+  );
+  assert.equal(parsed.times.length, 13);
+  // The two newest steps (06:00, 06:30) are held back until GIBS settles.
+  assert.equal(parsed.times.at(-1), '2026-09-16T05:30:00.000Z');
+  assert.equal(parsed.times[0], '2026-09-15T23:30:00.000Z');
+  assert.deepEqual(parsed.bounds, {
+    west: -180,
+    south: -90,
+    east: 180,
+    north: 90,
+  });
+  const reordered = parseDescribeDomains(
+    DOMAINS(
+      '2026-09-15T12:30:00Z/2026-09-16T06:30:00Z/PT30M',
+      "minx='-180' miny='-90' maxx='180' maxy='90'",
+    ),
+    'precip-global',
+    at,
+  );
+  assert.deepEqual(reordered.bounds, parsed.bounds);
+  assert.equal(
+    parseDescribeDomains(
+      DOMAINS(
+        '2026-01-01T00:00:00Z/2026-01-22T00:00:00Z/PT30M,2026-09-16/2026-09-16T06:30:00Z/PT30M',
+      ),
+      'precip-global',
+      at,
+    ).allowedTimes[0],
+    '2026-09-16T00:00:00.000Z',
+    'a bare date is midnight, and only the last interval counts (no earlier steps than its start)',
+  );
+  assert.equal(
+    parseDescribeDomains(
+      DOMAINS('2026-09-15T12:30:00Z/2026-09-16/PT30M'),
+      'precip-global',
+      at,
+    ).times.at(-1),
+    '2026-09-15T23:00:00.000Z',
+    'a midnight end is 00:00, and the two newest steps are held back',
+  );
+  assert.throws(
+    () => parseDescribeDomains(DOMAINS(null), 'precip-global', at),
+    /weather_observations_expired/,
+  );
+  for (const text of [
+    DOMAINS('2026-09-15T12:30:00Z/2026-09-16T06:45:00Z/PT30M'),
+    DOMAINS(
+      '2026-09-15T12:30:00Z/2026-09-16T06:30:00Z/PT30M',
+      "minx='-999' miny='-90' maxx='180' maxy='90'",
+    ),
+    '<!DOCTYPE x>' + DOMAINS('2026-09-15T12:30:00Z/2026-09-16T06:30:00Z/PT30M'),
+    'x'.repeat(512 * 1024 + 1),
+  ])
+    assert.throws(
+      () => parseDescribeDomains(text, 'precip-global', at),
+      /invalid_weather_metadata/,
+    );
+});
+
+test('IMERG proxy: DescribeDomains window floored to 30 minutes on a fixed GIBS path; seconds-only TIME', async () => {
+  const at = Date.parse('2026-09-16T12:17:00Z');
+  const calls = [];
+  const { request } = install({
+    now: () => at,
+    fetchImpl: async (url) => {
+      calls.push(new URL(url));
+      return url.endsWith('.xml')
+        ? new Response(
+            DOMAINS('2026-09-15T12:30:00Z/2026-09-16T06:30:00Z/PT30M'),
+          )
+        : image(png(256, 256));
+    },
+  });
+  const manifest = body(await request('/manifest?product=precip-global'));
+  assert.equal(manifest.source, 'NASA GIBS · GPM IMERG');
+  assert.equal(manifest.times.length, 13);
+  assert.equal(
+    calls[0].href,
+    'https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/1.0.0/IMERG_Precipitation_Rate_30min/default/2km/all/2026-09-15T12:00:00Z--2026-09-16T12:00:00Z.xml',
+  );
+  const ok = await request(
+    tile({
+      product: 'precip-global',
+      time: '2026-09-16T05:30:00.000Z',
+      z: 1,
+      x: 1,
+      y: 0,
+    }),
+  );
+  assert.equal(ok.statusCode, 200);
+  const map = calls.at(-1);
+  assert.equal(
+    map.origin + map.pathname,
+    'https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi',
+  );
+  assert.equal(
+    map.searchParams.get('layers'),
+    'IMERG_Precipitation_Rate_30min',
+  );
+  assert.equal(
+    map.searchParams.get('time'),
+    '2026-09-16T05:30:00Z',
+    'GIBS rejects fractional seconds',
+  );
+  assert.ok(calls.every((url) => url.host === 'gibs.earthdata.nasa.gov'));
 });

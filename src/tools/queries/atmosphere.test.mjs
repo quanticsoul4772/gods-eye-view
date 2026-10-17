@@ -319,3 +319,21 @@ test('with no area, a padded product shows its data box, not the padding', async
   assert.equal((box.east - box.west) / (box.north - box.south), 2);
   assert.deepEqual(result.data.box, box);
 });
+
+test('precipitation_global maps to the NASA IMERG estimate anywhere', async () => {
+  const maps = weatherMaps({
+    bounds: { west: -180, south: -90, east: 180, north: 90 },
+    dataBounds: { west: -180, south: -90, east: 180, north: 90 },
+    coverage: 'Global multi-satellite estimate',
+  });
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: { weatherMaps: maps },
+  });
+  await catalog.call('get_weather_map', {
+    map: 'precipitation_global',
+    area: { lat: 1.35, lon: 103.8, radius_km: 100 },
+  });
+  assert.equal(maps.requests[0].product, 'precip-global');
+  assert.ok(maps.requests[0].bbox, 'a window around Singapore');
+});

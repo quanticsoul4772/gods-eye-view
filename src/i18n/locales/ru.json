@@ -3128,5 +3128,19 @@
   "ECCC North American composite: precipitation type and intensity, every 6 minutes": "Североамериканская мозаика ECCC: тип и интенсивность осадков, каждые 6 минут",
   "NOAA MRMS reflectivity, contiguous US, about every 4 minutes": "Отражаемость NOAA MRMS, континентальная часть США, примерно каждые 4 минуты",
   "View North America": "Показать Северную Америку",
-  "ECCC North American 1 km radar composite classified by surface precipitation type and intensity, from dual-polarization radar, particle classification and model surface temperature; includes NOAA NEXRAD radars. Frames every 6 minutes; not a forecast or a storm warning.": "Североамериканская радарная мозаика ECCC (1 км), классифицированная по типу и интенсивности осадков у поверхности по данным радаров с двойной поляризацией, классификации частиц и приземной температуре модели; включает радары NOAA NEXRAD. Кадры каждые 6 минут; не прогноз и не штормовое предупреждение."
+  "ECCC North American 1 km radar composite classified by surface precipitation type and intensity, from dual-polarization radar, particle classification and model surface temperature; includes NOAA NEXRAD radars. Frames every 6 minutes; not a forecast or a storm warning.": "Североамериканская радарная мозаика ECCC (1 км), классифицированная по типу и интенсивности осадков у поверхности по данным радаров с двойной поляризацией, классификации частиц и приземной температуре модели; включает радары NOAA NEXRAD. Кадры каждые 6 минут; не прогноз и не штормовое предупреждение.",
+  "Rain · 0.1–1 mm/h": "Дождь · 0,1–1 мм/ч",
+  "Rain · 1–5 mm/h": "Дождь · 1–5 мм/ч",
+  "Rain · 5+ mm/h": "Дождь · 5+ мм/ч",
+  "Snow · 0.1–1 mm/h": "Снег · 0,1–1 мм/ч",
+  "Snow · 1–5 mm/h": "Снег · 1–5 мм/ч",
+  "Snow · 5+ mm/h": "Снег · 5+ мм/ч",
+  "SATELLITE PRECIPITATION · 30 min": "СПУТНИКОВЫЕ ОСАДКИ · 30 мин",
+  "Global · satellite estimate, about 6–7 h behind": "Весь мир · спутниковая оценка, отставание около 6–7 ч",
+  "Precipitation estimate · World": "Оценка осадков · Мир",
+  "Global (satellite)": "Весь мир (спутник)",
+  "World · NASA IMERG": "Мир · NASA IMERG",
+  "NASA GPM IMERG satellite precipitation estimate, worldwide, every 30 minutes, about 6–7 hours behind": "Спутниковая оценка осадков NASA GPM IMERG, весь мир, каждые 30 минут, отставание около 6–7 часов",
+  "View world": "Показать мир",
+  "NASA GPM IMERG Early multi-satellite precipitation estimate, not radar: each frame is the 30-minute average starting at its time, about 6–7 hours behind, so recent history has no frame. Rain and snow use separate colour ramps; under 0.1 mm/h is not shown. Light rain and snow tend to be underestimated. Not a forecast.": "Мультиспутниковая оценка осадков NASA GPM IMERG Early, не радар: каждый кадр — среднее за 30 минут, начиная с его времени, с отставанием около 6–7 часов, поэтому для недавней истории кадров нет. Дождь и снег показаны разными цветовыми шкалами; меньше 0,1 мм/ч не отображается. Слабый дождь и снег обычно занижаются. Не прогноз."
 }
