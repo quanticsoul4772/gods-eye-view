@@ -247,6 +247,43 @@ test('a stale or degraded radio directory is reported', async () => {
   assert.equal(result.data.degraded, true);
 });
 
+test('an empty camera search names a pack that is switched off there', async () => {
+  const nyc = {
+    pack: 'NYC DOT',
+    region: { south: 40.49, west: -74.26, north: 40.92, east: -73.7 },
+    enable:
+      "set CCTV_NYC_ENABLED=1; NYC DOT's feed needs a data-sharing agreement",
+  };
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: {
+      cctv: {
+        getCatalog: async () => ({
+          trimmedPacks: [],
+          offPacks: [nyc],
+          sources: [],
+        }),
+      },
+    },
+  });
+  const timesSquare = await catalog.call('find_cctv_cameras', {
+    area: { lat: 40.758, lon: -73.9855, radius_km: 2 },
+  });
+  assert.equal(timesSquare.data.total, 0);
+  assert.equal(timesSquare.data.complete, false);
+  assert.deepEqual(timesSquare.data.catalog_off, [nyc]);
+  assert.match(
+    timesSquare.summary,
+    /NYC DOT cameras cover this area but that pack is off \(set CCTV_NYC_ENABLED=1; NYC DOT's feed needs a data-sharing agreement\)\.$/,
+  );
+  // Elsewhere the off pack is not mentioned.
+  const london = await catalog.call('find_cctv_cameras', {
+    area: { lat: 51.51, lon: -0.12, radius_km: 5 },
+  });
+  assert.doesNotMatch(london.summary, /NYC/);
+  assert.deepEqual(london.data.catalog_off, []);
+});
+
 test('cameras from a trimmed catalog pack are reported as partial', async () => {
   const catalog = composeCatalog({
     tools: coreTools,

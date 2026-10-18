@@ -29,6 +29,8 @@ async function readCatalog(services, signal) {
     ),
     // Regional packs the catalog serves only part of, nearest their centers.
     trimmed: Array.isArray(payload.trimmedPacks) ? payload.trimmedPacks : [],
+    // Packs switched off here, with where their cameras would be.
+    off: Array.isArray(payload.offPacks) ? payload.offPacks : [],
   };
 }
 
@@ -77,6 +79,9 @@ export const findCctvCameras = defineTool({
     const trimmed = catalog.trimmed.filter((entry) =>
       entry.region ? boxesOverlap(area, entry.region) : packs.has(entry.pack),
     );
+    const off = catalog.off.filter(
+      (entry) => entry.region && boxesOverlap(area, entry.region),
+    );
     const rows = found
       .map((camera) => ({
         id: camera.id,
@@ -105,12 +110,20 @@ export const findCctvCameras = defineTool({
                   `${entry.served} of ${entry.available} from ${entry.pack}`,
               )
               .join(', ')}).`
-          : '.'),
+          : '.') +
+        // A pack switched off here is why the catalog may have nothing.
+        off
+          .map(
+            (entry) =>
+              ` ${entry.pack} cameras cover this area but that pack is off (${entry.enable}).`,
+          )
+          .join(''),
       data: {
         view: suggestView(services, { area, layers: ['cctv'] }),
         ...capRows(rows, args.limit),
-        complete: trimmed.length === 0,
+        complete: trimmed.length === 0 && off.length === 0,
         catalog_trimmed: trimmed,
+        catalog_off: off,
       },
     };
   },

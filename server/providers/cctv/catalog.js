@@ -53,76 +53,130 @@ const LIVE_PACKS = [
   {
     name: 'tfl',
     enabled: () => envEnabled('CCTV_TFL_ENABLED'),
+    label: 'Transport for London JamCams',
+    area: { south: 51.28, west: -0.51, north: 51.69, east: 0.33 },
+    offHint: 'CCTV_TFL_ENABLED is set to 0; remove it to turn the pack on',
     load: loadTflSourcesFromOpenData,
   },
   {
     name: 'ontario',
     enabled: () => envEnabled('CCTV_ONTARIO_ENABLED'),
+    // The 511on.ca API needs a developer key; without it the pack is empty.
+    unavailable: () =>
+      String(process.env.ONTARIO_511_API_KEY ?? '').trim()
+        ? null
+        : 'set ONTARIO_511_API_KEY (a free 511on.ca developer key)',
+    label: 'Ontario 511',
+    area: { south: 41.6, west: -95.2, north: 56.9, east: -74.3 },
+    offHint: 'CCTV_ONTARIO_ENABLED is set to 0; remove it to turn the pack on',
     load: loadOntarioSourcesFromOpenData,
   },
   {
     name: 'fintraffic',
     enabled: () => envEnabled('CCTV_FINTRAFFIC_ENABLED'),
+    label: 'Fintraffic (Finland)',
+    area: { south: 59.7, west: 20.5, north: 70.1, east: 31.6 },
+    offHint:
+      'CCTV_FINTRAFFIC_ENABLED is set to 0; remove it to turn the pack on',
     load: loadFintrafficSourcesFromOpenData,
   },
   {
     name: 'drivebc',
     enabled: () => envEnabled('CCTV_DRIVEBC_ENABLED'),
+    label: 'DriveBC (British Columbia)',
+    area: { south: 48.2, west: -139.1, north: 60.0, east: -114.0 },
+    offHint: 'CCTV_DRIVEBC_ENABLED is set to 0; remove it to turn the pack on',
     load: loadDriveBcSourcesFromOpenData,
   },
   {
     name: 'txdot',
     enabled: () => envEnabled('CCTV_TXDOT_ENABLED'),
+    label: 'TxDOT (Texas)',
+    area: { south: 25.8, west: -106.7, north: 36.5, east: -93.5 },
+    offHint: 'CCTV_TXDOT_ENABLED is set to 0; remove it to turn the pack on',
     load: loadTxdotSourcesFromOpenData,
   },
   {
     name: 'tallinn',
     enabled: () => envEnabled('CCTV_TALLINN_ENABLED'),
+    label: 'City of Tallinn',
+    area: { south: 59.35, west: 24.55, north: 59.5, east: 24.95 },
+    offHint: 'CCTV_TALLINN_ENABLED is set to 0; remove it to turn the pack on',
     load: loadTallinnSourcesFromCatalog,
   },
   {
     name: 'tarktee',
     enabled: () => envEnabled('CCTV_TARKTEE_ENABLED'),
+    label: 'Transpordiamet (Estonia)',
+    area: { south: 57.5, west: 21.7, north: 59.7, east: 28.2 },
+    offHint: 'CCTV_TARKTEE_ENABLED is set to 0; remove it to turn the pack on',
     load: loadTarkteeSourcesFromDatex,
   },
   {
     name: 'warendorf',
     enabled: () => envEnabled('CCTV_WARENDORF_ENABLED'),
+    label: 'Stadt Warendorf',
+    area: { south: 51.9, west: 7.9, north: 52.0, east: 8.1 },
+    offHint:
+      'CCTV_WARENDORF_ENABLED is set to 0; remove it to turn the pack on',
     load: loadWarendorfSourcesFromCatalog,
   },
   {
     name: 'nsw',
     enabled: () => envEnabled('CCTV_NSW_ENABLED'),
+    label: 'Live Traffic NSW',
+    area: { south: -37.6, west: 140.9, north: -28.1, east: 153.7 },
+    offHint: 'CCTV_NSW_ENABLED is set to 0; remove it to turn the pack on',
     load: loadNswSourcesFromOpenData,
   },
   {
     name: 'calgary',
     enabled: () => envEnabled('CCTV_CALGARY_ENABLED'),
+    label: 'City of Calgary',
+    area: { south: 50.8, west: -114.35, north: 51.25, east: -113.85 },
+    offHint: 'CCTV_CALGARY_ENABLED is set to 0; remove it to turn the pack on',
     load: loadCalgarySourcesFromOpenData,
   },
   {
     name: 'catalonia',
     enabled: () => envEnabled('CCTV_CATALONIA_ENABLED'),
+    label: 'Servei Català de Trànsit',
+    area: { south: 40.5, west: 0.15, north: 42.9, east: 3.35 },
+    offHint:
+      'CCTV_CATALONIA_ENABLED is set to 0; remove it to turn the pack on',
     load: loadCataloniaSourcesFromOpenData,
   },
   {
     name: 'deldot',
     enabled: () => envEnabled('CCTV_DELDOT_ENABLED'),
+    label: 'DelDOT (Delaware)',
+    area: { south: 38.45, west: -75.8, north: 39.85, east: -75.0 },
+    offHint: 'CCTV_DELDOT_ENABLED is set to 0; remove it to turn the pack on',
     load: loadDelDOTSourcesFromOpenData,
   },
   {
     name: 'kingcounty',
     enabled: () => envEnabled('CCTV_KINGCOUNTY_ENABLED'),
+    label: 'King County Road Services',
+    area: { south: 47.08, west: -122.55, north: 47.78, east: -121.06 },
+    offHint:
+      'CCTV_KINGCOUNTY_ENABLED is set to 0; remove it to turn the pack on',
     load: loadKingCountySourcesFromOpenData,
   },
   {
     name: 'wsdot',
     enabled: () => envEnabled('CCTV_WSDOT_ENABLED'),
+    label: 'WSDOT (Washington)',
+    area: { south: 45.5, west: -124.8, north: 49.0, east: -116.9 },
+    offHint: 'CCTV_WSDOT_ENABLED is set to 0; remove it to turn the pack on',
     load: loadWsdotSourcesFromOpenData,
   },
   {
     name: 'vegvesen',
     enabled: () => envEnabled('CCTV_VEGVESEN_ENABLED'),
+    label: 'Statens vegvesen (Norway)',
+    area: { south: 57.9, west: 4.5, north: 71.2, east: 31.1 },
+    offHint: 'CCTV_VEGVESEN_ENABLED is set to 0; remove it to turn the pack on',
     load: loadVegvesenSourcesFromOpenData,
   },
   {
@@ -130,11 +184,18 @@ const LIVE_PACKS = [
     // off unless the operator opts in (see DATA_SOURCES.md).
     name: 'nyc',
     enabled: () => envOptIn('CCTV_NYC_ENABLED'),
+    label: 'NYC DOT',
+    area: { south: 40.49, west: -74.26, north: 40.92, east: -73.7 },
+    offHint:
+      "set CCTV_NYC_ENABLED=1; NYC DOT's feed needs a data-sharing agreement",
     load: loadNycSourcesFromOpenData,
   },
   {
     name: 'toronto',
     enabled: () => envEnabled('CCTV_TORONTO_ENABLED'),
+    label: 'City of Toronto RESCU',
+    area: { south: 43.58, west: -79.64, north: 43.86, east: -79.11 },
+    offHint: 'CCTV_TORONTO_ENABLED is set to 0; remove it to turn the pack on',
     load: loadTorontoSourcesFromOpenData,
   },
   {
@@ -142,9 +203,28 @@ const LIVE_PACKS = [
     // camera photos (see DATA_SOURCES.md).
     name: 'lithuania',
     enabled: () => envOptIn('CCTV_LITHUANIA_ENABLED'),
+    label: 'Via Lietuva (Lithuania)',
+    area: { south: 53.9, west: 20.9, north: 56.5, east: 26.9 },
+    offHint: 'set CCTV_LITHUANIA_ENABLED=1; the photo terms are unconfirmed',
     load: loadLithuaniaSources,
   },
 ];
+/**
+ * Camera packs that are switched off here, with where their cameras would be
+ * and what turns them on, so an empty camera search can say why instead of
+ * implying no cameras exist.
+ * @returns {Array<{pack: string, region: object, enable: string}>}
+ */
+export function cctvOffPacks() {
+  return LIVE_PACKS.filter(
+    (pack) => pack.area && (!pack.enabled() || pack.unavailable?.()),
+  ).map((pack) => ({
+    pack: pack.label,
+    region: pack.area,
+    enable: !pack.enabled() ? pack.offHint : pack.unavailable(),
+  }));
+}
+
 /**
  * Load CCTV sources from a local JSON file (CCTV_SOURCES_FILE env or default).
  *
