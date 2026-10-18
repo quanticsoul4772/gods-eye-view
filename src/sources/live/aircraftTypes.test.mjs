@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createAircraftTypeLookup } from './aircraftTypes.js';
+import { BATCH_IDS, createAircraftTypeLookup } from './aircraftTypes.js';
+import { createFlightSource } from './standalone.js';
 
 const aircraft = (id, extra = {}) => ({
   id,
@@ -112,4 +113,66 @@ test('an aborted snapshot request rejects instead of filling', async () => {
     lookup.fill([aircraft('a1b2c3')], { signal: controller.signal }),
     { name: 'AbortError' },
   );
+});
+
+test('a snapshot larger than one request is asked about in batches', async () => {
+  const { requests, fetchImpl } = server({ '000001': ['B738', 'N1'] });
+  const lookup = createAircraftTypeLookup({ fetchImpl });
+  const records = Array.from({ length: BATCH_IDS + 1 }, (_, i) =>
+    aircraft(i.toString(16).padStart(6, '0')),
+  );
+  await lookup.fill(records);
+  assert.deepEqual(
+    requests.map((ids) => ids.length),
+    [BATCH_IDS, 1],
+  );
+  assert.equal(records[1].typeCode, 'B738');
+});
+
+test('one address is looked up once, a miss reads as unknown', async () => {
+  const { requests, fetchImpl } = server({ a1b2c3: ['B738', 'N123AB'] });
+  const lookup = createAircraftTypeLookup({ fetchImpl });
+  assert.deepEqual(await lookup.lookup('A1B2C3'), {
+    typeCode: 'B738',
+    registration: 'N123AB',
+    typeName: 'BOEING 737-800',
+  });
+  assert.equal(await lookup.lookup('ffffff'), null);
+  await lookup.lookup('a1b2c3');
+  await lookup.lookup('ffffff');
+  assert.equal(await lookup.lookup('not-hex'), null);
+  assert.deepEqual(requests, [['a1b2c3'], ['ffffff']]);
+});
+
+test('type enrichment asks the database first and adsbdb only for its misses', async () => {
+  const urls = [];
+  const fetchImpl = async (url, init) => {
+    urls.push(url);
+    if (url === '/api/aircraft-types') {
+      const { ids } = JSON.parse(init.body);
+      return Response.json({
+        aircraft: ids.includes('a1b2c3') ? { a1b2c3: ['B738', 'N123AB'] } : {},
+        typeNames: { B738: 'Boeing 737-800' },
+      });
+    }
+    return Response.json({ found: true, typeCode: 'C172', typeName: null });
+  };
+  const source = createFlightSource({ fetchImpl });
+  assert.deepEqual(await source.getEnrichment({ kind: 'type', id: 'a1b2c3' }), {
+    found: true,
+    typeCode: 'B738',
+    registration: 'N123AB',
+    typeName: 'Boeing 737-800',
+  });
+  assert.equal(
+    (await source.getEnrichment({ kind: 'type', id: 'ffffff' })).typeCode,
+    'C172',
+  );
+  await source.getEnrichment({ kind: 'route', id: 'UAL1' });
+  assert.deepEqual(urls, [
+    '/api/aircraft-types',
+    '/api/aircraft-types',
+    '/api/adsbdb/type/ffffff',
+    '/api/adsbdb/route/UAL1',
+  ]);
 });

@@ -383,7 +383,7 @@ export const getAircraftInfo = defineTool({
   title: 'Aircraft type and route',
   description:
     'Look up an aircraft type and registration by ICAO 24-bit address, and ' +
-    'a flight route by callsign, from adsbdb. Give either or both.',
+    'a flight route by callsign. Give either or both.',
   inputSchema: {
     type: 'object',
     properties: { icao24: ICAO24_SCHEMA, callsign: CALLSIGN_SCHEMA },

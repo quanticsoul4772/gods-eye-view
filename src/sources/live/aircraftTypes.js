@@ -11,6 +11,8 @@
 const RETRY_MS = 60_000;
 /** Forget addresses no longer in the feed once the memory passes this. */
 const MAX_REMEMBERED = 50_000;
+/** The most ids the server takes in one request (its MAX_IDS). */
+export const BATCH_IDS = 20_000;
 
 export function createAircraftTypeLookup({
   fetchImpl = (...args) => globalThis.fetch(...args),
@@ -20,7 +22,7 @@ export function createAircraftTypeLookup({
   const known = new Map();
   let retryAt = 0;
 
-  async function request(ids, signal) {
+  async function requestBatch(ids, signal) {
     const response = await fetchImpl('/api/aircraft-types', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -46,7 +48,38 @@ export function createAircraftTypeLookup({
     }
   }
 
+  /** Ask about ids in batches the server accepts; one failure stops the rest. */
+  async function request(ids, signal) {
+    for (let start = 0; start < ids.length; start += BATCH_IDS)
+      await requestBatch(ids.slice(start, start + BATCH_IDS), signal);
+  }
+
+  /** Ask about ids not yet known, unless a failure's retry time hasn't come. */
+  async function ask(ids, signal) {
+    const unknown = [...new Set(ids)].filter((id) => !known.has(id));
+    if (!unknown.length || now() < retryAt) return;
+    try {
+      await request(unknown, signal);
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      retryAt = now() + (error.retryMs ?? RETRY_MS);
+    }
+  }
+
   return {
+    /**
+     * Type, name and registration for one address, or null when the database
+     * doesn't know it or can't answer now (the caller may ask elsewhere).
+     */
+    async lookup(id, { signal } = {}) {
+      const hex = String(id ?? '').toLowerCase();
+      if (!/^[0-9a-f]{6}$/.test(hex)) return null;
+      await ask([hex], signal);
+      const entry = known.get(hex);
+      return entry
+        ? { typeCode: entry[0], registration: entry[1], typeName: entry[2] }
+        : null;
+    },
     /**
      * Fill `typeCode`, `typeName` and `registration` on records that lack a
      * type, in place. Records whose feed already reported a type keep it.
@@ -55,19 +88,10 @@ export function createAircraftTypeLookup({
       const untyped = records.filter(
         (record) => !record.typeCode && /^[0-9a-f]{6}$/.test(record.id),
       );
-      const ids = [
-        ...new Set(
-          untyped.map((record) => record.id).filter((id) => !known.has(id)),
-        ),
-      ];
-      if (ids.length && now() >= retryAt) {
-        try {
-          await request(ids, signal);
-        } catch (error) {
-          if (signal?.aborted) throw error;
-          retryAt = now() + (error.retryMs ?? RETRY_MS);
-        }
-      }
+      await ask(
+        untyped.map((record) => record.id),
+        signal,
+      );
       for (const record of untyped) {
         const entry = known.get(record.id);
         if (!entry) continue;

@@ -11,6 +11,7 @@ import {
   buildTypeIndex,
   createAircraftTypeDatabase,
   parseTypeDatabase,
+  readableTypeName,
 } from './types.js';
 
 const AIRCRAFTS = {
@@ -116,12 +117,12 @@ test('the index answers type, name and registration by address, any case', () =>
   assert.equal(index.size, 5);
   assert.deepEqual(index.lookup('a835af'), {
     typeCode: 'GLF6',
-    typeName: 'GULFSTREAM AEROSPACE G-650',
+    typeName: 'Gulfstream Aerospace G-650',
     registration: 'N628TS',
   });
   assert.deepEqual(index.lookup('3C6444'), {
     typeCode: 'A319',
-    typeName: 'AIRBUS A-319',
+    typeName: 'Airbus A-319',
     registration: 'D-AIBD',
   });
   // First and last rows in sorted order, a type with no name, no registration.
@@ -136,6 +137,22 @@ test('the index answers type, name and registration by address, any case', () =>
   assert.equal(index.lookup('123456'), null, 'unknown address');
   assert.equal(index.lookup('zzzzzz'), null, 'not hex');
   assert.equal(index.lookup(undefined), null);
+});
+
+test('type names read as names, abbreviations kept', () => {
+  const cases = {
+    'BOEING 737-800': 'Boeing 737-800',
+    'BOEING 737 MAX 8': 'Boeing 737 MAX 8',
+    'DE HAVILLAND DHC-8-400 Dash 8': 'de Havilland DHC-8-400 Dash 8',
+    'MCDONNELL-DOUGLAS MD-11': 'McDonnell-Douglas MD-11',
+    'ANTONOV An-124 Ruslan': 'Antonov An-124 Ruslan',
+    'ATR-72-600': 'ATR-72-600',
+    'AIR TRACTOR AT-802': 'Air Tractor AT-802',
+    'IAI Westwind': 'IAI Westwind',
+    ' EMBRAER ERJ-170-200 (long wing) ': 'Embraer ERJ-170-200 (long wing)',
+  };
+  for (const [raw, readable] of Object.entries(cases))
+    assert.equal(readableTypeName(raw), readable, raw);
 });
 
 test('the export is read from its zip, and an empty one is refused', async () => {
@@ -340,8 +357,8 @@ test('the route answers known addresses with their type names', async () => {
       ae0001: ['C17', null],
     },
     typeNames: {
-      GLF6: 'GULFSTREAM AEROSPACE G-650',
-      A319: 'AIRBUS A-319',
+      GLF6: 'Gulfstream Aerospace G-650',
+      A319: 'Airbus A-319',
     },
   });
 });
