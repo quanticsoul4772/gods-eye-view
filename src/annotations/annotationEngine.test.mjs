@@ -14,6 +14,8 @@ import { createStandalonePlaceSearch } from '../standalone/placeSearch.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  airPath,
+  circleRing,
   createAnnotationEngine,
   resolveOutlineWithRetry,
   normalizeTargetKey,
@@ -729,4 +731,93 @@ test('only an explicit navigation request permits resolving distant annotation t
   await engine.annotate([{ type: 'point', target: 'Remote landmark' }], { flyTo: true });
   assert.deepEqual(received.map(options => options.allowDistant), [false, true]);
   engine.destroy();
+});
+
+const haversineM = (a, b) => {
+  const r = (d) => (d * Math.PI) / 180;
+  const h =
+    Math.sin(r(b.lat - a.lat) / 2) ** 2 +
+    Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(r(b.lon - a.lon) / 2) ** 2;
+  return 2 * 6371000 * Math.asin(Math.min(1, Math.sqrt(h)));
+};
+const PLACES = {
+  Houston: { lon: -95.3698, lat: 29.7604 },
+  Oakland: { lon: -122.2711, lat: 37.8044 },
+  'San Jose': { lon: -121.8863, lat: 37.3382 },
+};
+const placeResolver = (seen = []) => async (options) => {
+  seen.push(options);
+  const place = PLACES[options.target];
+  return place
+    ? { ...place, height: 0, label: options.target, source: 'fake', ring: null }
+    : null;
+};
+
+test('a circle is a closed ring at the asked radius around the place', () => {
+  const ring = circleRing(PLACES.Houston, 50_000);
+  assert.deepEqual(ring[0], ring.at(-1), 'closed');
+  for (const [lon, lat] of ring)
+    assert.ok(Math.abs(haversineM(PLACES.Houston, { lon, lat }) - 50_000) < 50);
+});
+
+test('"a 50 km circle around Houston" draws that circle, not a pending outline', async (t) => {
+  installAnimationFrameStubs(t);
+  const { renderer } = fakeRenderer();
+  const seen = [];
+  const engine = createAnnotationEngine({ viewer: {}, renderer, resolveTarget: placeResolver(seen) });
+  const result = await engine.annotate([{ type: 'area', target: 'Houston', radiusKm: 50 }]);
+  assert.equal(result.drawn, 1);
+  const [mark] = engine.list();
+  assert.equal(mark.ring.length, 73);
+  assert.equal(mark.synthesized, false);
+  assert.equal(mark.outlineUnavailable, false);
+  assert.equal(mark.pendingOutline, false);
+  assert.equal(seen[0].footprint, false, 'no outline is looked up for a circle');
+  const [lon, lat] = mark.ring[18];
+  assert.ok(Math.abs(haversineM(PLACES.Houston, { lon, lat }) - 50_000) < 50);
+});
+
+test('a flying route is the direct great-circle path, with no street routing', async (t) => {
+  installAnimationFrameStubs(t);
+  const { renderer } = fakeRenderer();
+  const placeSearch = { route: () => assert.fail('a flying route must not ask for streets') };
+  const engine = createAnnotationEngine({
+    viewer: {},
+    renderer,
+    placeSearch,
+    resolveTarget: placeResolver(),
+  });
+  const result = await engine.annotate([
+    {
+      type: 'route',
+      mode: 'flying',
+      label: 'Oakland to San Jose',
+      points: [{ target: 'Oakland' }, { target: 'San Jose' }],
+    },
+  ]);
+  assert.equal(result.drawn, 1);
+  const [route] = engine.list();
+  assert.equal(route.mode, 'air');
+  assert.equal(route.durationS, null);
+  assert.match(route.label, /direct flight/);
+  const direct = haversineM(PLACES.Oakland, PLACES['San Jose']);
+  assert.ok(Math.abs(route.distanceM - direct) < 1);
+  assert.deepEqual(
+    [route.path[0].lon, route.path[0].lat, route.path.at(-1).lon, route.path.at(-1).lat],
+    [PLACES.Oakland.lon, PLACES.Oakland.lat, PLACES['San Jose'].lon, PLACES['San Jose'].lat],
+  );
+  // About one vertex per kilometre, each on the great circle.
+  assert.ok(route.path.length >= 60 && route.path.length <= 70, `${route.path.length} vertices`);
+  for (const point of route.path) {
+    const viaPoint = haversineM(PLACES.Oakland, point) + haversineM(point, PLACES['San Jose']);
+    assert.ok(viaPoint - direct < 1, 'vertex off the great circle');
+  }
+});
+
+test('a long air path keeps at most 400 vertices', () => {
+  const path = airPath([
+    { lon: -0.4543, lat: 51.47 },
+    { lon: -73.7781, lat: 40.6413 },
+  ]);
+  assert.ok(path.length <= 401, `${path.length}`);
 });

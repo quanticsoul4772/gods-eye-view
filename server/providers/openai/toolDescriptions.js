@@ -435,9 +435,14 @@ export const ACTION_DESCRIPTIONS = {
                   },
                 },
               },
+              radiusKm: {
+                description:
+                  'For type=area: draw a circle of this radius around the target ("a 50 km circle around Houston"). For "a circle around X" with no size, pick one that fits the place.',
+                $position: 2,
+              },
               mode: {
                 description:
-                  'For type=route: travel mode for a real street-following route (the app returns distance + time). Pick from the verb the user used ("walk" → walking, "drive" → driving). Defaults to walking.',
+                  'For type=route: walking, driving or cycling follow the streets (the app returns distance + time); flying is the direct path at altitude. Pick from the verb ("walk" → walking, "drive" → driving, "fly" → flying). To fly a route between places, use flying unless they asked for street directions. Defaults to walking.',
                 $position: 2,
               },
               latitude: {
@@ -532,7 +537,7 @@ export const ACTION_DESCRIPTIONS = {
   },
   fly_route: {
     description:
-      'Cinematic dolly along an EXISTING route annotation (drawn earlier with annotate_map type=route) — flies the street-following path from start to end. Omit label for the newest route. If no route is drawn, this fails with guidance: draw the route first.',
+      'Cinematic flight along an EXISTING route annotation (drawn earlier with annotate_map type=route): low along the streets for walking/driving/cycling, at altitude for a flying route. Omit label for the newest route. If no route is drawn, this fails with guidance: draw the route first.',
     $position: 1,
     parameters: {
       properties: {

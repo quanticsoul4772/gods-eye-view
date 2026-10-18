@@ -633,7 +633,7 @@ const schemas = [
               },
               mode: {
                 type: 'string',
-                enum: ['walking', 'driving', 'cycling'],
+                enum: ['walking', 'driving', 'cycling', 'flying'],
               },
               latitude: {
                 type: 'number',
@@ -669,6 +669,11 @@ const schemas = [
               },
               footprint: {
                 type: 'boolean',
+              },
+              radiusKm: {
+                type: 'number',
+                minimum: 0.05,
+                maximum: 2000,
               },
               intent: {
                 type: 'string',

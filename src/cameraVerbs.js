@@ -572,6 +572,214 @@ export function probeMeshFloorM(scene, cells) {
   return { heightM, sampled, requested };
 }
 
+// -- Air routes --
+// A flying route (annotate_map mode=flying) is flown as an aircraft would: a
+// level cruise along the great-circle path, high enough to see the way ahead.
+// It does not hug the ground, so it needs one terrain lookup per flight (to
+// clear high ground) instead of the street dolly's per-second corridor warm.
+const AIR_ROUTE_M_S = { slow: 150, normal: 300, fast: 700 };
+/** Cruise height grows with distance, within these bounds (metres). */
+const AIR_ROUTE_MIN_HEIGHT_M = 1500;
+const AIR_ROUTE_MAX_HEIGHT_M = 12000;
+const AIR_ROUTE_HEIGHT_PER_M = 0.05;
+/** Clearance kept over the highest ground sampled along the path. */
+const AIR_ROUTE_TERRAIN_CLEARANCE_M = 1200;
+/** Ground samples taken once, evenly along the path. */
+const AIR_ROUTE_TERRAIN_CELLS = 24;
+const AIR_ROUTE_PITCH_DEG = -25;
+const AIR_ROUTE_LOOKAHEAD_S = 8;
+const AIR_ROUTE_HEIGHT_RATE = 0.6;
+
+/**
+ * Build the state for a flight along a flying route.
+ * @param {Object} options
+ * @param {Cesium.Cartesian3[]} options.pts Route vertices (great-circle path).
+ * @param {number[]} options.cumM Cumulative arc length per vertex.
+ * @param {string} [options.speed] slow | normal | fast.
+ * @param {Function|null} [options.floorFn] (latDeg, lonDeg) => cached ground metres.
+ * @param {Function|null} [options.warmFn] (cells) => void, asks for those cells once.
+ * @returns {Object} Motion state for advanceRouteFlight().
+ */
+export function createAirRouteFlight({
+  pts,
+  cumM,
+  speed = 'normal',
+  floorFn = null,
+  warmFn = null,
+  reducedMotion = false,
+}) {
+  const totalM = cumM[cumM.length - 1];
+  const cruiseMps = AIR_ROUTE_M_S[speed] || AIR_ROUTE_M_S.normal;
+  const durationS = Math.max(2, totalM / cruiseMps);
+  const cruiseHeightM = Math.min(
+    AIR_ROUTE_MAX_HEIGHT_M,
+    Math.max(AIR_ROUTE_MIN_HEIGHT_M, totalM * AIR_ROUTE_HEIGHT_PER_M),
+  );
+  const state = {
+    kind: 'route',
+    air: true,
+    mode: 'continuous',
+    direction: 'forward',
+    speed,
+    pts,
+    cumM,
+    totalM,
+    durationS,
+    ramp: routeRampFraction(durationS),
+    u: 0,
+    traveled: 0,
+    floorFn,
+    reducedMotion,
+    cruiseHeightM,
+    heightM: Number.NaN,
+    terrainTopM: Number.NaN,
+    cells: [],
+    headingDir: null,
+    groundSpeedMps: 0,
+    bankDeg: 0,
+    departed: true,
+    floorKnown: false,
+    floorFromMeshProbe: false,
+    meshProbeSpent: false,
+  };
+  for (let i = 0; i < AIR_ROUTE_TERRAIN_CELLS; i += 1) {
+    const carto = Cesium.Cartographic.fromCartesian(
+      arcPoint(state, (totalM * i) / (AIR_ROUTE_TERRAIN_CELLS - 1), _airCell),
+      Cesium.Ellipsoid.WGS84,
+      _airCellCarto,
+    );
+    state.cells.push({
+      lat: Cesium.Math.toDegrees(carto.latitude),
+      lon: Cesium.Math.toDegrees(carto.longitude),
+    });
+  }
+  try {
+    warmFn?.(state.cells);
+  } catch {
+    /* terrain is a refinement; the cruise height stands without it */
+  }
+  return state;
+}
+const _airCell = new Cesium.Cartesian3();
+const _airCellCarto = new Cesium.Cartographic();
+
+/** Advance one frame of a flying-route flight (see createAirRouteFlight). */
+function advanceAirRouteFlight(state, dt) {
+  const step = Math.min(0.25, Math.max(0, Number.isFinite(dt) ? dt : 0));
+  state.u = Math.min(1, (state.u || 0) + step / state.durationS);
+  const profile = routeSpeedProfile(state.u, state.ramp);
+  const traveled = state.totalM * profile.distance;
+  state.traveled = traveled;
+  const cruiseMps = state.totalM / (state.durationS * (1 - state.ramp));
+  state.groundSpeedMps = cruiseMps * profile.speed;
+
+  const pos = arcPoint(state, traveled, _framePos);
+  const carto = Cesium.Cartographic.fromCartesian(
+    pos,
+    Cesium.Ellipsoid.WGS84,
+    _frameCarto,
+  );
+  const up = Cesium.Ellipsoid.WGS84.geodeticSurfaceNormalCartographic(
+    carto,
+    _frameUp,
+  );
+
+  // The highest ground the one-off lookup has answered so far: cache reads.
+  if (typeof state.floorFn === 'function') {
+    let top = Number.NaN;
+    for (const cell of state.cells) {
+      let ground = Number.NaN;
+      try {
+        ground = state.floorFn(cell.lat, cell.lon);
+      } catch {
+        ground = Number.NaN;
+      }
+      if (Number.isFinite(ground))
+        top = Number.isFinite(top) ? Math.max(top, ground) : ground;
+    }
+    if (Number.isFinite(top)) {
+      state.terrainTopM = top;
+      state.floorKnown = true;
+    }
+  }
+  const targetHeightM = Math.max(
+    state.cruiseHeightM,
+    Number.isFinite(state.terrainTopM)
+      ? state.terrainTopM + AIR_ROUTE_TERRAIN_CLEARANCE_M
+      : state.cruiseHeightM,
+  );
+  // A climb is eased and late terrain data only ever lifts the camera.
+  state.heightM = Number.isFinite(state.heightM)
+    ? Math.max(
+        approachValue(
+          state.heightM,
+          targetHeightM,
+          AIR_ROUTE_HEIGHT_RATE,
+          step,
+        ),
+        Math.min(state.heightM, targetHeightM),
+      )
+    : targetHeightM;
+
+  const lookaheadM = Math.max(2000, AIR_ROUTE_LOOKAHEAD_S * cruiseMps);
+  const gaze =
+    horizontalChord(state, traveled, traveled + lookaheadM, up, _frameGaze) ||
+    horizontalChord(state, traveled - lookaheadM, traveled, up, _frameGaze);
+  if (gaze) {
+    state.headingDir = state.headingDir
+      ? Cesium.Cartesian3.clone(gaze, state.headingDir)
+      : Cesium.Cartesian3.clone(gaze);
+  }
+  if (!state.headingDir) {
+    const east = Cesium.Cartesian3.fromElements(-pos.y, pos.x, 0, _frameGaze);
+    state.headingDir =
+      Cesium.Cartesian3.magnitude(east) > 1e-6
+        ? Cesium.Cartesian3.normalize(east, new Cesium.Cartesian3())
+        : Cesium.Cartesian3.fromElements(1, 0, 0, new Cesium.Cartesian3());
+  }
+  const pitch = Cesium.Math.toRadians(AIR_ROUTE_PITCH_DEG);
+  const direction = Cesium.Cartesian3.normalize(
+    Cesium.Cartesian3.add(
+      Cesium.Cartesian3.multiplyByScalar(
+        state.headingDir,
+        Math.cos(pitch),
+        _frameDir,
+      ),
+      Cesium.Cartesian3.multiplyByScalar(up, Math.sin(pitch), _frameLevelUp),
+      _frameDir,
+    ),
+    _frameDir,
+  );
+  const right = Cesium.Cartesian3.normalize(
+    Cesium.Cartesian3.cross(direction, up, _frameRight),
+    _frameRight,
+  );
+  const levelUp = Cesium.Cartesian3.normalize(
+    Cesium.Cartesian3.cross(right, direction, _frameLevelUp),
+    _frameLevelUp,
+  );
+  const eye = Cesium.Cartesian3.fromRadians(
+    carto.longitude,
+    carto.latitude,
+    state.heightM,
+    Cesium.Ellipsoid.WGS84,
+    _frameEye,
+  );
+  return {
+    finished: state.u >= 1,
+    eye,
+    direction,
+    up: levelUp,
+    bankDeg: 0,
+    heightM: state.heightM,
+    aglM: Number.isFinite(state.terrainTopM)
+      ? state.heightM - state.terrainTopM
+      : Number.NaN,
+    groundSpeedMps: state.groundSpeedMps,
+    progress: state.u,
+  };
+}
+
 /**
  * Build the state for one cinematic route flight.
  * @param {Object} options
@@ -672,6 +880,7 @@ export function createRouteFlight({
  *  groundSpeedMps: number, progress: number}} The frame.
  */
 export function advanceRouteFlight(state, dt) {
+  if (state.air) return advanceAirRouteFlight(state, dt);
   const step = Math.min(0.25, Math.max(0, Number.isFinite(dt) ? dt : 0));
 
   // ARMING. The corridor warm is fire-and-forget, so the alternative to waiting
@@ -1521,16 +1730,25 @@ export function flyRoute(
   const start = () => {
     interruptCameraMotion('replaced');
     setActiveMotion(
-      createRouteFlight({
-        pts,
-        cumM,
-        speed,
-        floorFn,
-        warmFn,
-        probeFn: (cells) => probeMeshFloorM(_viewer?.scene, cells),
-        cameraHeightM: _viewer?.camera?.positionCartographic?.height,
-        reducedMotion: prefersReducedMotion(),
-      }),
+      route.mode === 'air'
+        ? createAirRouteFlight({
+            pts,
+            cumM,
+            speed,
+            floorFn,
+            warmFn,
+            reducedMotion: prefersReducedMotion(),
+          })
+        : createRouteFlight({
+            pts,
+            cumM,
+            speed,
+            floorFn,
+            warmFn,
+            probeFn: (cells) => probeMeshFloorM(_viewer?.scene, cells),
+            cameraHeightM: _viewer?.camera?.positionCartographic?.height,
+            reducedMotion: prefersReducedMotion(),
+          }),
     );
     holdContinuousRender('camera-verb');
     return {
