@@ -163,7 +163,10 @@ focus within 20 seconds.
   BAW and a handful of others by day; at night there may be only one or two
   aircraft, which is still a right answer.
 - "What aircraft types are flying over London right now?" (`types-london`):
-  OpenSky sends no aircraft type, so "no type reported" is the right answer.
+  A320-family, 737 and 787 types and the like. OpenSky sends no type; the
+  Mictronics aircraft database fills it in, so "no type reported" is wrong.
+- "What type of plane is flying closest to SFO right now?"
+  (`type-nearest-sfo`): a type such as B738 or A320, not "unknown".
 - "How many aircraft are over Texas, broken down by operator?"
   (`operators-texas`): "no operator reported", for the same reason.
 - "Count the aircraft over the Philippines by airline."
@@ -174,7 +177,7 @@ focus within 20 seconds.
 - "What's the average altitude and speed of aircraft over Texas?"
   (`altitude-speed-texas`): min, median, mean and max over every match.
 - "What's the average altitude of planes over Texas, by aircraft type?"
-  (`aircraft-texas-altitude-by-type`).
+  (`aircraft-texas-altitude-by-type`): altitudes grouped by type code.
 - "Which countries' ships dominate the English Channel?"
   (`ships-channel-by-country`).
 - The Texas airline prompt, then "Turn on flights and fly there."

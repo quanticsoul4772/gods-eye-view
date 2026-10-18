@@ -425,11 +425,26 @@ export const PROMPTS = Object.freeze([
     checks: { tools: ['aircraft_in_area'], answerNot: STALE },
   },
   {
-    // OpenSky sends no aircraft type: an empty breakdown, said plainly.
+    // OpenSky sends no type; the Mictronics database fills it in.
     id: 'types-london',
     group: 'breakdowns',
     prompt: 'What aircraft types are flying over London right now?',
-    checks: { tools: ['aircraft_in_area'] },
+    checks: {
+      tools: ['aircraft_in_area'],
+      answer:
+        /\b(?:A3[1-5]\d|A2[01]N|B7[3-8]\d|B3[89]M|E\d{3}|CRJ\d|Airbus|Boeing|Embraer|Bombardier)\b/i,
+      answerNot: /no type|not report/i,
+    },
+  },
+  {
+    id: 'type-nearest-sfo',
+    group: 'breakdowns',
+    prompt: 'What type of plane is flying closest to SFO right now?',
+    // aircraft_in_area, or the flights layer plus get_aircraft_info.
+    checks: {
+      answer:
+        /\b(?:A3[1-5]\d|A2[01]N|B7[3-8]\d|B3[89]M|E\d{3}|CRJ\d|Airbus|Boeing|Embraer|Bombardier)\b/i,
+    },
   },
   {
     id: 'operators-texas',
@@ -464,7 +479,13 @@ export const PROMPTS = Object.freeze([
     group: 'breakdowns',
     prompt:
       "What's the average altitude of planes over Texas, by aircraft type?",
-    checks: { tools: ['aircraft_in_area'] },
+    // Per-type altitudes, not only counts. Aircraft with no type code may
+    // still be mentioned as such.
+    checks: {
+      tools: ['aircraft_in_area'],
+      answer: /\b(?:B738|B38M|A32\d|C172)\b[^\n]*\d[\d,]* (?:m|ft)\b/,
+      answerNot: /can'?t give|cannot give|no type reported|not per[- ]type/i,
+    },
   },
   {
     id: 'ships-channel-by-country',

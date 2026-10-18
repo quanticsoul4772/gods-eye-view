@@ -5,6 +5,7 @@ import { firmsProxy } from './firms.js';
 import { terrainHeightsProxy } from './terrain.js';
 import { terrainMeshProxy } from './terrainMesh.js';
 import { adsbdbProxy } from './aircraft/enrichment.js';
+import { aircraftTypesProxy } from './aircraft/types.js';
 import { overpassProxy } from './overpass.js';
 import { militaryInstallationsProxy } from './military-installations.js';
 import { regionalBriefProxy } from './regional/briefing.js';
@@ -58,6 +59,7 @@ function localProviderPlugins({ realtime } = {}) {
     terrainHeightsProxy(),
     terrainMeshProxy(),
     adsbdbProxy(),
+    aircraftTypesProxy(),
     overpassProxy(),
     militaryInstallationsProxy(),
     regionalBriefProxy(),
