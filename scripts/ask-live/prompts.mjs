@@ -483,7 +483,7 @@ export const PROMPTS = Object.freeze([
     // still be mentioned as such.
     checks: {
       tools: ['aircraft_in_area'],
-      answer: /\b(?:B738|B38M|A32\d|C172)\b[^\n]*\d[\d,]* (?:m|ft)\b/,
+      answer: /\b(?:B738|B38M|A32\d|C172)\b[^\n]*:\s*~?\d[\d,]{2,}/,
       answerNot: /can'?t give|cannot give|no type reported|not per[- ]type/i,
     },
   },
@@ -503,6 +503,30 @@ export const PROMPTS = Object.freeze([
     checks: {
       layersOn: ['flights'],
       cameraNear: { lat: 31.0, lon: -99.0, km: 700 },
+    },
+  },
+
+  {
+    id: 'types-germany',
+    group: 'breakdowns',
+    prompt: 'How many aircraft are over Germany, broken down by aircraft type?',
+    checks: {
+      tools: ['aircraft_in_area'],
+      answer:
+        /\b(?:A3[1-5]\d|A2[01]N|B7[3-8]\d|B3[89]M|E\d{3}|CRJ\d|Airbus|Boeing|Embraer|Bombardier)\b/i,
+      answerNot: /no type reported/i,
+    },
+  },
+
+  {
+    id: 'hex-lookup',
+    group: 'breakdowns',
+    prompt: "What's the ICAO hex address of the plane closest to SFO?",
+    then: ['Look up that hex: what type and registration is it?'],
+    checks: {
+      tools: ['get_aircraft_info'],
+      answer:
+        /\b(?:A3[1-5]\d|A2[01]N|B7[3-8]\d|B3[89]M|E\d{3}|CRJ\d|Airbus|Boeing|Embraer|Bombardier)\b/i,
     },
   },
 

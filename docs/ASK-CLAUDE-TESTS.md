@@ -176,6 +176,12 @@ focus within 20 seconds.
   overflights (UK, Turkey) can outnumber it.
 - "What's the average altitude and speed of aircraft over Texas?"
   (`altitude-speed-texas`): min, median, mean and max over every match.
+- "How many aircraft are over Germany, broken down by aircraft type?"
+  (`types-germany`): counts by type code with a small unknown remainder.
+- "What's the ICAO hex address of the plane closest to SFO?", then "Look up
+  that hex: what type and registration is it?" (`hex-lookup`): the type and
+  registration come from the aircraft database ("Embraer ERJ-170-200 (long
+  wing)"), the route from adsbdb.
 - "What's the average altitude of planes over Texas, by aircraft type?"
   (`aircraft-texas-altitude-by-type`): altitudes grouped by type code.
 - "Which countries' ships dominate the English Channel?"
