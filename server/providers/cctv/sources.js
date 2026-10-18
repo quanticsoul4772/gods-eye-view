@@ -506,7 +506,7 @@ let ontarioKeyMissingLogged = false;
 
 /**
  * Fetch Ontario 511 CCTV cameras. The camera list comes from the 511 API,
- * which now requires a free developer key (511on.ca/developers, "Requires a
+ * which now requires a free developer key (511on.ca/developers/doc, "Requires a
  * developer key"; unkeyed calls answer 400 "Invalid Key"), read from
  * ONTARIO_511_API_KEY. Without one the pack is skipped with a single log line.
  * Frame URLs are stable still-image endpoints under 511on.ca/map/Cctv/. Only
