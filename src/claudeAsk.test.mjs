@@ -120,6 +120,56 @@ test('query tools run on the server and the answer comes back', async () => {
   assert.equal('fallbacks' in client.requests[0], false, 'Haiku has none');
 });
 
+test('a map image reaches Claude in that request and is not sent back to the page', async () => {
+  const image = { mimeType: 'image/png', data: 'iVBORw0KGgo=' };
+  const catalog = {
+    async call() {
+      return {
+        summary: 'Satellite lightning · 5 min over Kinshasa.',
+        data: { map: 'lightning' },
+        images: [image],
+      };
+    },
+  };
+  const client = scriptedClient([
+    {
+      stop_reason: 'tool_use',
+      content: [toolUse('t1', 'get_weather_map', { map: 'lightning' })],
+      usage: {},
+    },
+    {
+      stop_reason: 'end_turn',
+      content: [text('Two flash clusters east of Kinshasa.')],
+      usage: {},
+    },
+  ]);
+  const outcome = await runAskTurn({
+    client,
+    catalog,
+    tools: [],
+    actionNames,
+    messages: question('Any lightning near Kinshasa?'),
+  });
+  // Claude's second request carries the image itself, not "images_omitted".
+  const sent = client.requests[1].messages[2].content[0];
+  assert.equal(sent.type, 'tool_result');
+  assert.equal(sent.content[1].type, 'image');
+  assert.deepEqual(sent.content[1].source, {
+    type: 'base64',
+    media_type: 'image/png',
+    data: image.data,
+  });
+  assert.doesNotMatch(sent.content[0].text, /images_omitted/);
+  // The conversation the page keeps (and resends) has a note instead.
+  const kept = outcome.messages[2].content[0];
+  assert.equal(
+    kept.content.some((block) => block.type === 'image'),
+    false,
+  );
+  assert.match(kept.content[1].text, /map image was shown/);
+  assert.doesNotMatch(JSON.stringify(outcome), /iVBORw0KGgo=/);
+});
+
 test('app actions go back to the page with the same turn’s query results', async () => {
   const catalog = {
     async call() {

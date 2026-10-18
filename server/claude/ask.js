@@ -111,17 +111,69 @@ export function parseAskRequest(body) {
   return { messages };
 }
 
+const IMAGE_NOTE = Object.freeze({
+  type: 'text',
+  text: '[The map image was shown in that step and is not kept in the conversation.]',
+});
+
+/**
+ * The conversation goes back to the page and returns with every later
+ * request, under the body limit, so map images are kept for the request that
+ * fetched them only. A message, or a tool_result inside one, has each image
+ * replaced by a short note.
+ */
+export function withoutImages(entry) {
+  if (!Array.isArray(entry?.content)) return entry;
+  let changed = false;
+  const content = entry.content.map((block) => {
+    if (block?.type === 'image') {
+      changed = true;
+      return IMAGE_NOTE;
+    }
+    if (block?.type === 'tool_result' && Array.isArray(block.content)) {
+      const inner = withoutImages(block);
+      if (inner !== block) changed = true;
+      return inner;
+    }
+    return block;
+  });
+  return changed ? { ...entry, content } : entry;
+}
+
 async function runQuery(catalog, block, signal) {
   try {
     const result = await catalog.call(block.name, block.input ?? {}, {
       signal,
     });
+    const images = result?.images ?? [];
     return {
       view: result?.data?.view ?? null,
       content: {
         type: 'tool_result',
         tool_use_id: block.id,
-        content: JSON.stringify(toFunctionOutput(block.name, result)),
+        // A map tool returns its image; Claude reads it with the JSON, as an
+        // MCP client would, instead of being told the image was left out.
+        content: images.length
+          ? [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  ok: true,
+                  tool: block.name,
+                  summary: result.summary,
+                  data: result.data,
+                }),
+              },
+              ...images.map((image) => ({
+                type: 'image',
+                source: {
+                  type: 'base64',
+                  media_type: image.mimeType,
+                  data: image.data,
+                },
+              })),
+            ]
+          : JSON.stringify(toFunctionOutput(block.name, result)),
       },
     };
   } catch (error) {
@@ -167,7 +219,13 @@ export async function runAskTurn({
     cache_creation_input_tokens: 0,
     output_tokens: 0,
   };
-  const outcome = (fields) => ({ ...fields, messages, view, usage });
+  const outcome = ({ results, ...fields }) => ({
+    ...fields,
+    ...(results ? { results: results.map(withoutImages) } : {}),
+    messages: messages.map(withoutImages),
+    view,
+    usage,
+  });
   for (let turn = 0; turn < MAX_TURNS; turn += 1) {
     const response = await client.beta.messages.create(
       {

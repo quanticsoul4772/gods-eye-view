@@ -585,6 +585,23 @@ test('beforeFly runs once after resolution and immediately before the flight', a
   assert.equal(viewer.flights.length, 1);
 });
 
+test('a city with no viewport to frame flies at city range, not building range', async () => {
+  // Photon's "Lagos" has no extent; it used to land 250 m from one street.
+  const viewer = stubViewer();
+  const result = await runSearch(viewer, {}, {
+    query: 'lagos',
+    result: {
+      formatted_address: 'Lagos, Nigeria',
+      types: ['locality', 'political'],
+      geometry: { location: { lat: 6.455, lng: 3.394 } },
+    },
+  });
+  assert.equal(result.navigationMode, 'city-overview');
+  assert.equal(viewer.flights.length, 1);
+  const range = viewer.flights[0].offset?.range;
+  assert.ok(range >= 10_000, `city fallback range ${range}`);
+});
+
 test('a final authority veto returns cancellation without issuing a flight', async () => {
   const viewer = stubViewer();
   const result = await runSearch(viewer, { beforeFly: () => false });

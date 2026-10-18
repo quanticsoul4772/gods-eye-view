@@ -755,7 +755,11 @@ export function regionFramingPlan(viewport) {
 }
 
 function defaultRangeForNavigationMode(mode) {
-  // Fallback ranges when the geocode has no usable viewport to frame.
+  // Fallback ranges when the geocode has no usable viewport to frame. The
+  // keyless geocoder (Photon) returns many cities with no extent: "Lagos"
+  // framed as a city overview at 250 m put the camera 147 m over one street.
+  if (mode === 'region-overview') return 600_000;
+  if (mode === 'city-overview') return 25_000;
   if (mode === 'area-overview') return 1400;
   if (mode === 'street-corridor') return 900;
   return 250;

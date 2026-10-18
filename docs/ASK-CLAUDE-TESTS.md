@@ -160,7 +160,8 @@ focus within 20 seconds.
 ## F. Area breakdowns (`breakdowns`)
 
 - "Which airlines are flying over London right now?" (`airlines-london`):
-  BAW and a handful of others.
+  BAW and a handful of others by day; at night there may be only one or two
+  aircraft, which is still a right answer.
 - "What aircraft types are flying over London right now?" (`types-london`):
   OpenSky sends no aircraft type, so "no type reported" is the right answer.
 - "How many aircraft are over Texas, broken down by operator?"
@@ -168,7 +169,8 @@ focus within 20 seconds.
 - "Count the aircraft over the Philippines by airline."
   (`airlines-philippines`): CEB and PAL. Manila alone usually has none.
 - "How many aircraft are over Germany, by country of registration?"
-  (`countries-germany`): Germany first.
+  (`countries-germany`): counts by country. Germany leads by day; at night
+  overflights (UK, Turkey) can outnumber it.
 - "What's the average altitude and speed of aircraft over Texas?"
   (`altitude-speed-texas`): min, median, mean and max over every match.
 - "What's the average altitude of planes over Texas, by aircraft type?"
