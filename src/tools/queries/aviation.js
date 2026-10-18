@@ -78,6 +78,7 @@ function aircraftRow(record, from) {
     course_deg: round(record.courseDeg, 0),
     vertical_rate_mps: round(record.verticalRateMps, 1),
     type_code: record.typeCode || null,
+    type_name: record.typeName || null,
     registration: record.registration || null,
     operator: record.operator || null,
     origin_country: record.originCountry || null,
@@ -172,8 +173,21 @@ export const aircraftInArea = defineTool({
       ...(regional ? [`regional feed: ${snapshot.coverage}`] : []),
       ...(snapshot.freshness === 'stale' ? ['data may be stale'] : []),
     ];
+    // With group_by, stats also come per group (altitude by type, say).
+    const summarize = (subset) => ({
+      altitude_m: numericSummary(
+        subset.filter((row) => !row.on_ground),
+        'altitude_m',
+      ),
+      speed_mps: numericSummary(subset, 'speed_mps'),
+    });
     const groups = args.group_by
-      ? breakdown(rows, args.group_by, groupValue(args.group_by))
+      ? breakdown(
+          rows,
+          args.group_by,
+          groupValue(args.group_by),
+          args.stats ? summarize : null,
+        )
       : null;
     return {
       summary:
@@ -187,17 +201,7 @@ export const aircraftInArea = defineTool({
         }),
         ...capRows(rows, args.limit),
         ...(groups ? { breakdown: groups } : {}),
-        ...(args.stats
-          ? {
-              stats: {
-                altitude_m: numericSummary(
-                  rows.filter((row) => !row.on_ground),
-                  'altitude_m',
-                ),
-                speed_mps: numericSummary(rows, 'speed_mps'),
-              },
-            }
-          : {}),
+        ...(args.stats ? { stats: summarize(rows) } : {}),
         ...snapshotInfo(snapshot),
       },
     };
@@ -209,8 +213,7 @@ export const findAircraft = defineTool({
   title: 'Find an aircraft',
   description:
     'Find aircraft currently reported anywhere by callsign, ICAO 24-bit ' +
-    'address or registration. Registrations are known only for aircraft in ' +
-    'the military feed.',
+    'address or registration.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -238,11 +241,9 @@ export const findAircraft = defineTool({
       icao24: 'id',
       registration: 'registration',
     }[key];
-    // Only the military feed reports registrations.
+    // Civil registrations come from the aircraft type database's fill.
     const feeds = [
-      ...(key === 'registration'
-        ? []
-        : [{ name: 'civil', feed: services.aircraft }]),
+      { name: 'civil', feed: services.aircraft },
       { name: 'military', feed: services.military },
     ].filter(({ feed }) => feed);
     if (!feeds.length)

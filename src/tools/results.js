@@ -31,7 +31,12 @@ export const MAX_GROUPS = 10;
  * without a value are counted as unknown. `valueOf` derives the value when
  * it is not a row field as it stands.
  */
-export function breakdown(rows, field, valueOf = (row) => row[field]) {
+export function breakdown(
+  rows,
+  field,
+  valueOf = (row) => row[field],
+  summarize = null,
+) {
   const groups = new Map();
   let unknown = 0;
   for (const row of rows) {
@@ -43,13 +48,21 @@ export function breakdown(rows, field, valueOf = (row) => row[field]) {
     }
     const key = value.toLowerCase();
     const group = groups.get(key);
-    if (group) group.count += 1;
-    else groups.set(key, { value, count: 1 });
+    if (group) {
+      group.count += 1;
+      group.rows.push(row);
+    } else groups.set(key, { value, count: 1, rows: [row] });
   }
   const sorted = [...groups.values()].sort(
     (a, b) => b.count - a.count || a.value.localeCompare(b.value),
   );
-  const listed = sorted.slice(0, MAX_GROUPS);
+  const listed = sorted
+    .slice(0, MAX_GROUPS)
+    .map(({ value, count, rows: groupRows }) => ({
+      value,
+      count,
+      ...(summarize ? { stats: summarize(groupRows) } : {}),
+    }));
   return {
     field,
     groups: listed,

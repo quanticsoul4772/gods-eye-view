@@ -90,6 +90,7 @@ test('aircraft in an area are filtered, nearest first, with source details', asy
     course_deg: 90,
     vertical_rate_mps: 0,
     type_code: null,
+    type_name: null,
     registration: null,
     operator: null,
     origin_country: 'United States',
@@ -321,14 +322,29 @@ test('aircraft searches keep the feeds that answered and name the others', async
     'Found 1 aircraft with callsign RCH123. The civil feed did not answer.',
   );
   assert.deepEqual(byCallsign.data.unavailable_feeds, ['civil']);
-  const civil = feed([]);
-  const byRegistration = await composeCatalog({
+  // Civil registrations come from the aircraft type database's fill.
+  const civil = feed([
+    record('a1b2c3', 37.7, -122.4, {
+      typeCode: 'B738',
+      registration: 'N123AB',
+    }),
+  ]);
+  const both = composeCatalog({
     tools: coreTools,
     services: { aircraft: civil, military },
-  }).call('find_aircraft', { registration: '05-5140' });
+  });
+  const byRegistration = await both.call('find_aircraft', {
+    registration: '05-5140',
+  });
   assert.equal(byRegistration.data.rows[0].id, 'ae1234');
   assert.deepEqual(byRegistration.data.unavailable_feeds, []);
-  assert.equal(civil.calls.length, 0);
+  const civilRegistration = await both.call('find_aircraft', {
+    registration: 'n123ab',
+  });
+  assert.deepEqual(
+    civilRegistration.data.rows.map((row) => [row.id, row.type_code]),
+    [['a1b2c3', 'B738']],
+  );
   await assert.rejects(
     composeCatalog({
       tools: coreTools,
@@ -416,8 +432,46 @@ test('aircraft in an area can be counted by operator over every match', async ()
   assert.deepEqual(result.data.breakdown, {
     field: 'operator',
     groups: [
-      { value: 'United', count: 2 },
-      { value: 'Delta', count: 1 },
+      {
+        value: 'United',
+        count: 2,
+        stats: {
+          altitude_m: {
+            count: 2,
+            min: 3000,
+            median: 6500,
+            mean: 6500,
+            max: 10000,
+          },
+          speed_mps: {
+            count: 2,
+            min: 230.0,
+            median: 230.0,
+            mean: 230.0,
+            max: 230.0,
+          },
+        },
+      },
+      {
+        value: 'Delta',
+        count: 1,
+        stats: {
+          altitude_m: {
+            count: 1,
+            min: 10000,
+            median: 10000,
+            mean: 10000,
+            max: 10000,
+          },
+          speed_mps: {
+            count: 1,
+            min: 230.0,
+            median: 230.0,
+            mean: 230.0,
+            max: 230.0,
+          },
+        },
+      },
     ],
     other_count: 0,
     unknown_count: 1,
