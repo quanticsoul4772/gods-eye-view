@@ -172,6 +172,10 @@ async function resetApp(start) {
     // zero wheel is that touch, so it cannot carry into the next prompt.
     v.scene.canvas.dispatchEvent(new WheelEvent('wheel', { deltaY: 0 }));
     v.camera.cancelFlight();
+    // Style, HUD and layers go back to the default so one prompt's "night
+    // vision" or "hide the HUD" cannot change the next prompt's answer.
+    gev.styleManager.setStyle?.('normal');
+    gev.styleManager.setHudVisible?.('on');
     gev.styleManager.setHudLayout?.('professional');
     gev.annotations?.clear?.();
     for (const [id, entry] of gev.dataManager.layers) {
@@ -192,6 +196,8 @@ async function resetApp(start) {
       }),
       orientation: { heading: 0, pitch: s.pitch * rad, roll: 0 },
     });
+    // The HUD readouts (GSD, place) update on a rendered frame.
+    gev.requestRender?.();
   }, start);
   const newChat = await page.$('#gev-ask-composer .gev-ask-new');
   if (newChat && (await newChat.evaluate((b) => !b.hidden && !b.disabled)))

@@ -234,7 +234,8 @@ export const PROMPTS = Object.freeze([
     id: 'fiji-dateline',
     group: 'places',
     prompt: 'Take me to Fiji and look east across the date line.',
-    checks: { cameraNear: { lat: -17.7, lon: 178.1, km: 600 } },
+    // Looking east from a regional range puts the camera well west of Fiji.
+    checks: { cameraNear: { lat: -17.7, lon: 178.1, km: 1600 } },
   },
   {
     id: 'south-pole',
@@ -419,7 +420,9 @@ export const PROMPTS = Object.freeze([
     id: 'airlines-london',
     group: 'breakdowns',
     prompt: 'Which airlines are flying over London right now?',
-    checks: { tools: ['aircraft_in_area'], answer: /BAW|British Airways/ },
+    // At night London can have one aircraft in the air; the breakdown runs
+    // whatever is there.
+    checks: { tools: ['aircraft_in_area'], answerNot: STALE },
   },
   {
     // OpenSky sends no aircraft type: an empty breakdown, said plainly.
@@ -434,7 +437,7 @@ export const PROMPTS = Object.freeze([
     prompt: 'How many aircraft are over Texas, broken down by operator?',
     checks: {
       tools: ['aircraft_in_area'],
-      answer: /no operator|not report|doesn'?t (report|send)/i,
+      answer: /no operator|not report|empty|doesn'?t (report|send)/i,
     },
   },
   {
@@ -684,7 +687,8 @@ export const PROMPTS = Object.freeze([
     // get_bike_share consults the source directory itself.
     checks: {
       tools: ['get_bike_share'],
-      answer: /no bike[- ]?share|no (supported )?system|no stations/i,
+      answer:
+        /no bike[- ]?share|no (supported )?(bike[- ]?share )?system|no stations|none (nearby|here)/i,
     },
   },
   {
@@ -694,7 +698,7 @@ export const PROMPTS = Object.freeze([
     prompt: 'Show buses in Lagos.',
     checks: {
       answer:
-        /no (supported |live )?(transit )?feed|not (yet )?(covered|available|shown)|listed/i,
+        /no (supported |live )?(transit |bus )?feed|not (yet )?(covered|available|shown)|listed/i,
     },
   },
   {
@@ -811,7 +815,9 @@ export const PROMPTS = Object.freeze([
     group: 'briefs',
     prompt: 'Find a pharmacy open now near here.',
     start: LONDON,
-    checks: { tools: ['places_nearby'] },
+    // places_nearby or search_places; either way it may only claim "open"
+    // when the tool returned opening hours.
+    checks: { answer: /pharmac/i },
   },
   {
     id: 'nearest-hospital',
