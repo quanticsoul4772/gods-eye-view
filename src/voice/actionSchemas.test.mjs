@@ -52,7 +52,8 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // Plain "air quality" routes to air-sensors (AQHI keeps Canada); hints skip the id spelled with spaces.
     // Prompt room: a rule stated twice keeps one copy; ranges and "Optional" that the schema already says are dropped.
     // rangeM says a bare coordinate is a 250 m close-up, so a storm or fire gets a fitting range.
-    '11c8d2dd2d3276701267edb88037587d600a9eeac515c510408028033e6f8f0a',
+    // Routes can be flown (mode=flying) and an area can be a circle (radiusKm).
+    '8b47489fc1b3e05682380d592de68a136694e8f72397b29567b1604fdbf08d47',
   );
 });
 
@@ -160,7 +161,7 @@ test('all legacy action arguments are byte-identical after removing the delibera
   // Derived by applying the same removals to the 4b56d0e9 actionSchemas.
   assert.equal(
     createHash('sha256').update(JSON.stringify(legacy)).digest('hex'),
-    '01f14fdb1523eebfcbff8b115e48e6ab99e36fa06f55a3bb13c65e198f79d758',
+    'c9dbb213af29124a926ba9813098598a216e11bfe3635b157ef1edf88a9ffd04',
   );
 });
 

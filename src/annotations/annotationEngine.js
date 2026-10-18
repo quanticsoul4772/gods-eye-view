@@ -518,8 +518,23 @@ export function createAnnotationEngine({
         err.failedTargets = failed;
         throw err;
       }
-      // Real street-following route (OSM/OSRM), mode-aware.
       const mode = normalizeMode(spec.mode);
+      // A flying route is the direct path between the places, flown at
+      // altitude: no street routing and no travel time.
+      if (mode === 'air') {
+        let direct = 0;
+        for (let i = 1; i < resolvedPts.length; i += 1)
+          direct += greatCircleM(resolvedPts[i - 1], resolvedPts[i]);
+        return {
+          path: airPath(resolvedPts),
+          distanceM: direct,
+          durationS: null,
+          mode,
+          source: resolvedPts[0].source,
+          fallback: false,
+        };
+      }
+      // Real street-following route (OSM/OSRM), mode-aware.
       const routed = await fetchRoute(
         resolvedPts.map((p) => [p.lon, p.lat]),
         mode,
@@ -592,6 +607,35 @@ export function createAnnotationEngine({
         to,
         distanceM: greatCircleM(from, to),
         source: from.source,
+      };
+    }
+    // A circle of a given radius around the place: the center is resolved and
+    // the ring is computed, so it never waits on (or fails for want of) an
+    // outline.
+    const radiusKm = Number(spec.radiusKm);
+    if (type === 'area' && Number.isFinite(radiusKm) && radiusKm > 0) {
+      const center = await resolveTarget({
+        placeSearch,
+        viewer,
+        target: spec.target,
+        latitude: spec.latitude,
+        longitude: spec.longitude,
+        screenX: spec.screenX,
+        screenY: spec.screenY,
+        footprint: false,
+        allowDistant,
+        signal,
+      });
+      if (!center) return null;
+      return {
+        ...center,
+        ring: circleRing(center, radiusKm * 1000),
+        polygons: null,
+        footprintKind: 'area',
+        synthesized: false,
+        outlineUnavailable: false,
+        resolveOutline: undefined,
+        radiusM: radiusKm * 1000,
       };
     }
     const wantFootprint =
@@ -1551,6 +1595,8 @@ function closedRingWithoutRepeat(ring) {
 
 function normalizeMode(m) {
   const t = String(m || '').toLowerCase();
+  if (t === 'flying' || t === 'fly' || t === 'flight' || t === 'air')
+    return 'air';
   if (t === 'car' || t === 'drive' || t === 'driving') return 'car';
   if (t === 'bike' || t === 'cycle' || t === 'cycling' || t === 'bicycle')
     return 'bike';
@@ -1564,6 +1610,92 @@ async function fetchRoute(coordPairs, mode, signal, service) {
   } catch {
     return null;
   }
+}
+
+/**
+ * A closed geodesic circle of `radiusM` around `center`, as the [lon, lat]
+ * ring the renderer drapes.
+ * @param {{lat: number, lon: number}} center
+ * @param {number} radiusM
+ * @returns {Array<[number, number]>}
+ */
+export function circleRing(center, radiusM, segments = 72) {
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const toDeg = (rad) => (rad * 180) / Math.PI;
+  const lat1 = toRad(center.lat);
+  const lon1 = toRad(center.lon);
+  const d = radiusM / 6371000;
+  const ring = [];
+  for (let i = 0; i <= segments; i += 1) {
+    const bearing = ((i % segments) / segments) * 2 * Math.PI;
+    const lat2 = Math.asin(
+      Math.sin(lat1) * Math.cos(d) +
+        Math.cos(lat1) * Math.sin(d) * Math.cos(bearing),
+    );
+    const lon2 =
+      lon1 +
+      Math.atan2(
+        Math.sin(bearing) * Math.sin(d) * Math.cos(lat1),
+        Math.cos(d) - Math.sin(lat1) * Math.sin(lat2),
+      );
+    ring.push([((toDeg(lon2) + 540) % 360) - 180, toDeg(lat2)]);
+  }
+  return ring;
+}
+
+/** Most vertices an air path carries; a long leg gets fewer, longer steps. */
+const AIR_PATH_MAX_POINTS = 400;
+/** Target spacing of air-path vertices, so the line follows the curved Earth. */
+const AIR_PATH_STEP_M = 1000;
+
+/**
+ * The great-circle path through the waypoints, as {lon, lat, height: 0}
+ * vertices about a kilometre apart (fewer on very long legs), so a drawn line
+ * and a flight along it follow the Earth instead of cutting a chord.
+ * @param {Array<{lat: number, lon: number}>} points Resolved waypoints.
+ * @returns {Array<{lon: number, lat: number, height: number}>}
+ */
+export function airPath(points) {
+  const legs = [];
+  let total = 0;
+  for (let i = 1; i < points.length; i += 1) {
+    const meters = greatCircleM(points[i - 1], points[i]);
+    legs.push(meters);
+    total += meters;
+  }
+  const step = Math.max(AIR_PATH_STEP_M, total / AIR_PATH_MAX_POINTS);
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const toDeg = (rad) => (rad * 180) / Math.PI;
+  const path = [{ lon: points[0].lon, lat: points[0].lat, height: 0 }];
+  for (let i = 1; i < points.length; i += 1) {
+    const a = points[i - 1];
+    const b = points[i];
+    const steps = Math.max(1, Math.ceil(legs[i - 1] / step));
+    const angle = legs[i - 1] / 6371000;
+    for (let k = 1; k <= steps; k += 1) {
+      if (k === steps || angle < 1e-9) {
+        if (k === steps) path.push({ lon: b.lon, lat: b.lat, height: 0 });
+        continue;
+      }
+      // Spherical interpolation between the two waypoints.
+      const f = k / steps;
+      const sinAngle = Math.sin(angle);
+      const wa = Math.sin((1 - f) * angle) / sinAngle;
+      const wb = Math.sin(f * angle) / sinAngle;
+      const [la1, lo1, la2, lo2] = [a.lat, a.lon, b.lat, b.lon].map(toRad);
+      const x =
+        wa * Math.cos(la1) * Math.cos(lo1) + wb * Math.cos(la2) * Math.cos(lo2);
+      const y =
+        wa * Math.cos(la1) * Math.sin(lo1) + wb * Math.cos(la2) * Math.sin(lo2);
+      const z = wa * Math.sin(la1) + wb * Math.sin(la2);
+      path.push({
+        lon: toDeg(Math.atan2(y, x)),
+        lat: toDeg(Math.atan2(z, Math.hypot(x, y))),
+        height: 0,
+      });
+    }
+  }
+  return path;
 }
 
 function greatCircleM(a, b) {
@@ -1591,6 +1723,10 @@ function composeRouteLabel(baseLabel, distM, durS, mode, fallback) {
   const min = Number.isFinite(durS) ? Math.max(1, Math.round(durS / 60)) : null;
   const word = mode === 'car' ? 'drive' : mode === 'bike' ? 'ride' : 'walk';
   if (mode === 'manual') return baseLabel ? `${baseLabel} — ${dist}` : dist;
+  if (mode === 'air') {
+    const metrics = `${dist} · direct flight`;
+    return baseLabel ? `${baseLabel} — ${metrics}` : metrics;
+  }
   // Fallback = routing was unavailable, so we drew a straight line: label it as a
   // direct line with no travel time (never claim an "X min walk" we didn't compute).
   let metrics;

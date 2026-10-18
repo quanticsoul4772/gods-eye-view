@@ -204,6 +204,8 @@ test('no unchanged Realtime tool definition drifts silently', () => {
     'move_camera',
     'control_radio',
     'clear_annotations',
+    // Routes can be flown at altitude (annotate_map mode=flying).
+    'fly_route',
   ]);
   const unchanged = realtimeTools()
     .filter((tool) => !TOUCHED.has(tool.name))
@@ -215,13 +217,13 @@ test('no unchanged Realtime tool definition drifts silently', () => {
   const hudLayout = unchanged.find((tool) => tool.name === 'set_hud').parameters.properties.layout;
   assert.deepEqual(hudLayout.enum, ['professional', 'tactical', 'operator', 'minimal', 'cyber']);
   hudLayout.enum = hudLayout.enum.filter((layout) => !['cyber', 'professional'].includes(layout));
-  assert.equal(unchanged.length, 11);
+  assert.equal(unchanged.length, 10);
   const digest = createHash('sha256')
     .update(JSON.stringify(unchanged))
     .digest('hex')
     .slice(0, 16);
   // Analyst additions and ISS wording correction are explicitly excluded above; all other tool definitions retain their pin.
-  assert.equal(digest, '5426ad9ae70f93f1', 'an unchanged Realtime tool definition drifted');
+  assert.equal(digest, '28cae255e5582695', 'an unchanged Realtime tool definition drifted');
 });
 
 test('Radio volume and mission speed share the Sharpen slider visual language', () => {

@@ -15,6 +15,7 @@ import {
   ROUTE_CINEMA,
   advanceRouteFlight,
   approachValue,
+  createAirRouteFlight,
   createRouteFlight,
   flyRoute,
   getActiveCameraMotion,
@@ -1077,4 +1078,48 @@ test('a new viewer lifetime drops the previous view-target getter', () => {
   assert.equal(asked, askedBefore, 'the old getter was never called again');
   interruptCameraMotion('test-cleanup');
   second.restore();
+});
+
+// -- Air routes (annotate_map mode=flying) --
+function airFlightFrom(lonLat, options = {}) {
+  const pts = lonLat.map(([lon, lat]) => Cesium.Cartesian3.fromDegrees(lon, lat, 0));
+  const cumM = [0];
+  for (let i = 1; i < pts.length; i += 1) {
+    cumM.push(cumM[i - 1] + Cesium.Cartesian3.distance(pts[i - 1], pts[i]));
+  }
+  return createAirRouteFlight({ pts, cumM, ...options });
+}
+
+test('a flying route cruises at altitude, fast, and asks for terrain once', () => {
+  // Oakland to San Jose, about 55 km in a straight line.
+  const warmed = [];
+  const flight = airFlightFrom(
+    [[-122.2711, 37.8044], [-122.0, 37.55], [-121.8863, 37.3382]],
+    { warmFn: (cells) => warmed.push(cells.length) },
+  );
+  assert.deepEqual(warmed, [24], 'one batch of 24 ground cells per flight');
+  assert.ok(flight.durationS > 150 && flight.durationS < 250, `${flight.durationS} s`);
+  const frames = record(flight);
+  const heights = frames.map((frame) => frame.heightM);
+  assert.ok(Math.min(...heights) >= 1500, `lowest ${Math.min(...heights)} m`);
+  assert.ok(Math.max(...frames.map((f) => f.speed)) > 250, 'cruise near 300 m/s');
+  assert.ok(frames.every((frame) => frame.bankDeg === 0));
+  // It ends over the destination.
+  const end = Cesium.Cartographic.fromCartesian(frames.at(-1).eye);
+  assert.ok(Math.abs(Cesium.Math.toDegrees(end.latitude) - 37.3382) < 0.01);
+  assert.ok(Math.abs(Cesium.Math.toDegrees(end.longitude) + 121.8863) < 0.01);
+});
+
+test('a flying route climbs clear of high ground once the terrain answers', () => {
+  let ground = Number.NaN;
+  const flight = airFlightFrom([[-106.0, 39.5], [-105.5, 39.6]], {
+    floorFn: () => ground,
+  });
+  const before = advanceRouteFlight(flight, FRAME_S).heightM;
+  assert.equal(before, flight.cruiseHeightM, 'cruise height before terrain');
+  assert.ok(before < 4300, 'the cruise alone would be under the peaks');
+  ground = 4300; // Colorado's fourteeners
+  let heightM = before;
+  for (let i = 0; i < 400; i += 1) heightM = advanceRouteFlight(flight, FRAME_S).heightM;
+  assert.ok(heightM > 4300 + 1000, `climbed to ${heightM} m`);
 });

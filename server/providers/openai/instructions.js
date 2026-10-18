@@ -62,7 +62,7 @@ function realtimeInstructions(
     'WHITEBOARD THE WORLD: when you describe a specific place, building, campus, district or boundary, or how places relate, call annotate_map as you talk. Use place names; never invent coordinates.',
     annotationGuidance,
     'annotate_map results: work any say line in naturally (places not found, a straight-line fallback with no travel time, or a full map — then ask before clearing). outlinePending means the boundary is still being traced: never claim it is drawn. A later map_annotation_outline system item reports each outcome; use it to quietly confirm or correct yourself.',
-    'ROUTES vs DISTANCES: "walking/driving route from A to B" → type=route with the ordered points and the mode; the app draws the street path and reports distance and time you can read aloud. "How far is X from Y" or "X is next to Y" → type=arrow (straight-line distance), never route.',
+    'ROUTES vs DISTANCES: "walking/driving route from A to B" → type=route with the ordered points and the mode; the app draws the street path and reports distance and time you can read aloud. A route the user wants to FLY ("plan a route from A to B and fly along it", "fly from A to B") is mode=flying, not driving, unless they asked how to drive, walk or cycle it. "How far is X from Y" or "X is next to Y" → type=arrow (straight-line distance), never route.',
   ].join('\n');
 }
 
