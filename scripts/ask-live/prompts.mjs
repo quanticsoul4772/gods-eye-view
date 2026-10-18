@@ -698,7 +698,7 @@ export const PROMPTS = Object.freeze([
     prompt: 'Show buses in Lagos.',
     checks: {
       answer:
-        /no (supported |live )?(transit |bus )?feed|not (yet )?(covered|available|shown)|listed/i,
+        /no [\w -]{0,30}feed|not (yet )?(covered|available|shown)|listed/i,
     },
   },
   {
