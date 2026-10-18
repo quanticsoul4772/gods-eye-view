@@ -6,6 +6,7 @@ import {
   parseTerrainPoints,
   resolveTerrainHeightRequest,
   terrainPointKey,
+  terrainRetryAfterMs,
   validTerrainResult,
 } from '../../src/data/terrainHeightsProxy.js';
 
@@ -50,6 +51,11 @@ export function terrainHeightsProxy() {
     return 'upstream request failed';
   };
   const UPSTREAM_CHUNK = 64;
+  // After a 429 the upstream is left alone for its Retry-After, or this long
+  // when it gives none (Re:Earth sends none). Every page poll used to retry
+  // straight away, so a busy route flight kept the limit in force.
+  const RATE_LIMIT_PAUSE_MS = 60_000;
+  let rateLimitedUntil = 0;
   const MAX_POINTS = 2000;
 
   /** @type {Map<string, {at:number, result:object}>} keyed by canonical 5dp lon/lat. */
@@ -140,15 +146,28 @@ export function terrainHeightsProxy() {
    * @returns {Promise<Array<object>>}
    */
   async function fetchUpstreamAll(points) {
+    if (Date.now() < rateLimitedUntil) {
+      // Rate-limited: asking again only extends the limit. Cached points are
+      // still served; the rest resolve on the page through its geoid.
+      const error = new Error('HTTP 429');
+      error.coolingDown = true;
+      throw error;
+    }
     const results = [];
     let firstError = null;
     for (let i = 0; i < points.length; i += UPSTREAM_CHUNK) {
       const chunk = points.slice(i, i + UPSTREAM_CHUNK);
       let chunkResults = [];
-      try {
-        chunkResults = await fetchTerrainChunkWithRetry(chunk);
-      } catch (error) {
-        firstError = firstError || error;
+      if (Date.now() >= rateLimitedUntil) {
+        try {
+          chunkResults = await fetchTerrainChunkWithRetry(chunk);
+        } catch (error) {
+          firstError = firstError || error;
+          if (error?.message === 'HTTP 429')
+            rateLimitedUntil =
+              Date.now() +
+              (terrainRetryAfterMs(error.retryAfter) ?? RATE_LIMIT_PAUSE_MS);
+        }
       }
       // Keep later chunks aligned even if a malformed upstream response omits
       // trailing positions. The resolver will reject each null individually.
@@ -213,11 +232,18 @@ export function terrainHeightsProxy() {
           ttlMs: TTL_MS,
         });
         if (outcome.cacheChanged) diskDirty = true;
-        if (outcome.upstreamError) {
+        const failure = chunkFailure ?? outcome.upstreamError;
+        if (failure?.coolingDown) {
+          // Logged once, when the pause began.
+        } else if (outcome.upstreamError) {
           console.warn(
             `[terrain-heights-proxy] refresh incomplete (${upstreamReason(
-              chunkFailure ?? outcome.upstreamError,
-            )})` + ' — serving stale points when available',
+              failure,
+            )}${
+              Date.now() < rateLimitedUntil
+                ? `; pausing upstream for ${Math.ceil((rateLimitedUntil - Date.now()) / 1000)} s`
+                : ''
+            })` + ' — serving stale points when available',
           );
         } else if (outcome.absentPoints > 0) {
           // Not a refresh failure. The upstream answered every position and

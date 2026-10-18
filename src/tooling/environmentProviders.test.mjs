@@ -402,6 +402,28 @@ test('a terrain refresh warning names the upstream failure', async (t) => {
   assert.match(warnings[0], /refresh incomplete \(HTTP 400\)/);
 });
 
+test('after a 429 the terrain proxy leaves the upstream alone and logs once', async (t) => {
+  isolate(t);
+  const warnings = [];
+  t.mock.method(console, 'warn', (...args) => warnings.push(args.join(' ')));
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls += 1;
+    return new Response('', { status: 429 });
+  });
+  const request = install(terrainHeightsProxy());
+  await request('/?points=1,2');
+  const afterFirst = calls;
+  assert.ok(afterFirst >= 1);
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /HTTP 429; pausing upstream for 60 s/);
+  // New points during the pause: no upstream call, no new log line.
+  const paused = await request('/?points=3,4');
+  assert.equal(calls, afterFirst);
+  assert.equal(paused.status, 502);
+  assert.equal(warnings.length, 1);
+});
+
 test('terrain middleware retains successful chunks around a failure and retries only missing points', async (t) => {
   isolate(t);
   const requests = [];
