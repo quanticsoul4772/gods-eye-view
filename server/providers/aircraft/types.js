@@ -33,6 +33,36 @@ const DOWNLOAD_TIMEOUT_MS = 60_000;
 export const MAX_IDS = 20_000;
 const MAX_BODY_BYTES = MAX_IDS * 12 + 64;
 const HEX_RE = /^[0-9a-f]{6}$/;
+/** Short capitalised words in type names that are words, not abbreviations. */
+const NAME_WORDS = Object.freeze({
+  AIR: 'Air',
+  DE: 'de',
+  NEW: 'New',
+  SKY: 'Sky',
+  FLY: 'Fly',
+  CUB: 'Cub',
+});
+
+/**
+ * The database writes manufacturers in capitals ("BOEING 737-800", "DE
+ * HAVILLAND DHC-8-400 Dash 8"); read them as names ("Boeing 737-800", "de
+ * Havilland DHC-8-400 Dash 8"). Words of three letters or fewer stay as
+ * written (ATR, IAI, MBB), as does anything with a digit or lowercase letter.
+ */
+export function readableTypeName(name) {
+  const part = (word) => {
+    if (NAME_WORDS[word]) return NAME_WORDS[word];
+    if (!/^[A-Z]{4,}$/.test(word)) return word;
+    if (word.startsWith('MC'))
+      return 'Mc' + word[2] + word.slice(3).toLowerCase();
+    return word[0] + word.slice(1).toLowerCase();
+  };
+  return String(name)
+    .trim()
+    .split(' ')
+    .map((word) => word.split('-').map(part).join('-'))
+    .join(' ');
+}
 
 /**
  * Build the lookup index from the export's aircrafts.json
@@ -68,7 +98,7 @@ export function buildTypeIndex(aircrafts, types = {}) {
   for (const code of typeCodes) {
     const name = types?.[code]?.[0];
     if (typeof name === 'string' && name.trim())
-      typeNames.set(code, name.trim());
+      typeNames.set(code, readableTypeName(name));
   }
 
   function find(hex) {
