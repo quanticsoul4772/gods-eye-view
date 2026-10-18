@@ -32,6 +32,23 @@ export function terrainHeightsProxy() {
   // cause of "[terrain-heights-proxy] refresh incomplete" (owner incident
   // 2026-08-21). 64 points costs 5.6-12 s, inside the timeout at both ends of
   // that range.
+  /**
+   * A reason for a failed refresh that is safe to log: only the shapes this
+   * module creates itself. Any other message could carry upstream text, so it
+   * is not logged.
+   */
+  const upstreamReason = (error) => {
+    if (error?.name === 'TimeoutError') return 'upstream timed out';
+    if (error?.name === 'AbortError') return 'upstream request aborted';
+    const message = String(error?.message ?? '');
+    if (
+      /^HTTP \d{3}$/.test(message) ||
+      /^upstream omitted \d+ terrain position\(s\)$/.test(message) ||
+      message === 'malformed upstream response (no results array)'
+    )
+      return message;
+    return 'upstream request failed';
+  };
   const UPSTREAM_CHUNK = 64;
   const MAX_POINTS = 2000;
 
@@ -140,6 +157,9 @@ export function terrainHeightsProxy() {
     }
     if (firstError && results.every((result) => result == null))
       throw firstError;
+    // A chunk that failed shows up downstream only as omitted positions; keep
+    // its own error so the log can say what actually went wrong.
+    if (firstError) results.failure = firstError;
     return results;
   }
 
@@ -181,17 +201,23 @@ export function terrainHeightsProxy() {
           return;
         }
 
+        let chunkFailure = null;
         const outcome = await resolveTerrainHeightRequest({
           points,
           cache: mem,
-          fetchMissing: fetchMissingSingleFlight,
+          fetchMissing: async (missing) => {
+            const results = await fetchMissingSingleFlight(missing);
+            chunkFailure = results.failure ?? null;
+            return results;
+          },
           ttlMs: TTL_MS,
         });
         if (outcome.cacheChanged) diskDirty = true;
         if (outcome.upstreamError) {
           console.warn(
-            '[terrain-heights-proxy] refresh incomplete' +
-              ' — serving stale points when available',
+            `[terrain-heights-proxy] refresh incomplete (${upstreamReason(
+              chunkFailure ?? outcome.upstreamError,
+            )})` + ' — serving stale points when available',
           );
         } else if (outcome.absentPoints > 0) {
           // Not a refresh failure. The upstream answered every position and

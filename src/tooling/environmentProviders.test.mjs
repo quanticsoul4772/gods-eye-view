@@ -385,6 +385,23 @@ test('GBFS keeps host/path/method guards, response caps and distinct information
   assert.equal((await request(target('station_status.json'))).status, 502);
 });
 
+test('a terrain refresh warning names the upstream failure', async (t) => {
+  isolate(t);
+  const warnings = [];
+  t.mock.method(console, 'warn', (...args) => warnings.push(args.join(' ')));
+  // The second 64-point chunk fails; the first and third resolve.
+  t.mock.method(globalThis, 'fetch', async (raw) => {
+    const points = new URL(raw).searchParams.get('points').split(';');
+    if (points[0].startsWith('0.64')) return new Response('', { status: 400 });
+    return Response.json({ results: points.map(() => ({ ellipsoid: 1 })) });
+  });
+  const request = install(terrainHeightsProxy());
+  const points = Array.from({ length: 130 }, (_, i) => `${i / 100},1`);
+  await request('/?points=' + points.join(';'));
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /refresh incomplete \(HTTP 400\)/);
+});
+
 test('terrain middleware retains successful chunks around a failure and retries only missing points', async (t) => {
   isolate(t);
   const requests = [];
