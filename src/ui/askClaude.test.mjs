@@ -7,6 +7,7 @@ import {
   isSlashShortcut,
   messageText,
   runTypedTurn,
+  showView,
 } from './askClaude.js';
 
 /** A fake /api/claude/ask that replays scripted replies and records requests. */
@@ -264,4 +265,42 @@ test('the cockpit pop-up previews long answers and keeps the rest', () => {
   assert.equal(more, true);
   assert.equal(preview.length, COCKPIT_PREVIEW_CHARS);
   assert.ok(preview.endsWith('…'));
+});
+
+test('a suggested view turns on its layers, then flies; a cancelled turn does not fly', async () => {
+  const view = {
+    layers: ['cctv'],
+    camera: { lat: 51.5, lon: -0.13, altitude_m: 73373, heading_deg: 0 },
+  };
+  const make = () => {
+    const calls = [];
+    return {
+      calls,
+      viewer: { camera: { flyTo: (options) => calls.push(['fly', options]) } },
+      dataManager: { isEnabled: () => false },
+      run: async (name, args) => calls.push([name, args.layerId]),
+    };
+  };
+  const shown = make();
+  await showView(view, shown);
+  assert.deepEqual(
+    shown.calls.map(([name]) => name),
+    ['set_layer_visibility', 'fly'],
+  );
+
+  // Cancel arrives while the layer loads: no flight afterwards.
+  const cancelled = make();
+  const controller = new AbortController();
+  await showView(view, {
+    ...cancelled,
+    signal: controller.signal,
+    run: async (name, args) => {
+      cancelled.calls.push([name, args.layerId]);
+      controller.abort();
+    },
+  });
+  assert.deepEqual(
+    cancelled.calls.map(([name]) => name),
+    ['set_layer_visibility'],
+  );
 });

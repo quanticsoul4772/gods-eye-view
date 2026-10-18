@@ -320,14 +320,19 @@ export async function runTypedTurn({
   }
 }
 
-/** Turn on the view's layers (leaving the others as they are) and fly to it. */
-async function showView(view, { viewer, dataManager, run }) {
+/**
+ * Turn on the view's layers (leaving the others as they are) and fly to it.
+ * A layer can take seconds to load, so a cancelled turn stops before the
+ * flight.
+ */
+export async function showView(view, { viewer, dataManager, run, signal }) {
   for (const layerId of view.layers ?? []) {
+    if (signal?.aborted) return;
     if (!dataManager.isEnabled(layerId))
       await run('set_layer_visibility', { layerId, enabled: true });
   }
   const camera = view.camera;
-  if (!camera) return;
+  if (!camera || signal?.aborted) return;
   viewer.camera.flyTo({
     destination: Cesium.Cartesian3.fromDegrees(
       camera.lon,
@@ -539,6 +544,16 @@ export function installAskClaude({
         isVoiceActive: voiceActive,
         signal: controller.signal,
       });
+      // The view a query answer suggests belongs to this turn: it is shown
+      // before the turn ends, so it cannot land on a later conversation, and
+      // Cancel stops it.
+      if (outcome.answer && outcome.view && outcome.actions === 0)
+        await showView(outcome.view, {
+          viewer,
+          dataManager,
+          run,
+          signal: controller.signal,
+        });
     } finally {
       clearInterval(turn.timer);
       turn = null;
@@ -550,8 +565,6 @@ export function installAskClaude({
     syncGate();
     syncTurns();
     onDone?.(outcome);
-    if (outcome.answer && outcome.view && outcome.actions === 0)
-      await showView(outcome.view, { viewer, dataManager, run });
     return outcome;
   }
 
