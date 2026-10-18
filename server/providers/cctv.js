@@ -1,4 +1,4 @@
-import { createCctvCatalog } from './cctv/catalog.js';
+import { cctvOffPacks, createCctvCatalog } from './cctv/catalog.js';
 import {
   normalizeFeedType,
   isVideoFeedType,
@@ -144,6 +144,7 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         if (url.pathname === '/sources') {
           const body = {
             trimmedPacks: getCctvSources.trimmedPacks?.() ?? [],
+            offPacks: cctvOffPacks(),
             sources: sources.map((source) => ({
               id: source.id,
               pack: source.pack,
