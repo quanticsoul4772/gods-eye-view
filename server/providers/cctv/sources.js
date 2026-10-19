@@ -70,6 +70,7 @@ import {
   TORONTO_GROUND_ELEVATION_M,
   TORONTO_MAX_CATALOG_BYTES,
   CCTV_SOURCE_FETCH_TIMEOUT_MS,
+  TARKTEE_FETCH_TIMEOUT_MS,
   DELDOT_CCTV_URL,
   DEFAULT_DELDOT_MAX_SOURCES,
   DELDOT_ANCHORS,
@@ -1216,11 +1217,11 @@ export async function loadTarkteeSourcesFromDatex() {
     const [locResp, imgResp] = await Promise.all([
       fetch(TARKTEE_LOCATIONS_URL, {
         headers: { Accept: 'application/xml,text/xml,*/*' },
-        signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+        signal: AbortSignal.timeout(TARKTEE_FETCH_TIMEOUT_MS),
       }),
       fetch(TARKTEE_IMAGES_URL, {
         headers: { Accept: 'application/xml,text/xml,*/*' },
-        signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+        signal: AbortSignal.timeout(TARKTEE_FETCH_TIMEOUT_MS),
       }),
     ]);
     if (!locResp.ok) {
