@@ -6,6 +6,7 @@ import {
 } from '../../server/providers/cctv/cap.js';
 import {
   CCTV_MAX_SOURCES_CEILING,
+  CCTV_SOURCE_CACHE_MS,
   DEFAULT_CCTV_MAX_SOURCES,
 } from '../../server/providers/cctv/constants.js';
 import { createCctvCatalog } from '../../server/providers/cctv/catalog.js';
@@ -159,4 +160,78 @@ test('a pack trimmed to its nearest cameras reports how many it offered', async 
   );
   assert.equal(kept.available, 5);
   assert.deepEqual(kept.region, { west: 0, south: 0, east: 0, north: 4 });
+});
+
+test('an expired catalog is served at once while a slow pack refreshes in the background', async (t) => {
+  const saved = { ...process.env };
+  const envSources = (prefix) =>
+    JSON.stringify(
+      Array.from({ length: 3 }, (_, i) => ({
+        id: `${prefix}-${i}`,
+        name: `${prefix} ${i}`,
+        lat: 30 + i * 0.01,
+        lon: -97,
+        url: `https://example.test/${prefix}-${i}.jpg`,
+      })),
+    );
+  try {
+    // Live packs run alongside the env pack, so one slow upstream can hold
+    // the refresh open.
+    process.env.CCTV_FORCE_AUSTIN = '1';
+    process.env.CCTV_SOURCES_FILE = '/nonexistent/cctv.json';
+    process.env.CCTV_SOURCES_JSON = envSources('old');
+    let now = 1_000_000;
+    t.mock.method(Date, 'now', () => now);
+    t.mock.method(console, 'warn', () => {});
+    t.mock.method(console, 'log', () => {});
+    const hung = [];
+    let hang = false;
+    t.mock.method(globalThis, 'fetch', () =>
+      hang
+        ? new Promise((_, reject) => {
+            hung.push(() => reject(new Error('upstream gave up')));
+          })
+        : Promise.reject(new Error('offline')),
+    );
+    const getSources = createCctvCatalog({ sourceRoot: '/nonexistent' });
+    assert.deepEqual(
+      (await getSources()).map((s) => s.id),
+      ['old-0', 'old-1', 'old-2'],
+    );
+
+    // Past the TTL, with every live pack's upstream hanging.
+    now += CCTV_SOURCE_CACHE_MS + 1;
+    hang = true;
+    process.env.CCTV_SOURCES_JSON = envSources('new');
+    const served = await Promise.race([
+      getSources(),
+      new Promise((resolve) => setTimeout(() => resolve('waited'), 200)),
+    ]);
+    assert.notEqual(
+      served,
+      'waited',
+      'the request did not wait for the refresh',
+    );
+    assert.deepEqual(
+      served.map((s) => s.id),
+      ['old-0', 'old-1', 'old-2'],
+    );
+
+    // When the slow pack gives up, the refreshed catalog replaces the old one.
+    for (const giveUp of hung) giveUp();
+    for (let i = 0; i < 50; i += 1) {
+      const ids = (await getSources()).map((s) => s.id);
+      if (ids[0] === 'new-0') break;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.deepEqual(
+      (await getSources()).map((s) => s.id),
+      ['new-0', 'new-1', 'new-2'],
+    );
+  } finally {
+    for (const key of Object.keys(process.env)) {
+      if (!(key in saved)) delete process.env[key];
+    }
+    Object.assign(process.env, saved);
+  }
 });
