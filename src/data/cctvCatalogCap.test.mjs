@@ -217,7 +217,18 @@ test('an expired catalog is served at once while a slow pack refreshes in the ba
       ['old-0', 'old-1', 'old-2'],
     );
 
+    // Requests during the refresh share it rather than starting another.
+    const pause = () => new Promise((resolve) => setTimeout(resolve, 50));
+    await pause();
+    const inFlight = hung.length;
+    assert.ok(inFlight > 0, 'the refresh reached the hanging upstreams');
+    await getSources();
+    await getSources();
+    await pause();
+    assert.equal(hung.length, inFlight, 'only one refresh ran');
+
     // When the slow pack gives up, the refreshed catalog replaces the old one.
+    hang = false;
     for (const giveUp of hung) giveUp();
     for (let i = 0; i < 50; i += 1) {
       const ids = (await getSources()).map((s) => s.id);

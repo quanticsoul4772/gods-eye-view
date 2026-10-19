@@ -304,21 +304,22 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
       _cctvSourceInflight = refreshCctvSources().finally(() => {
         _cctvSourceInflight = null;
       });
+      // A background refresh has no caller waiting on it: report its failure
+      // here, once per refresh rather than once per request it serves.
+      if (_cctvSourceCache.length) {
+        _cctvSourceInflight.catch((error) => {
+          console.warn(
+            '[CCTV] background catalog refresh failed:',
+            error?.message || error,
+          );
+        });
+      }
     }
     // With a catalog in hand, answer with it while the refresh runs: the
     // refresh lasts as long as the slowest pack (Tarktee's DATEX feeds take up
     // to its 30 s timeout), and every /api/cctv request would otherwise wait
     // for it. Only the first load, with nothing to serve yet, waits.
-    if (_cctvSourceCache.length) {
-      _cctvSourceInflight.catch((error) => {
-        console.warn(
-          '[CCTV] background catalog refresh failed:',
-          error?.message || error,
-        );
-      });
-      return _cctvSourceCache;
-    }
-    return _cctvSourceInflight;
+    return _cctvSourceCache.length ? _cctvSourceCache : _cctvSourceInflight;
   }
 
   /**
