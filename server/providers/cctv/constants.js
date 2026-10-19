@@ -439,6 +439,10 @@ export const CCTV_SOURCE_CACHE_MS = 15 * 60 * 1000;
  * pending forever — a hung fetch aborts, the loader returns [], and
  * serve-stale/other packs take over. */
 export const CCTV_SOURCE_FETCH_TIMEOUT_MS = 15 * 1000;
+/** Tarktee's two DATEX feeds (120 and 160 KB) answered in 2 to 16.6 s across
+ * ten requests on 2026-10-18, so the shared 15 s timeout dropped the Estonian
+ * pack on about a third of loads. Both must arrive for any camera to load. */
+export const TARKTEE_FETCH_TIMEOUT_MS = 30 * 1000;
 /** Individual CCTV image fetches must settle before the active 10-second
  * client refresh cadence. A bounded miss can fall through to Street View or
  * the synthetic frame instead of leaving the browser preview pending. */
