@@ -284,7 +284,8 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
    *
    * Merges every source pack (live open-data packs, local file, env
    * variable), deduplicates by ID, shares the catalog cap fairly across
-   * packs, and caches for CCTV_SOURCE_CACHE_MS.
+   * packs, and caches for CCTV_SOURCE_CACHE_MS. Past that, the cached list is
+   * returned while a background refresh replaces it; only a first load waits.
    *
    * @returns {Promise<Array<object>>} Deduplicated, capped source list.
    */
@@ -299,10 +300,24 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
     // Single-flight: a burst of requests arriving past the TTL shares ONE refresh
     // instead of each launching the full multi-provider refetch. The `.finally`
     // clears the ref so the next post-TTL cycle starts fresh.
-    if (_cctvSourceInflight) return _cctvSourceInflight;
-    _cctvSourceInflight = refreshCctvSources().finally(() => {
-      _cctvSourceInflight = null;
-    });
+    if (!_cctvSourceInflight) {
+      _cctvSourceInflight = refreshCctvSources().finally(() => {
+        _cctvSourceInflight = null;
+      });
+    }
+    // With a catalog in hand, answer with it while the refresh runs: the
+    // refresh lasts as long as the slowest pack (Tarktee's DATEX feeds take up
+    // to its 30 s timeout), and every /api/cctv request would otherwise wait
+    // for it. Only the first load, with nothing to serve yet, waits.
+    if (_cctvSourceCache.length) {
+      _cctvSourceInflight.catch((error) => {
+        console.warn(
+          '[CCTV] background catalog refresh failed:',
+          error?.message || error,
+        );
+      });
+      return _cctvSourceCache;
+    }
     return _cctvSourceInflight;
   }
 
