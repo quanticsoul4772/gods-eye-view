@@ -169,16 +169,13 @@ const COMBINED = [
  * Regression thresholds for --compare (relative to the baseline), set from two
  * identical runs on the Arc baseline machine (2026-10-13):
  * - heap, retained heap, startup timings and bytes repeated within ~5 %;
- * - fps of the heavy scenes (flights ~12k, cables, CCTV, combined) within
- *   ~15-25 %;
- * - fps of mid-weight scenes was bimodal (datacenters 30 vs 59, satellites 34
- *   vs 59): one run cannot judge them, so a flag there needs a second run;
  * - layer activation swung 2-4x with the network (CCTV 4.3-15.5 s), so it is
  *   reported, not gated, until layers have recorded fixtures.
+ * fps and rAF frame times follow the display, so they are not gated; the
+ * work-per-frame metrics get thresholds once an A/A pair has measured their
+ * noise.
  */
 const THRESHOLDS = {
-  fps: -0.25,
-  frameP95Ms: 0.5,
   heapMiB: 0.1,
   heapDeltaMiB: 0.1,
   retainedMiB: 0.15,
@@ -521,11 +518,53 @@ async function measureWindow(
         let renders = 0;
         let ticks = 0;
         const deltas = [];
+        // Work per frame, which the display's refresh rate does not change:
+        // CPU ms from a tick's preUpdate to its postRender (rendered frames
+        // only), and GPU ms from preRender to postRender by a WebGL2 timer
+        // query, read a few frames later when the GPU reports it.
+        const gl = scene.context._gl;
+        const timer = gl.getExtension('EXT_disjoint_timer_query_webgl2');
+        const cpuMs = [];
+        const gpuMs = [];
+        const pending = [];
+        let gpuDisjoint = 0;
+        let tickStart = null;
+        let query = null;
+        const collectQueries = () => {
+          if (gl.getParameter(timer.GPU_DISJOINT_EXT)) {
+            // A disjoint event makes every query in flight meaningless.
+            gpuDisjoint += pending.length;
+            for (const q of pending.splice(0)) gl.deleteQuery(q);
+            return;
+          }
+          while (
+            pending.length &&
+            gl.getQueryParameter(pending[0], gl.QUERY_RESULT_AVAILABLE)
+          ) {
+            const q = pending.shift();
+            gpuMs.push(gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6);
+            gl.deleteQuery(q);
+          }
+        };
         const removeRender = scene.postRender.addEventListener(() => {
           renders += 1;
+          if (tickStart !== null) cpuMs.push(performance.now() - tickStart);
+          tickStart = null;
+          if (query) {
+            gl.endQuery(timer.TIME_ELAPSED_EXT);
+            pending.push(query);
+            query = null;
+          }
+        });
+        const removePreRender = scene.preRender.addEventListener(() => {
+          if (!timer || query) return;
+          collectQueries();
+          query = gl.createQuery();
+          gl.beginQuery(timer.TIME_ELAPSED_EXT, query);
         });
         const removeTick = scene.preUpdate.addEventListener(() => {
           ticks += 1;
+          tickStart = performance.now();
           if (motion) v.camera.rotateRight(0.002);
         });
         if (motion) scene.requestRender();
@@ -535,30 +574,48 @@ async function measureWindow(
           deltas.push(now - last);
           last = now;
           if (now - t0 < ms) requestAnimationFrame(frame);
-          else {
-            removeRender();
-            removeTick();
-            const elapsed = (performance.now() - t0) / 1000;
-            const long = window.__benchLongTasks.slice(longStart);
-            const sorted = deltas.slice(1).sort((a, b) => a - b);
-            const pct = (p) =>
-              sorted.length
-                ? sorted[
-                    Math.min(sorted.length - 1, Math.floor(p * sorted.length))
-                  ]
-                : null;
-            resolve({
-              elapsed,
-              fps: deltas.length / elapsed,
-              ticksPerSec: ticks / elapsed,
-              rendersPerSec: renders / elapsed,
-              frameP50Ms: pct(0.5),
-              frameP95Ms: pct(0.95),
-              frameMaxMs: sorted.at(-1) ?? null,
-              longTasks: long.length,
-              longTaskMs: long.reduce((a, b) => a + b, 0),
-            });
-          }
+          else finish();
+        };
+        const percentile = (values, p) => {
+          const sorted = values.slice().sort((a, b) => a - b);
+          return sorted.length
+            ? sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))]
+            : null;
+        };
+        const finish = async () => {
+          removeRender();
+          removePreRender();
+          removeTick();
+          const elapsed = (performance.now() - t0) / 1000;
+          // Queries still in flight report within a few frames.
+          if (timer)
+            for (let i = 0; i < 30 && pending.length; i += 1) {
+              await new Promise((r) => setTimeout(r, 16));
+              collectQueries();
+            }
+          const gpuUnread = pending.length;
+          if (timer) for (const q of pending.splice(0)) gl.deleteQuery(q);
+          const long = window.__benchLongTasks.slice(longStart);
+          const frameDeltas = deltas.slice(1);
+          resolve({
+            cpuFrameP50Ms: percentile(cpuMs, 0.5),
+            cpuFrameP95Ms: percentile(cpuMs, 0.95),
+            cpuFrames: cpuMs.length,
+            gpuFrameP50Ms: timer ? percentile(gpuMs, 0.5) : null,
+            gpuFrameP95Ms: timer ? percentile(gpuMs, 0.95) : null,
+            gpuFrames: gpuMs.length,
+            gpuDisjoint,
+            gpuUnread,
+            elapsed,
+            fps: deltas.length / elapsed,
+            ticksPerSec: ticks / elapsed,
+            rendersPerSec: renders / elapsed,
+            frameP50Ms: percentile(frameDeltas, 0.5),
+            frameP95Ms: percentile(frameDeltas, 0.95),
+            frameMaxMs: percentile(frameDeltas, 1),
+            longTasks: long.length,
+            longTaskMs: long.reduce((a, b) => a + b, 0),
+          });
         };
         requestAnimationFrame(frame);
       }),
@@ -576,9 +633,19 @@ async function measureWindow(
   }
   const secs = inPage.elapsed;
   return {
-    // Cesium render-loop ticks per second (the app caps them at 60). Headless
-    // rAF is not tied to a 60 Hz display (it read 84/s at idle), so it is kept
-    // only as rafFps.
+    // Work per frame decides comparisons: the display's refresh rate, dynamic
+    // refresh and sleep change how often frames are drawn, not how long one
+    // takes to make.
+    cpuFrameP50Ms: round(inPage.cpuFrameP50Ms, 2),
+    cpuFrameP95Ms: round(inPage.cpuFrameP95Ms, 2),
+    cpuFrames: inPage.cpuFrames,
+    gpuFrameP50Ms: round(inPage.gpuFrameP50Ms, 2),
+    gpuFrameP95Ms: round(inPage.gpuFrameP95Ms, 2),
+    gpuFrames: inPage.gpuFrames,
+    gpuDisjoint: inPage.gpuDisjoint,
+    gpuUnread: inPage.gpuUnread,
+    // Cesium render-loop ticks per second (the app caps them at 60), reported
+    // only: it follows the display. Headless rAF is kept as rafFps.
     fps: round(inPage.ticksPerSec),
     rafFps: round(inPage.fps),
     ticksPerSec: round(inPage.ticksPerSec),
@@ -862,51 +929,17 @@ function compare(current, baseline) {
 
 // ── run ─────────────────────────────────────────────────────────────────────
 
-// Frames follow the display's vsync, as in a real browser. With the display
-// asleep the compositor paces headless Chrome at ~10 Hz (a whole run read
-// 7-9 fps), so a blank-page check refuses to measure then. --uncapped frees
-// the clock from the display (UNCAPPED_FRAME_ARGS) for a machine whose display
-// cannot stay awake, but it also lets light scenes run rAF at 100-300/s,
-// which made fps noisy between runs; vsync is the default.
+// Frames follow the display's vsync, as in a real browser, so how many are
+// drawn depends on the display (its refresh rate, dynamic refresh, sleep:
+// asleep, the compositor paced headless Chrome at ~10 Hz). Comparisons are
+// therefore judged on work per frame (cpuFrame*/gpuFrame*), which does not
+// depend on it, the way Chromium's ANGLE perf tests measure CPU and GPU work
+// under vsync; the blank-page frame clock is recorded, not gated.
+// --uncapped frees the clock from the display (UNCAPPED_FRAME_ARGS); it let
+// light scenes run rAF at 100-300/s.
 const UNCAPPED = argv.includes('--uncapped');
 const browser = await launchProbeBrowser({ gpu: true, uncapped: UNCAPPED });
-const MIN_FRAME_CLOCK = UNCAPPED ? 50 : 55;
-// A display above 60 Hz (or dynamic refresh raising it) lets light scenes run
-// faster than on a 60 Hz baseline, so vsync runs also refuse a fast clock.
-const MAX_FRAME_CLOCK = UNCAPPED ? Infinity : 65;
-const frameClockOk = (rate) =>
-  rate >= MIN_FRAME_CLOCK && rate <= MAX_FRAME_CLOCK;
-// A busy moment (a build just finished, a server starting) dips the clock for
-// a few seconds, so measure up to three times before refusing.
-let frameClock = await blankPageRafRate(browser);
-for (let i = 0; i < 2 && !frameClockOk(frameClock); i += 1) {
-  await new Promise((resolve) => setTimeout(resolve, 5000));
-  frameClock = await blankPageRafRate(browser);
-}
-// Memory and startup do not depend on the frame clock; only frame-rate
-// scenarios need it.
-const FRAME_RATE_SCENARIOS = [
-  'idle',
-  'layers',
-  'detection',
-  'styles',
-  'combined',
-];
-const needsFrameClock = FRAME_RATE_SCENARIOS.some((name) => want(name));
-if (needsFrameClock && frameClock < MIN_FRAME_CLOCK) {
-  await browser.close();
-  console.error(
-    `The frame clock runs at ${frameClock.toFixed(1)}/s on a blank page (need ≥ ${MIN_FRAME_CLOCK}). Wake the display (a sleeping display throttles frames), close GPU-heavy apps, and run again. Not measuring.`,
-  );
-  process.exit(2);
-}
-if (needsFrameClock && frameClock > MAX_FRAME_CLOCK) {
-  await browser.close();
-  console.error(
-    `The frame clock runs at ${frameClock.toFixed(1)}/s on a blank page (need ≤ ${MAX_FRAME_CLOCK}). Set the display to 60 Hz and turn off dynamic refresh rate, then run again. Not measuring.`,
-  );
-  process.exit(2);
-}
+const frameClock = await blankPageRafRate(browser);
 const results = {
   label: SAVE_BASELINE || stamp,
   capturedAt: new Date().toISOString(),

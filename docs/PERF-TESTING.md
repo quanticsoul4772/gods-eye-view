@@ -10,15 +10,18 @@ the findings and ranked work list are a local report
 | Experience            | Metric                                                                                        | Where                                                                  |
 | --------------------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
 | Opening the app       | app ready, tiles loaded, settled (ms); download MiB and requests; heap after start            | `qa-bench` startup                                                     |
-| Panning and orbiting  | Cesium ticks/s while the camera moves (60 = smooth), frame-time p95, long tasks               | `qa-bench` motion windows                                              |
+| Panning and orbiting  | CPU and GPU ms per frame while the camera moves (p50/p95), long tasks; ticks/s reported       | `qa-bench` motion windows                                              |
 | A parked view         | renders/s at rest (0 when nothing moves; ~12 with aircraft, by design), script ms/s           | `qa-bench` rest windows, `qa-perf`, `qa-paced-render`                  |
 | Turning a layer on    | ms until enabled and until first data; object count                                           | `qa-bench` layers                                                      |
 | Memory over a session | heap while a layer is on, heap still held after it is turned off, growth over repeated on/off | `qa-bench` layers (`heapDeltaMiB`, `retainedMiB`), leaks (`growthMiB`) |
 | Asking the assistant  | seconds, model round trips, input tokens per question                                         | `qa-ask-live`                                                          |
 
-`fps` in `qa-bench` is Cesium's render-loop tick rate. Headless `requestAnimationFrame`
-is not tied to a 60 Hz display (it read 84/s at idle), so it is kept only as
-`rafFps`. At rest, compare `rendersPerSec` and `scriptMsPerSec`, not fps: a
+`qa-bench` judges frames by the work each one takes: `cpuFrameP50Ms`/`P95Ms`
+(a Cesium tick's preUpdate to its postRender, rendered frames only) and
+`gpuFrameP50Ms`/`P95Ms` (preRender to postRender, by an
+`EXT_disjoint_timer_query_webgl2` timer query). How many frames are drawn per
+second follows the display, how long one takes to make does not, so `fps`
+(Cesium's render-loop tick rate) and `rafFps` are reported, not gated. At rest, compare `rendersPerSec` and `scriptMsPerSec`, not fps: a
 parked scene that is working correctly draws nothing.
 
 ## Tiers
@@ -47,16 +50,15 @@ parked scene that is working correctly draws nothing.
   Results record `conditions.server`.
 - **Real GPU.** The harness refuses a software renderer unless
   `--allow-software` is passed (then the numbers are relative only).
-- **A frame clock that does not depend on the display.** Headless Chrome on
-  Windows paces frames from the compositor's vsync; when the display sleeps
-  that drops to ~10 Hz, and a whole run read 7–9 fps (a blank page: 10 rAF/s).
-  The harness launches with `--disable-gpu-vsync --disable-frame-rate-limit`,
-  which helped (53 rAF/s with the display just asleep) but not for long: later
-  in the same sleep the blank page got 40–43. So **keep the display awake**
-  during a run; the harness refuses to measure when a blank page gets fewer
-  than 50 frames/s. Cesium still caps its loop at 60, so `fps` keeps its
-  meaning. Disable display sleep for the session (Windows: Settings → Power →
-  screen off "Never", or `powercfg /change monitor-timeout-ac 0`).
+- **Work per frame, not frames per second.** Headless Chrome on Windows paces
+  frames from the compositor's vsync, so the frame rate follows the display:
+  ~10 Hz while it sleeps, 63–77 rAF/s with dynamic refresh rate under
+  activity, and `--disable-gpu-vsync --disable-frame-rate-limit` did not hold
+  it steady (40–43 rAF/s later in one sleep). CPU and GPU ms per frame do not
+  depend on it (Chromium's ANGLE perf tests measure CPU and GPU work under
+  vsync for the same reason), so no display setting is needed. The blank-page
+  frame clock is recorded in `conditions.frameClock`. Motion turns the camera
+  a fixed step per tick, so each frame does comparable work at any frame rate.
 - **A fresh page per scenario.** Layers keep memory after they are turned off,
   so one page carried state forward: styles measured at 22 fps after the layer
   runs and 53–60 fps on a fresh page.
