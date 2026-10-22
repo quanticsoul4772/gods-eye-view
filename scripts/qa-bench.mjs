@@ -222,20 +222,37 @@ async function openApp(browser, { cacheDisabled = false } = {}) {
     }
 
     // Synchronous readbacks: every call and its ms, per method name.
-    const readbacks = { calls: {}, ms: {}, callers: {} };
+    const readbacks = { calls: {}, ms: {}, callers: {}, samples: {} };
     window.__benchReadbacks = readbacks;
     if (stacks) Error.stackTraceLimit = 100;
-    /** The innermost frame that names who asked for the readback. */
+    /**
+     * The innermost frame that names who asked for the readback. An app
+     * frame is followed by the next app frame in another file, so a shared
+     * helper (scenePick.js) also names its caller: "helper ← caller".
+     */
     const callerOf = (stack) => {
-      for (const line of String(stack).split('\n').slice(1)) {
-        const src = line.match(/(\/src\/[^\s?:)]+)(?:\?[^\s:)]*)?:(\d+)/);
-        if (src) return `${src[1]}:${src[2]}`;
+      const lines = String(stack).split('\n').slice(1);
+      const appFrame = (line) =>
+        line.match(/(\/src\/[^\s?:)]+)(?:\?[^\s:)]*)?:(\d+)/);
+      for (const [index, line] of lines.entries()) {
+        const src = appFrame(line);
+        if (src) {
+          const outer = lines
+            .slice(index + 1)
+            .map(appFrame)
+            .find((frame) => frame && frame[1] !== src[1]);
+          return outer
+            ? `${src[1]}:${src[2]} ← ${outer[1]}:${outer[2]}`
+            : `${src[1]}:${src[2]}`;
+        }
         if (line.includes('_updateClamping'))
           return 'Billboard._updateClamping';
         if (line.includes('getGlobeHeight') || line.includes('initializeFrame'))
           return 'Scene.initializeFrame/getGlobeHeight';
         if (line.includes('processUpdateHeight'))
           return 'Cesium3DTileset.processUpdateHeight';
+        if (line.includes('callbackWrapper'))
+          return 'Scene.updateHeight callback (tile loaded)';
       }
       return 'other Cesium';
     };
@@ -251,7 +268,11 @@ async function openApp(browser, { cacheDisabled = false } = {}) {
           readbacks.calls[name] = (readbacks.calls[name] || 0) + 1;
           readbacks.ms[name] = (readbacks.ms[name] || 0) + ms;
           if (gl && stacks) {
-            const caller = callerOf(new Error().stack);
+            const stack = new Error().stack;
+            const caller = callerOf(stack);
+            // A few raw stacks per caller, to read where an unnamed one is.
+            const samples = (readbacks.samples[caller] ||= []);
+            if (samples.length < 3) samples.push(stack);
             const entry = (readbacks.callers[caller] ||= { calls: 0, ms: 0 });
             entry.calls += 1;
             entry.ms += ms;
@@ -279,6 +300,18 @@ async function openApp(browser, { cacheDisabled = false } = {}) {
         'getHeight',
       ])
         wrap(proto, name);
+      // Height callbacks run after a tile loads, with no trace of who asked
+      // for them, so stacks mode counts their registrations by caller.
+      const register = proto.updateHeight;
+      if (stacks && typeof register === 'function') {
+        readbacks.heightCallbacks = {};
+        proto.updateHeight = function benchUpdateHeight(...args) {
+          const caller = callerOf(new Error().stack);
+          readbacks.heightCallbacks[caller] =
+            (readbacks.heightCallbacks[caller] || 0) + 1;
+          return register.apply(this, args);
+        };
+      }
       proto.__benchWrapped = true;
     };
   }, READBACK_STACKS);
@@ -722,7 +755,21 @@ async function restAndMotion(page, cdp, label) {
   };
   const rest = await windows(false);
   const motion = await windows(true);
-  return { rest, motion, sceneCounts: await page.evaluate(sceneCountsInPage) };
+  return {
+    rest,
+    motion,
+    sceneCounts: await page.evaluate(sceneCountsInPage),
+    ...(READBACK_STACKS
+      ? {
+          readbackSamples: await page.evaluate(
+            () => window.__benchReadbacks.samples,
+          ),
+          heightCallbackRegistrations: await page.evaluate(
+            () => window.__benchReadbacks.heightCallbacks,
+          ),
+        }
+      : {}),
+  };
 }
 
 // ── scenarios ───────────────────────────────────────────────────────────────
