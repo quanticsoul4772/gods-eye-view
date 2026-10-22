@@ -39,11 +39,23 @@
  *   node scripts/qa-bench.mjs --basemap esri-imagery  measure on a given map stack (startup keeps the default)
  *   node scripts/qa-bench.mjs --uncapped              frames not tied to the display (noisier; see below)
  *   node scripts/qa-bench.mjs --allow-software        permit SwiftShader (numbers are relative only)
+ *   node scripts/qa-bench.mjs --camera fleet-oblique  view the contiguous US from 2,500 km at -35°
+ *   node scripts/qa-bench.mjs --readback-stacks       attribute GPU readbacks to callers (dev server, untimed)
+ *
+ * Every window also counts synchronous GPU readbacks (WebGL readPixels and
+ * getBufferSubData) and the Scene queries that cause them (sampleHeight,
+ * clampToHeight, pickPosition, pick, drillPick, getHeight), with their
+ * total ms. --readback-stacks also captures a stack per GL readback and names
+ * its caller: the innermost app frame (/src/file:line), else the Cesium
+ * internal source (clamped billboards, the camera height query, tileset
+ * height callbacks). Capturing stacks slows frames, so its fps are not
+ * comparable; run it against the dev server, whose Cesium is unminified.
  *
  * Output: qa-shots/bench/<stamp>/results.json and report.md (gitignored).
  * Baselines: bench/baselines/<name>.json (committed).
  * Exit code 1 when --compare finds a regression beyond the thresholds.
  */
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -76,6 +88,27 @@ const REPS = Number(opt('--reps', '2'));
 
 /** Austin from 60 km, looking straight down: the harnesses' shared park spot. */
 const PARK = { lat: 30.27, lon: -97.74, height: 60_000, pitch: -90 };
+/**
+ * Camera for every scenario. `park` is the 69 x 43 km Austin frame above, in
+ * which most aircraft are off screen; `fleet-oblique` looks at the middle of
+ * the contiguous US from 2,500 km at -35°, so the whole fleet is drawn.
+ */
+const CAMERAS = {
+  park: null,
+  'fleet-oblique': {
+    lon: -98,
+    lat: 39,
+    heading: 0,
+    pitch: -35,
+    range: 2_500_000,
+  },
+};
+const CAMERA = opt('--camera', 'park');
+if (!Object.hasOwn(CAMERAS, CAMERA))
+  throw new Error(
+    `Unknown --camera ${CAMERA}; use ${Object.keys(CAMERAS).join(' or ')}`,
+  );
+const READBACK_STACKS = argv.includes('--readback-stacks');
 const LAYER_FILTER = (opt('--layers', '') || '').split(',').filter(Boolean);
 const ALL_LAYERS = [
   'flights',
@@ -105,6 +138,23 @@ const STYLES = [
   'anime',
   'noir',
   'snow',
+];
+/**
+ * Style runs. Sharpen is on by default in every style, and Cesium allocates
+ * and clears the post-process framebuffer while any stage exists, even a
+ * disabled one, so `normal` is also measured with sharpen off and with every
+ * (then disabled) stage removed.
+ */
+const STYLE_RUNS = [
+  { key: 'normal', style: 'normal' },
+  { key: 'normal-sharpen-off', style: 'normal', sharpenOff: true },
+  {
+    key: 'normal-stages-removed',
+    style: 'normal',
+    sharpenOff: true,
+    removeStages: true,
+  },
+  ...STYLES.slice(1).map((style) => ({ key: style, style })),
 ];
 const DETECTION = [25, 50, 100];
 const COMBINED = [
@@ -160,7 +210,9 @@ const median = (values) => {
 async function openApp(browser, { cacheDisabled = false } = {}) {
   const page = await browser.newPage();
   await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
-  await page.evaluateOnNewDocument(() => {
+  const pageErrors = [];
+  page.on('pageerror', (error) => pageErrors.push(String(error?.message)));
+  await page.evaluateOnNewDocument((stacks) => {
     sessionStorage.setItem('gev:first-run-mission-session:v1', 'dismissed');
     window.__benchLongTasks = [];
     try {
@@ -171,14 +223,214 @@ async function openApp(browser, { cacheDisabled = false } = {}) {
     } catch {
       /* longtask unsupported: counts stay 0 */
     }
-  });
+
+    // Synchronous readbacks: every call and its ms, per method name.
+    const readbacks = { calls: {}, ms: {}, callers: {} };
+    window.__benchReadbacks = readbacks;
+    if (stacks) Error.stackTraceLimit = 100;
+    /** The innermost frame that names who asked for the readback. */
+    const callerOf = (stack) => {
+      for (const line of String(stack).split('\n').slice(1)) {
+        const src = line.match(/(\/src\/[^\s?:)]+)(?:\?[^\s:)]*)?:(\d+)/);
+        if (src) return `${src[1]}:${src[2]}`;
+        if (line.includes('_updateClamping'))
+          return 'Billboard._updateClamping';
+        if (line.includes('getGlobeHeight') || line.includes('initializeFrame'))
+          return 'Scene.initializeFrame/getGlobeHeight';
+        if (line.includes('processUpdateHeight'))
+          return 'Cesium3DTileset.processUpdateHeight';
+      }
+      return 'other Cesium';
+    };
+    const wrap = (proto, name, { gl = false } = {}) => {
+      const original = proto?.[name];
+      if (typeof original !== 'function') return;
+      proto[name] = function benchReadback(...args) {
+        const t0 = performance.now();
+        try {
+          return original.apply(this, args);
+        } finally {
+          const ms = performance.now() - t0;
+          readbacks.calls[name] = (readbacks.calls[name] || 0) + 1;
+          readbacks.ms[name] = (readbacks.ms[name] || 0) + ms;
+          if (gl && stacks) {
+            const caller = callerOf(new Error().stack);
+            const entry = (readbacks.callers[caller] ||= { calls: 0, ms: 0 });
+            entry.calls += 1;
+            entry.ms += ms;
+          }
+        }
+      };
+    };
+    for (const proto of [
+      window.WebGL2RenderingContext?.prototype,
+      window.WebGLRenderingContext?.prototype,
+    ])
+      wrap(proto, 'readPixels', { gl: true });
+    wrap(window.WebGL2RenderingContext?.prototype, 'getBufferSubData', {
+      gl: true,
+    });
+    window.__benchWrapScene = (scene) => {
+      const proto = Object.getPrototypeOf(scene);
+      if (proto.__benchWrapped) return;
+      for (const name of [
+        'sampleHeight',
+        'clampToHeight',
+        'pickPosition',
+        'pick',
+        'drillPick',
+        'getHeight',
+      ])
+        wrap(proto, name);
+      proto.__benchWrapped = true;
+    };
+  }, READBACK_STACKS);
   const cdp = await page.createCDPSession();
   await cdp.send('Performance.enable');
   if (cacheDisabled) {
     await cdp.send('Network.enable');
     await cdp.send('Network.setCacheDisabled', { cacheDisabled: true });
   }
-  return { page, cdp };
+  return { page, cdp, pageErrors };
+}
+
+/** Readback counters so far (calls and ms per method, callers by stack). */
+function readbackTotals(page) {
+  return page.evaluate(() => structuredClone(window.__benchReadbacks));
+}
+
+/** Per-method readback calls and ms between two totals, as flat metrics. */
+function readbackDelta(before, after) {
+  const out = {};
+  for (const name of Object.keys(after.calls)) {
+    out[`${name}Calls`] = after.calls[name] - (before.calls[name] || 0);
+    out[`${name}Ms`] = round(after.ms[name] - (before.ms[name] || 0));
+  }
+  const callers = {};
+  for (const [caller, entry] of Object.entries(after.callers)) {
+    const was = before.callers[caller] || { calls: 0, ms: 0 };
+    if (entry.calls > was.calls)
+      callers[caller] = {
+        calls: entry.calls - was.calls,
+        ms: round(entry.ms - was.ms),
+      };
+  }
+  return { metrics: out, callers };
+}
+
+/**
+ * Whether the ground is loaded: the globe's tiles and every shown 3D tileset's
+ * (Google's photorealistic tiles hide the globe, whose tilesLoaded is then
+ * true at once). Runs in the page.
+ */
+function tilesReadyInPage() {
+  const scene = window.__godsEyeView.viewer.scene;
+  if (!scene.globe.tilesLoaded) return false;
+  const primitives = scene.primitives;
+  for (let i = 0; i < primitives.length; i += 1) {
+    const primitive = primitives.get(i);
+    if (
+      primitive?.show !== false &&
+      typeof primitive?.tilesLoaded === 'boolean' &&
+      !primitive.tilesLoaded
+    )
+      return false;
+  }
+  return true;
+}
+
+/**
+ * Shown primitives, and billboards and points shown and on screen (inside the
+ * view frustum and above the horizon), plus entities per data source. Taken
+ * between windows, outside the timed interval. Runs in the page; uses only
+ * live Cesium instances, since the dev server has no window.Cesium.
+ */
+function sceneCountsInPage() {
+  const viewer = window.__godsEyeView.viewer;
+  const scene = viewer.scene;
+  const camera = scene.camera;
+  const planes = camera.frustum.computeCullingVolume(
+    camera.positionWC,
+    camera.directionWC,
+    camera.upWC,
+  ).planes;
+  const radii = scene.globe.ellipsoid.radii;
+  const eye = {
+    x: camera.positionWC.x / radii.x,
+    y: camera.positionWC.y / radii.y,
+    z: camera.positionWC.z / radii.z,
+  };
+  const eyeHorizonSq = eye.x ** 2 + eye.y ** 2 + eye.z ** 2 - 1;
+  const onScreen = (p) => {
+    for (const plane of planes)
+      if (plane.x * p.x + plane.y * p.y + plane.z * p.z + plane.w < 0)
+        return false;
+    // Cesium's EllipsoidalOccluder test, in the ellipsoid's scaled space.
+    const t = {
+      x: p.x / radii.x - eye.x,
+      y: p.y / radii.y - eye.y,
+      z: p.z / radii.z - eye.z,
+    };
+    const tDotEye = -(t.x * eye.x + t.y * eye.y + t.z * eye.z);
+    return !(
+      tDotEye > eyeHorizonSq &&
+      tDotEye ** 2 / (t.x ** 2 + t.y ** 2 + t.z ** 2) > eyeHorizonSq
+    );
+  };
+  const counts = {
+    primitivesShown: 0,
+    billboards: 0,
+    billboardsOnScreen: 0,
+    points: 0,
+    pointsOnScreen: 0,
+  };
+  const visit = (collection) => {
+    for (let i = 0; i < collection.length; i += 1) {
+      const primitive = collection.get(i);
+      if (!primitive || primitive.show === false) continue;
+      if (Array.isArray(primitive._primitives)) {
+        visit(primitive);
+        continue;
+      }
+      counts.primitivesShown += 1;
+      const kind = Array.isArray(primitive._billboards)
+        ? 'billboards'
+        : Array.isArray(primitive._pointPrimitives)
+          ? 'points'
+          : null;
+      if (!kind) continue;
+      for (let j = 0; j < primitive.length; j += 1) {
+        const item = primitive.get(j);
+        if (!item?.show) continue;
+        counts[kind] += 1;
+        if (onScreen(item.position)) counts[`${kind}OnScreen`] += 1;
+      }
+    }
+  };
+  visit(scene.primitives);
+  visit(scene.groundPrimitives);
+  const entities = {};
+  for (let i = 0; i < viewer.dataSources.length; i += 1) {
+    const source = viewer.dataSources.get(i);
+    if (source.show === false) continue;
+    const name = source.name || `source-${i}`;
+    entities[name] = (entities[name] || 0) + source.entities.values.length;
+  }
+  return { ...counts, entities };
+}
+
+/** The GPU names and driver versions Windows reports; null elsewhere. */
+function gpuDrivers() {
+  if (process.platform !== 'win32') return null;
+  return execFileSync(
+    'powershell',
+    [
+      '-NoProfile',
+      '-Command',
+      '(Get-CimInstance Win32_VideoController | ForEach-Object { "$($_.Name) $($_.DriverVersion)" }) -join "; "',
+    ],
+    { encoding: 'utf8' },
+  ).trim();
 }
 
 async function cdpMetrics(cdp) {
@@ -193,6 +445,27 @@ async function heapAfterGcMiB(cdp) {
 }
 
 function park(page, at = PARK) {
+  const view = CAMERAS[CAMERA];
+  if (view)
+    return page.evaluate((s) => {
+      const v = window.__godsEyeView.viewer;
+      v.trackedEntity = undefined;
+      v.camera.cancelFlight();
+      const rad = Math.PI / 180;
+      const target = v.scene.globe.ellipsoid.cartographicToCartesian({
+        longitude: s.lon * rad,
+        latitude: s.lat * rad,
+        height: 0,
+      });
+      v.camera.lookAt(target, {
+        heading: s.heading * rad,
+        pitch: s.pitch * rad,
+        range: s.range,
+      });
+      // Release the look-at frame so the camera moves freely again; Matrix4
+      // is read off a live instance (the dev server has no window.Cesium).
+      v.camera.lookAtTransform(v.camera.transform.constructor.IDENTITY);
+    }, view);
   return page.evaluate((s) => {
     const v = window.__godsEyeView.viewer;
     v.trackedEntity = undefined;
@@ -211,13 +484,10 @@ function park(page, at = PARK) {
 
 function waitTiles(page, timeout) {
   return page
-    .waitForFunction(
-      () => window.__godsEyeView.viewer.scene.globe.tilesLoaded,
-      {
-        timeout,
-        polling: 200,
-      },
-    )
+    .waitForFunction(tilesReadyInPage, {
+      timeout,
+      polling: 200,
+    })
     .then(
       () => true,
       () => false,
@@ -239,6 +509,8 @@ async function measureWindow(
     await cdp.send('Profiler.setSamplingInterval', { interval: 500 });
     await cdp.send('Profiler.start');
   }
+  const tilesLoadedAtStart = (await page.evaluate(tilesReadyInPage)) ? 1 : 0;
+  const readbacksBefore = await readbackTotals(page);
   const before = await cdpMetrics(cdp);
   const inPage = await page.evaluate(
     (ms, motion) =>
@@ -294,6 +566,7 @@ async function measureWindow(
     motion,
   );
   const after = await cdpMetrics(cdp);
+  const readbacks = readbackDelta(readbacksBefore, await readbackTotals(page));
   if (PROFILE) {
     const { profile } = await cdp.send('Profiler.stop');
     fs.writeFileSync(
@@ -322,7 +595,39 @@ async function measureWindow(
       ((after.TaskDuration - before.TaskDuration) * 1000) / secs,
     ),
     heapMiB: round(after.JSHeapUsedSize / 2 ** 20),
+    tilesLoadedAtStart,
+    ...readbacks.metrics,
+    ...(READBACK_STACKS ? { readbackCallers: readbacks.callers } : {}),
   };
+}
+
+/**
+ * Combine a sample's windows: the median of each metric (a readback method
+ * absent from a window had 0 calls), the minimum of tilesLoadedAtStart (0
+ * when any window started while tiles streamed), and summed readback callers.
+ */
+function combineWindows(runs) {
+  const keys = [...new Set(runs.flatMap((run) => Object.keys(run)))];
+  const out = {};
+  for (const key of keys) {
+    if (key === 'readbackCallers') {
+      const callers = {};
+      for (const run of runs)
+        for (const [caller, entry] of Object.entries(run.readbackCallers)) {
+          const sum = (callers[caller] ||= { calls: 0, ms: 0 });
+          sum.calls += entry.calls;
+          sum.ms = round(sum.ms + entry.ms);
+        }
+      out.readbackCallers = callers;
+    } else if (key === 'tilesLoadedAtStart') {
+      out[key] = Math.min(...runs.map((run) => run[key]));
+    } else {
+      out[key] = round(
+        median(runs.map((run) => (run[key] === undefined ? 0 : run[key]))),
+      );
+    }
+  }
+  return out;
 }
 
 /**
@@ -346,14 +651,11 @@ async function restAndMotion(page, cdp, label) {
           { motion },
         ),
       );
-    return Object.fromEntries(
-      Object.keys(runs[0]).map((k) => [
-        k,
-        round(median(runs.map((r) => r[k]))),
-      ]),
-    );
+    return combineWindows(runs);
   };
-  return { rest: await windows(false), motion: await windows(true) };
+  const rest = await windows(false);
+  const motion = await windows(true);
+  return { rest, motion, sceneCounts: await page.evaluate(sceneCountsInPage) };
 }
 
 // ── scenarios ───────────────────────────────────────────────────────────────
@@ -569,10 +871,15 @@ function compare(current, baseline) {
 const UNCAPPED = argv.includes('--uncapped');
 const browser = await launchProbeBrowser({ gpu: true, uncapped: UNCAPPED });
 const MIN_FRAME_CLOCK = UNCAPPED ? 50 : 55;
+// A display above 60 Hz (or dynamic refresh raising it) lets light scenes run
+// faster than on a 60 Hz baseline, so vsync runs also refuse a fast clock.
+const MAX_FRAME_CLOCK = UNCAPPED ? Infinity : 65;
+const frameClockOk = (rate) =>
+  rate >= MIN_FRAME_CLOCK && rate <= MAX_FRAME_CLOCK;
 // A busy moment (a build just finished, a server starting) dips the clock for
 // a few seconds, so measure up to three times before refusing.
 let frameClock = await blankPageRafRate(browser);
-for (let i = 0; i < 2 && frameClock < MIN_FRAME_CLOCK; i += 1) {
+for (let i = 0; i < 2 && !frameClockOk(frameClock); i += 1) {
   await new Promise((resolve) => setTimeout(resolve, 5000));
   frameClock = await blankPageRafRate(browser);
 }
@@ -593,6 +900,13 @@ if (needsFrameClock && frameClock < MIN_FRAME_CLOCK) {
   );
   process.exit(2);
 }
+if (needsFrameClock && frameClock > MAX_FRAME_CLOCK) {
+  await browser.close();
+  console.error(
+    `The frame clock runs at ${frameClock.toFixed(1)}/s on a blank page (need ≤ ${MAX_FRAME_CLOCK}). Set the display to 60 Hz and turn off dynamic refresh rate, then run again. Not measuring.`,
+  );
+  process.exit(2);
+}
 const results = {
   label: SAVE_BASELINE || stamp,
   capturedAt: new Date().toISOString(),
@@ -603,6 +917,7 @@ const results = {
     memoryGiB: round(os.totalmem() / 2 ** 30),
     node: process.version,
     chrome: await browser.version(),
+    gpuDrivers: gpuDrivers(),
   },
   conditions: {
     viewport: '1440x900@1',
@@ -611,6 +926,8 @@ const results = {
     isolation: 'fresh page per scenario',
     frameClock: `${UNCAPPED ? `uncapped (${UNCAPPED_FRAME_ARGS.join(' ')})` : 'display vsync'}, blank page ${frameClock.toFixed(0)} rAF/s`,
     park: PARK,
+    camera: { name: CAMERA, view: CAMERAS[CAMERA] ?? PARK },
+    readbackStacks: READBACK_STACKS,
     appUrl: APP_URL,
   },
   scenarios: {},
@@ -647,6 +964,9 @@ try {
         window.__godsEyeView.voiceCommands?.runner,
       { timeout: 180_000 },
     );
+    await app.page.evaluate(() =>
+      window.__benchWrapScene(window.__godsEyeView.viewer.scene),
+    );
     await pause(4000);
     if (BASEMAP)
       await app.page.evaluate(
@@ -666,6 +986,8 @@ try {
     );
     const renderer = await webglRenderer(page);
     results.machine.gpu = renderer;
+    // What the scenarios' camera shows, to check the view by eye.
+    await page.screenshot({ path: path.join(outDir, `camera-${CAMERA}.png`) });
     results.conditions.basemap = await page.evaluate(
       () =>
         window.__godsEyeView.mapStackController?.getState?.()?.activeId ?? null,
@@ -774,24 +1096,54 @@ try {
 
   if (want('styles')) {
     results.scenarios.styles = {};
-    for (const style of STYLES) {
-      const { page, cdp } = await fresh();
-      await page.evaluate(
+    const setStyle = (page, style) =>
+      page.evaluate(
         (s) =>
           window.__godsEyeView.voiceCommands.runner('set_visual_style', {
             style: s,
           }),
         style,
       );
-      results.scenarios.styles[style] = await restAndMotion(
-        page,
-        cdp,
-        `style-${style}`,
-      );
+    {
+      // Unmeasured: the first style page fills the HTTP and shader caches,
+      // which otherwise slowed whichever style ran first.
+      const { page, cdp } = await fresh();
+      await setStyle(page, 'normal');
+      await measureWindow(page, cdp, 'style-warm', { motion: true, ms: 3000 });
+      await waitTiles(page, 20_000);
+      await page.close();
+    }
+    for (const run of STYLE_RUNS) {
+      const { page, cdp, pageErrors } = await fresh();
+      await setStyle(page, run.style);
+      if (run.sharpenOff)
+        await page.evaluate(() =>
+          window.__godsEyeView.voiceCommands.runner('set_post_processing', {
+            sharpen: { enabled: false },
+          }),
+        );
+      let stagesRemaining = null;
+      if (run.removeStages) {
+        stagesRemaining = await page.evaluate(() => {
+          const stages = window.__godsEyeView.viewer.scene.postProcessStages;
+          for (let i = stages.length - 1; i >= 0; i -= 1)
+            if (!stages.get(i).enabled) stages.remove(stages.get(i));
+          return stages.length;
+        });
+        if (stagesRemaining !== 0)
+          throw new Error(
+            `style ${run.key}: ${stagesRemaining} post-process stage(s) still enabled after sharpen off`,
+          );
+      }
+      results.scenarios.styles[run.key] = {
+        ...(await restAndMotion(page, cdp, `style-${run.key}`)),
+        ...(run.removeStages ? { stagesRemaining } : {}),
+        pageErrors: pageErrors.length,
+      };
       await page.close();
       console.log(
-        `style ${style}`,
-        JSON.stringify(results.scenarios.styles[style].motion),
+        `style ${run.key}`,
+        JSON.stringify(results.scenarios.styles[run.key].motion),
       );
     }
   }
