@@ -39,7 +39,7 @@
  *   node scripts/qa-bench.mjs --basemap esri-imagery  measure on a given map stack (startup keeps the default)
  *   node scripts/qa-bench.mjs --uncapped              frames not tied to the display (noisier; see below)
  *   node scripts/qa-bench.mjs --allow-software        permit SwiftShader (numbers are relative only)
- *   node scripts/qa-bench.mjs --camera fleet-oblique  view the contiguous US from 2,500 km at -35°
+ *   node scripts/qa-bench.mjs --camera fleet-oblique  view the contiguous US from 5,000 km at -55°
  *   node scripts/qa-bench.mjs --readback-stacks       attribute GPU readbacks to callers (dev server, untimed)
  *
  * Every window also counts synchronous GPU readbacks (WebGL readPixels and
@@ -91,16 +91,16 @@ const PARK = { lat: 30.27, lon: -97.74, height: 60_000, pitch: -90 };
 /**
  * Camera for every scenario. `park` is the 69 x 43 km Austin frame above, in
  * which most aircraft are off screen; `fleet-oblique` looks at the middle of
- * the contiguous US from 2,500 km at -35°, so the whole fleet is drawn.
+ * the contiguous US from 5,000 km at -55°, so the whole fleet is drawn.
  */
 const CAMERAS = {
   park: null,
   'fleet-oblique': {
-    lon: -98,
-    lat: 39,
+    lon: -97,
+    lat: 38,
     heading: 0,
-    pitch: -35,
-    range: 2_500_000,
+    pitch: -55,
+    range: 5_000_000,
   },
 };
 const CAMERA = opt('--camera', 'park');
