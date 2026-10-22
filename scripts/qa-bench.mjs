@@ -30,6 +30,7 @@
  *   npm run build && npx vite preview --port 4180 --strictPort   (another shell)
  *   QA_BASE_URL=http://localhost:4180 node scripts/qa-bench.mjs   all scenarios, real GPU
  *   node scripts/qa-bench.mjs --only startup,layers   a subset
+ *   node scripts/qa-bench.mjs --only hud-pick         HUD place-label picks per summary build
  *   node scripts/qa-bench.mjs --save-baseline arc-win11
  *   node scripts/qa-bench.mjs --compare bench/baselines/arc-win11.json
  *   node scripts/qa-bench.mjs --only layers --layers cctv,radio   chosen layers
@@ -40,6 +41,7 @@
  *   node scripts/qa-bench.mjs --uncapped              frames not tied to the display (noisier; see below)
  *   node scripts/qa-bench.mjs --allow-software        permit SwiftShader (numbers are relative only)
  *   node scripts/qa-bench.mjs --camera fleet-oblique  view the contiguous US from 5,000 km at -55°
+ *   node scripts/qa-bench.mjs --camera airport-atl    Atlanta airfield from 4 km at -35° (aircraft on the ground)
  *   node scripts/qa-bench.mjs --readback-stacks       attribute GPU readbacks to callers (dev server, untimed)
  *
  * Every window also counts synchronous GPU readbacks (WebGL readPixels and
@@ -91,7 +93,9 @@ const PARK = { lat: 30.27, lon: -97.74, height: 60_000, pitch: -90 };
 /**
  * Camera for every scenario. `park` is the 69 x 43 km Austin frame above, in
  * which most aircraft are off screen; `fleet-oblique` looks at the middle of
- * the contiguous US from 5,000 km at -55°, so the whole fleet is drawn.
+ * the contiguous US from 5,000 km at -55°, so the whole fleet is drawn;
+ * `airport-atl` looks at Atlanta's airfield from 4 km at -35°, so aircraft
+ * on the ground (whose models ask the ground snap for heights) are in view.
  */
 const CAMERAS = {
   park: null,
@@ -101,6 +105,13 @@ const CAMERAS = {
     heading: 0,
     pitch: -55,
     range: 5_000_000,
+  },
+  'airport-atl': {
+    lon: -84.4277,
+    lat: 33.6407,
+    heading: 0,
+    pitch: -35,
+    range: 4_000,
   },
 };
 const CAMERA = opt('--camera', 'park');
@@ -298,6 +309,7 @@ async function openApp(browser, { cacheDisabled = false } = {}) {
         'pick',
         'drillPick',
         'getHeight',
+        'pickFromRay',
       ])
         wrap(proto, name);
       // Height callbacks run after a tile loads, with no trace of who asked
@@ -439,6 +451,25 @@ function sceneCountsInPage() {
   };
   visit(scene.primitives);
   visit(scene.groundPrimitives);
+  // Aircraft on the ground in view: each one's 3D model asks the ground snap
+  // for a height, so its sample counts are compared per aircraft.
+  // (A finite limit: getAnalystRecords falls back to 2,000 for Infinity.)
+  const rad = Math.PI / 180;
+  counts.onGroundAircraftOnScreen = 0;
+  for (const id of ['flights', 'military']) {
+    const module = window.__godsEyeView.dataManager.layers.get(id)?.module;
+    for (const record of module?.getAnalystRecords?.(Number.MAX_SAFE_INTEGER) ||
+      []) {
+      if (!record.onGround || record.lat === null || record.lon === null)
+        continue;
+      const position = scene.globe.ellipsoid.cartographicToCartesian({
+        longitude: record.lon * rad,
+        latitude: record.lat * rad,
+        height: 0,
+      });
+      if (onScreen(position)) counts.onGroundAircraftOnScreen += 1;
+    }
+  }
   const entities = {};
   for (let i = 0; i < viewer.dataSources.length; i += 1) {
     const source = viewer.dataSources.get(i);
@@ -736,13 +767,24 @@ function combineWindows(runs) {
  * warm-up the first scene measured after a camera move ran at half speed
  * while its tiles and shaders loaded.
  */
-async function restAndMotion(page, cdp, label) {
-  await measureWindow(page, cdp, `${label}-warmup`, { motion: true, ms: 3000 });
+/**
+ * Put the camera back on the scenario's view and let its tiles load. Motion
+ * turns the camera about the Earth's axis (rotateRight), so the 3 s warm-up
+ * alone moved the view ~20° of longitude, and a build drawing more frames
+ * moved it further: every window and count starts from the parked view.
+ */
+async function repark(page) {
+  await park(page);
   await waitTiles(page, 20_000);
   await pause(1500);
+}
+
+async function restAndMotion(page, cdp, label) {
+  await measureWindow(page, cdp, `${label}-warmup`, { motion: true, ms: 3000 });
   const windows = async (motion) => {
     const runs = [];
-    for (let i = 0; i < REPS; i += 1)
+    for (let i = 0; i < REPS; i += 1) {
+      await repark(page);
       runs.push(
         await measureWindow(
           page,
@@ -751,10 +793,12 @@ async function restAndMotion(page, cdp, label) {
           { motion },
         ),
       );
+    }
     return combineWindows(runs);
   };
   const rest = await windows(false);
   const motion = await windows(true);
+  await repark(page);
   return {
     rest,
     motion,
@@ -876,7 +920,7 @@ async function layerScenario(page, cdp, layerId) {
   // layer's own cost is the detection-off window; the default-state windows
   // above are what a new user sees.
   await setDetection(page, null);
-  await pause(1500);
+  await repark(page);
   const motionDetectionOff = await measureWindow(
     page,
     cdp,
@@ -1226,6 +1270,45 @@ try {
         JSON.stringify(results.scenarios.styles[run.key].motion),
       );
     }
+  }
+
+  if (want('hud-pick')) {
+    // The HUD summary's place label picks the screen centre. It refreshes
+    // every 15 s and on moveEnd, so a timed window holds 0-1 refreshes; this
+    // builds the summary context a fixed number of times while the camera
+    // turns and counts the picks per build (no summary request is sent).
+    const { page } = await fresh();
+    const builds = 10;
+    const before = await readbackTotals(page);
+    const elapsedMs = await page.evaluate(async (n) => {
+      const v = window.__godsEyeView.viewer;
+      const hud = window.__godsEyeView.styleManager.hud;
+      const removeTick = v.scene.preUpdate.addEventListener(() =>
+        v.camera.rotateRight(0.002),
+      );
+      v.scene.requestRender();
+      let ms = 0;
+      for (let i = 0; i < n; i += 1) {
+        await new Promise((r) => setTimeout(r, 500));
+        const t0 = performance.now();
+        await hud._summaryContext();
+        ms += performance.now() - t0;
+      }
+      removeTick();
+      return ms;
+    }, builds);
+    const delta = readbackDelta(before, await readbackTotals(page));
+    results.scenarios.hudPick = {
+      builds,
+      contextMsPerBuild: round(elapsedMs / builds),
+      pickFromRayPerBuild: round(
+        (delta.metrics.pickFromRayCalls || 0) / builds,
+      ),
+      readPixelsPerBuild: round((delta.metrics.readPixelsCalls || 0) / builds),
+      readPixelsMsPerBuild: round((delta.metrics.readPixelsMs || 0) / builds),
+    };
+    await page.close();
+    console.log('hud-pick', JSON.stringify(results.scenarios.hudPick));
   }
 
   if (want('combined')) {
