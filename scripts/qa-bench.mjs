@@ -425,6 +425,16 @@ function sceneCountsInPage() {
     billboardsOnScreen: 0,
     points: 0,
     pointsOnScreen: 0,
+    models: 0,
+    modelsOnScreen: 0,
+  };
+  const countItems = (collection, kind) => {
+    for (let j = 0; j < collection.length; j += 1) {
+      const item = collection.get(j);
+      if (!item?.show) continue;
+      counts[kind] += 1;
+      if (onScreen(item.position)) counts[`${kind}OnScreen`] += 1;
+    }
   };
   const visit = (collection) => {
     for (let i = 0; i < collection.length; i += 1) {
@@ -435,18 +445,26 @@ function sceneCountsInPage() {
         continue;
       }
       counts.primitivesShown += 1;
-      const kind = Array.isArray(primitive._billboards)
-        ? 'billboards'
-        : Array.isArray(primitive._pointPrimitives)
-          ? 'points'
-          : null;
-      if (!kind) continue;
-      for (let j = 0; j < primitive.length; j += 1) {
-        const item = primitive.get(j);
-        if (!item?.show) continue;
-        counts[kind] += 1;
-        if (onScreen(item.position)) counts[`${kind}OnScreen`] += 1;
+      // A data source's EntityCluster holds its entities' billboards and
+      // points (DataSourceDisplay adds the cluster, not the collections).
+      if ('_billboardCollection' in primitive) {
+        if (primitive._billboardCollection)
+          countItems(primitive._billboardCollection, 'billboards');
+        if (primitive._pointCollection)
+          countItems(primitive._pointCollection, 'points');
+        continue;
       }
+      // Close in, aircraft draw as 3D models and hide their billboards.
+      if ('_sceneGraph' in primitive) {
+        counts.models += 1;
+        const center = primitive.boundingSphere?.center;
+        if (center && onScreen(center)) counts.modelsOnScreen += 1;
+        continue;
+      }
+      if (Array.isArray(primitive._billboards))
+        countItems(primitive, 'billboards');
+      else if (Array.isArray(primitive._pointPrimitives))
+        countItems(primitive, 'points');
     }
   };
   visit(scene.primitives);
@@ -492,6 +510,26 @@ function gpuDrivers() {
     ],
     { encoding: 'utf8' },
   ).trim();
+}
+
+/**
+ * Whether the machine runs on the charger or the battery ("ac", "battery", or
+ * "no battery"); laptops lower CPU and GPU clocks on battery. null elsewhere.
+ */
+function powerSource() {
+  if (process.platform !== 'win32') return null;
+  const status = execFileSync(
+    'powershell',
+    [
+      '-NoProfile',
+      '-Command',
+      '(Get-CimInstance Win32_Battery | Select-Object -First 1).BatteryStatus',
+    ],
+    { encoding: 'utf8' },
+  ).trim();
+  // BatteryStatus 1 is "discharging"; 2 and above mean on AC.
+  if (!status) return 'no battery';
+  return status === '1' ? 'battery' : 'ac';
 }
 
 async function cdpMetrics(cdp) {
@@ -646,6 +684,10 @@ async function measureWindow(
             ? sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))]
             : null;
         };
+        const mean = (values) =>
+          values.length
+            ? values.reduce((a, b) => a + b, 0) / values.length
+            : null;
         const finish = async () => {
           removeRender();
           removePreRender();
@@ -664,8 +706,10 @@ async function measureWindow(
           resolve({
             cpuFrameP50Ms: percentile(cpuMs, 0.5),
             cpuFrameP95Ms: percentile(cpuMs, 0.95),
+            cpuFrameMeanMs: mean(cpuMs),
             cpuFrames: cpuMs.length,
             gpuFrameP50Ms: timer ? percentile(gpuMs, 0.5) : null,
+            gpuFrameMeanMs: timer ? mean(gpuMs) : null,
             gpuFrameP95Ms: timer ? percentile(gpuMs, 0.95) : null,
             gpuFrames: gpuMs.length,
             gpuDisjoint,
@@ -702,9 +746,13 @@ async function measureWindow(
     // takes to make.
     cpuFrameP50Ms: round(inPage.cpuFrameP50Ms, 2),
     cpuFrameP95Ms: round(inPage.cpuFrameP95Ms, 2),
+    // Frame times can cluster in two groups, which flips the p50 between
+    // them from run to run; the mean moves with their proportions instead.
+    cpuFrameMeanMs: round(inPage.cpuFrameMeanMs, 2),
     cpuFrames: inPage.cpuFrames,
     gpuFrameP50Ms: round(inPage.gpuFrameP50Ms, 2),
     gpuFrameP95Ms: round(inPage.gpuFrameP95Ms, 2),
+    gpuFrameMeanMs: round(inPage.gpuFrameMeanMs, 2),
     gpuFrames: inPage.gpuFrames,
     gpuDisjoint: inPage.gpuDisjoint,
     gpuUnread: inPage.gpuUnread,
@@ -736,10 +784,24 @@ async function measureWindow(
  * Combine a sample's windows: the median of each metric (a readback method
  * absent from a window had 0 calls), the minimum of tilesLoadedAtStart (0
  * when any window started while tiles streamed), and summed readback callers.
+ * The work-per-frame metrics also keep each window's value, so a disagreement
+ * between runs can be traced to one window or to all of them.
  */
+const PER_WINDOW = [
+  'cpuFrameP50Ms',
+  'cpuFrameMeanMs',
+  'gpuFrameP50Ms',
+  'gpuFrameMeanMs',
+  'taskMsPerSec',
+];
+
 function combineWindows(runs) {
   const keys = [...new Set(runs.flatMap((run) => Object.keys(run)))];
-  const out = {};
+  const out = {
+    perWindow: Object.fromEntries(
+      PER_WINDOW.map((key) => [key, runs.map((run) => run[key] ?? null)]),
+    ),
+  };
   for (const key of keys) {
     if (key === 'readbackCallers') {
       const callers = {};
@@ -1042,6 +1104,7 @@ const results = {
     node: process.version,
     chrome: await browser.version(),
     gpuDrivers: gpuDrivers(),
+    powerAtStart: powerSource(),
   },
   conditions: {
     viewport: '1440x900@1',
@@ -1345,6 +1408,7 @@ if (fs.existsSync('dist/assets')) {
   };
 }
 
+results.machine.powerAtEnd = powerSource();
 fs.writeFileSync(
   path.join(outDir, 'results.json'),
   JSON.stringify(results, null, 2),
