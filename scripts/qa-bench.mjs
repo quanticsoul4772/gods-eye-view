@@ -1112,6 +1112,7 @@ const results = {
     reps: REPS,
     isolation: 'fresh page per scenario',
     frameClock: `${UNCAPPED ? `uncapped (${UNCAPPED_FRAME_ARGS.join(' ')})` : 'display vsync'}, blank page ${frameClock.toFixed(0)} rAF/s`,
+    frameClockAtStart: round(frameClock),
     park: PARK,
     camera: { name: CAMERA, view: CAMERAS[CAMERA] ?? PARK },
     readbackStacks: READBACK_STACKS,
@@ -1386,6 +1387,9 @@ try {
     await page.close();
     console.log('combined', JSON.stringify(results.scenarios.combined.motion));
   }
+  // A display that dims or turns off mid-run lowers the frame clock, and the
+  // CPU work per frame of the flights scenarios rose ~2x with it (2026-10-22).
+  results.conditions.frameClockAtEnd = round(await blankPageRafRate(browser));
 } finally {
   await browser.close();
 }
