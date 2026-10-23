@@ -123,8 +123,11 @@ Two different things show up as heap kept after a layer is turned off:
   their data instead of discarding it, so turning them back on skips a
   refetch. Measured flat across three cycles; kept by design (2026-10-13).
 
-`qa-bench --only leaks` runs three on/off cycles per layer and fails when
-growth from cycle 1 to 3 exceeds 3 MiB, whatever the baseline says. To see
+`qa-bench --only leaks` runs five unmeasured on/off cycles per layer, so
+bounded caches fill, then three measured ones, and fails when growth from
+measured cycle 1 to 3 exceeds 3 MiB, whatever the baseline says. Flights keeps
+a 5-fix position history per aircraft while off: it grew 6.4 MiB over three
+cold cycles and 0.8 MiB after six warm ones (2026-10-23). To see
 what a layer keeps, or what grows, use
 `node scripts/qa-heap-diff.mjs --layer <id> [--warm-cycles 1 --cycles 2]`.
 

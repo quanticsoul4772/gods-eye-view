@@ -199,6 +199,9 @@ const THRESHOLDS = {
 /** Heap growth between on/off cycle 1 and 3 that counts as a leak (MiB). */
 const LEAK_GROWTH_LIMIT_MIB = 3;
 
+/** Unmeasured on/off cycles before the leak check, so bounded caches fill. */
+const LEAK_WARM_CYCLES = 5;
+
 const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
 const outDir = path.join('qa-shots', 'bench', stamp);
 fs.mkdirSync(outDir, { recursive: true });
@@ -1113,6 +1116,7 @@ const results = {
     isolation: 'fresh page per scenario',
     frameClock: `${UNCAPPED ? `uncapped (${UNCAPPED_FRAME_ARGS.join(' ')})` : 'display vsync'}, blank page ${frameClock.toFixed(0)} rAF/s`,
     frameClockAtStart: round(frameClock),
+    leakWarmCycles: LEAK_WARM_CYCLES,
     park: PARK,
     camera: { name: CAMERA, view: CAMERAS[CAMERA] ?? PARK },
     readbackStacks: READBACK_STACKS,
@@ -1225,16 +1229,19 @@ try {
   }
 
   if (want('leaks')) {
-    // Three on/off cycles per layer. Several layers keep a bounded cache when
-    // off (CCTV's catalog, Radio's stations), which is by design; growth from
-    // cycle 1 to cycle 3 is what a leak looks like, and it is gated absolutely
+    // Three measured on/off cycles per layer, after LEAK_WARM_CYCLES unmeasured
+    // ones. Several layers keep a bounded cache when off (CCTV's catalog,
+    // Radio's stations, flights' 5-fix position history per aircraft), which
+    // is by design; the warm-up lets those fill (flights grew 6.4 MiB over
+    // three cold cycles, 0.8 MiB after six warm ones). Growth from measured
+    // cycle 1 to 3 is what a leak looks like, and it is gated absolutely
     // (LEAK_GROWTH_LIMIT_MIB) whatever the baseline says.
     results.scenarios.leaks = {};
     for (const id of LAYERS) {
       const { page, cdp } = await fresh();
       const base = await heapAfterGcMiB(cdp);
       const kept = [];
-      for (let i = 0; i < 3; i += 1) {
+      for (let i = 0; i < LEAK_WARM_CYCLES + 3; i += 1) {
         await page.evaluate(async (id) => {
           const dm = window.__godsEyeView.dataManager;
           await dm.setEnabled(id, true, { origin: 'user' });
@@ -1248,7 +1255,8 @@ try {
           await dm.setEnabled(id, false, { origin: 'user' });
         }, id);
         await pause(4000);
-        kept.push(round((await heapAfterGcMiB(cdp)) - base));
+        if (i >= LEAK_WARM_CYCLES)
+          kept.push(round((await heapAfterGcMiB(cdp)) - base));
       }
       await page.close();
       results.scenarios.leaks[id] = {
