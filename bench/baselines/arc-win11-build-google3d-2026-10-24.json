@@ -1,0 +1,3615 @@
+{
+  "label": "arc-win11-build-google3d-2026-10-24",
+  "capturedAt": "2026-10-24T14:57:16.465Z",
+  "machine": {
+    "os": "Windows_NT 10.0.26300 x64",
+    "cpu": "Intel(R) Core(TM) Ultra 9 185H",
+    "cores": 22,
+    "memoryGiB": 31.4,
+    "node": "v24.16.0",
+    "chrome": "Chrome/152.0.7977.75",
+    "gpuDrivers": "NVIDIA GeForce RTX 4070 Laptop GPU 32.0.15.9282; Intel(R) Arc(TM) Graphics 32.0.101.8826",
+    "powerAtStart": "ac",
+    "gpu": "ANGLE (Intel, Intel(R) Arc(TM) Graphics (0x00007D55) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "powerAtEnd": "ac"
+  },
+  "conditions": {
+    "viewport": "1440x900@1",
+    "windowMs": 5000,
+    "reps": 3,
+    "isolation": "fresh page per scenario",
+    "frameClock": "display vsync, blank page 58 rAF/s",
+    "frameClockAtStart": 58.2,
+    "leakWarmCycles": 5,
+    "park": {
+      "lat": 30.27,
+      "lon": -97.74,
+      "height": 60000,
+      "pitch": -90
+    },
+    "camera": {
+      "name": "park",
+      "view": {
+        "lat": 30.27,
+        "lon": -97.74,
+        "height": 60000,
+        "pitch": -90
+      }
+    },
+    "readbackStacks": false,
+    "appUrl": "http://localhost:4180",
+    "server": "build",
+    "basemap": "photoreal",
+    "detectionDefault": {
+      "detectionMode": "DENSE",
+      "densityPct": 75,
+      "allocationStrategy": "ELASTIC",
+      "fadePct": 7,
+      "outsideOpacityPct": 1
+    },
+    "frameClockAtEnd": 53.2
+  },
+  "scenarios": {
+    "startup": {
+      "median": {
+        "domContentLoadedMs": 580,
+        "loadEventMs": 932,
+        "appReadyMs": 933,
+        "tilesLoadedMs": 5577,
+        "settledMs": 7638,
+        "scriptMs": 3988,
+        "heapMiB": 118,
+        "networkMiB": 58.55,
+        "requests": 738
+      },
+      "samples": [
+        {
+          "domContentLoadedMs": 977,
+          "loadEventMs": 1575,
+          "appReadyMs": 3599,
+          "tilesLoadedMs": 8803,
+          "settledMs": 8810,
+          "scriptMs": 5331,
+          "heapMiB": 111.6,
+          "networkMiB": 57.75,
+          "requests": 720
+        },
+        {
+          "domContentLoadedMs": 515,
+          "loadEventMs": 858,
+          "appReadyMs": 859,
+          "tilesLoadedMs": 5532,
+          "settledMs": 7553,
+          "scriptMs": 3914,
+          "heapMiB": 118,
+          "networkMiB": 58.55,
+          "requests": 738
+        },
+        {
+          "domContentLoadedMs": 555,
+          "loadEventMs": 932,
+          "appReadyMs": 933,
+          "tilesLoadedMs": 5577,
+          "settledMs": 7607,
+          "scriptMs": 3988,
+          "heapMiB": 119.4,
+          "networkMiB": 58.71,
+          "requests": 740
+        },
+        {
+          "domContentLoadedMs": 688,
+          "loadEventMs": 1082,
+          "appReadyMs": 1085,
+          "tilesLoadedMs": 5608,
+          "settledMs": 7638,
+          "scriptMs": 3637,
+          "heapMiB": 117.9,
+          "networkMiB": 58.55,
+          "requests": 738
+        },
+        {
+          "domContentLoadedMs": 580,
+          "loadEventMs": 899,
+          "appReadyMs": 902,
+          "tilesLoadedMs": 5335,
+          "settledMs": 8393,
+          "scriptMs": 4114,
+          "heapMiB": 119.4,
+          "networkMiB": 58.73,
+          "requests": 741
+        }
+      ]
+    },
+    "idle": {
+      "rest": {
+        "perWindow": {
+          "cpuFrameP50Ms": [
+            null,
+            null,
+            null
+          ],
+          "cpuFrameMeanMs": [
+            null,
+            null,
+            null
+          ],
+          "tickFrameMeanMs": [
+            null,
+            null,
+            null
+          ],
+          "gpuFrameP50Ms": [
+            null,
+            null,
+            null
+          ],
+          "gpuFrameMeanMs": [
+            null,
+            null,
+            null
+          ],
+          "taskMsPerSec": [
+            129,
+            132.6,
+            126.5
+          ]
+        },
+        "cpuFrameP50Ms": null,
+        "cpuFrameP95Ms": null,
+        "cpuFrameMeanMs": null,
+        "cpuFrames": 0,
+        "tickFrameP50Ms": null,
+        "tickFrameP95Ms": null,
+        "tickFrameMeanMs": null,
+        "tickFrames": 0,
+        "gpuFrameP50Ms": null,
+        "gpuFrameP95Ms": null,
+        "gpuFrameMeanMs": null,
+        "gpuFrames": 0,
+        "gpuDisjoint": 0,
+        "gpuUnread": 0,
+        "fps": 59.7,
+        "rafFps": 73.3,
+        "ticksPerSec": 59.7,
+        "rendersPerSec": 0,
+        "frameP50Ms": 16.5,
+        "frameP95Ms": 16.8,
+        "frameMaxMs": 25,
+        "longTasks": 0,
+        "longTaskMs": 0,
+        "scriptMsPerSec": 78.8,
+        "taskMsPerSec": 129,
+        "heapMiB": 143.9,
+        "tilesLoadedAtStart": 1,
+        "readPixelsCalls": 0,
+        "readPixelsMs": 0,
+        "pickFromRayCalls": 0,
+        "pickFromRayMs": 0,
+        "pickPositionCalls": 0,
+        "pickPositionMs": 0,
+        "getBufferSubDataCalls": 0,
+        "getBufferSubDataMs": 0,
+        "getHeightCalls": 0,
+        "getHeightMs": 0
+      },
+      "motion": {
+        "perWindow": {
+          "cpuFrameP50Ms": [
+            2.3,
+            1.2,
+            1.2
+          ],
+          "cpuFrameMeanMs": [
+            2.38,
+            1.38,
+            1.3
+          ],
+          "tickFrameMeanMs": [
+            3.71,
+            2.22,
+            2.04
+          ],
+          "gpuFrameP50Ms": [
+            9.37,
+            9.24,
+            9.23
+          ],
+          "gpuFrameMeanMs": [
+            9.66,
+            9.44,
+            9.33
+          ],
+          "taskMsPerSec": [
+            330.3,
+            195.6,
+            188
+          ]
+        },
+        "cpuFrameP50Ms": 1.2,
+        "cpuFrameP95Ms": 2.2,
+        "cpuFrameMeanMs": 1.4,
+        "cpuFrames": 301,
+        "tickFrameP50Ms": 2,
+        "tickFrameP95Ms": 3.5,
+        "tickFrameMeanMs": 2.2,
+        "tickFrames": 301,
+        "gpuFrameP50Ms": 9.2,
+        "gpuFrameP95Ms": 10.6,
+        "gpuFrameMeanMs": 9.4,
+        "gpuFrames": 301,
+        "gpuDisjoint": 0,
+        "gpuUnread": 0,
+        "fps": 60,
+        "rafFps": 82.6,
+        "ticksPerSec": 60,
+        "rendersPerSec": 60,
+        "frameP50Ms": 8.6,
+        "frameP95Ms": 16.8,
+        "frameMaxMs": 17.7,
+        "longTasks": 0,
+        "longTaskMs": 0,
+        "scriptMsPerSec": 141,
+        "taskMsPerSec": 195.6,
+        "heapMiB": 151.9,
+        "tilesLoadedAtStart": 1,
+        "readPixelsCalls": 3,
+        "readPixelsMs": 11.6,
+        "pickFromRayCalls": 1,
+        "pickFromRayMs": 12.4,
+        "pickPositionCalls": 0,
+        "pickPositionMs": 0,
+        "getBufferSubDataCalls": 1132,
+        "getBufferSubDataMs": 155.4,
+        "getHeightCalls": 323,
+        "getHeightMs": 213.8
+      },
+      "sceneCounts": {
+        "primitivesShown": 10,
+        "billboards": 0,
+        "billboardsOnScreen": 0,
+        "points": 0,
+        "pointsOnScreen": 0,
+        "models": 0,
+        "modelsOnScreen": 0,
+        "onGroundAircraftOnScreen": 0,
+        "entities": {
+          "gev-annotations": 0,
+          "gev-draw-preview": 1,
+          "gev-recent-imagery-box-preview": 2
+        }
+      },
+      "heapMiB": 137.3
+    },
+    "layers": {
+      "flights": {
+        "activationMs": 1769,
+        "firstDataMs": 1769,
+        "count": 12437,
+        "enabled": true,
+        "error": null,
+        "heapOnMiB": 178,
+        "heapDeltaMiB": 46.4,
+        "retainedMiB": 39.6,
+        "rest": {
+          "perWindow": {
+            "cpuFrameP50Ms": [
+              41,
+              52.2,
+              48.3
+            ],
+            "cpuFrameMeanMs": [
+              39.03,
+              57.01,
+              47.32
+            ],
+            "tickFrameMeanMs": [
+              39.27,
+              57.3,
+              47.59
+            ],
+            "gpuFrameP50Ms": [
+              9.83,
+              10.01,
+              9.72
+            ],
+            "gpuFrameMeanMs": [
+              10.3,
+              10.36,
+              9.97
+            ],
+            "taskMsPerSec": [
+              674.7,
+              747.7,
+              708.4
+            ]
+          },
+          "cpuFrameP50Ms": 48.3,
+          "cpuFrameP95Ms": 69.7,
+          "cpuFrameMeanMs": 47.3,
+          "cpuFrames": 64,
+          "tickFrameP50Ms": 48.6,
+          "tickFrameP95Ms": 70,
+          "tickFrameMeanMs": 47.6,
+          "tickFrames": 64,
+          "gpuFrameP50Ms": 9.8,
+          "gpuFrameP95Ms": 12.7,
+          "gpuFrameMeanMs": 10.3,
+          "gpuFrames": 64,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 40.1,
+          "rafFps": 50.6,
+          "ticksPerSec": 40.1,
+          "rendersPerSec": 12.7,
+          "frameP50Ms": 16.5,
+          "frameP95Ms": 58.3,
+          "frameMaxMs": 133.4,
+          "longTasks": 31,
+          "longTaskMs": 1891,
+          "scriptMsPerSec": 655,
+          "taskMsPerSec": 708.4,
+          "heapMiB": 218.3,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 39,
+          "readPixelsMs": 62.3,
+          "getBufferSubDataCalls": 0,
+          "getBufferSubDataMs": 0,
+          "getHeightCalls": 0,
+          "getHeightMs": 0,
+          "pickFromRayCalls": 0,
+          "pickFromRayMs": 0,
+          "sampleHeightCalls": 4,
+          "sampleHeightMs": 152.3
+        },
+        "motion": {
+          "perWindow": {
+            "cpuFrameP50Ms": [
+              13.1,
+              57.2,
+              33.7
+            ],
+            "cpuFrameMeanMs": [
+              32.08,
+              49.46,
+              36.81
+            ],
+            "tickFrameMeanMs": [
+              36.17,
+              55.32,
+              41.44
+            ],
+            "gpuFrameP50Ms": [
+              9.78,
+              9.94,
+              9.92
+            ],
+            "gpuFrameMeanMs": [
+              10.82,
+              10.85,
+              10.66
+            ],
+            "taskMsPerSec": [
+              1006.7,
+              1008.4,
+              996.7
+            ]
+          },
+          "cpuFrameP50Ms": 33.7,
+          "cpuFrameP95Ms": 78.1,
+          "cpuFrameMeanMs": 36.8,
+          "cpuFrames": 115,
+          "tickFrameP50Ms": 40.4,
+          "tickFrameP95Ms": 80.9,
+          "tickFrameMeanMs": 41.4,
+          "tickFrames": 115,
+          "gpuFrameP50Ms": 9.9,
+          "gpuFrameP95Ms": 15.4,
+          "gpuFrameMeanMs": 10.8,
+          "gpuFrames": 115,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 22.6,
+          "rafFps": 22.8,
+          "ticksPerSec": 22.6,
+          "rendersPerSec": 22.6,
+          "frameP50Ms": 33.7,
+          "frameP95Ms": 83.5,
+          "frameMaxMs": 100.2,
+          "longTasks": 54,
+          "longTaskMs": 3824,
+          "scriptMsPerSec": 959.8,
+          "taskMsPerSec": 1006.7,
+          "heapMiB": 232.9,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 21,
+          "readPixelsMs": 34.6,
+          "getBufferSubDataCalls": 510,
+          "getBufferSubDataMs": 476.4,
+          "getHeightCalls": 126,
+          "getHeightMs": 513.6,
+          "pickFromRayCalls": 0,
+          "pickFromRayMs": 0,
+          "sampleHeightCalls": 3,
+          "sampleHeightMs": 55.8
+        },
+        "sceneCounts": {
+          "primitivesShown": 107,
+          "billboards": 1525,
+          "billboardsOnScreen": 0,
+          "points": 0,
+          "pointsOnScreen": 0,
+          "models": 96,
+          "modelsOnScreen": 17,
+          "onGroundAircraftOnScreen": 10,
+          "entities": {
+            "gev-annotations": 0,
+            "gev-draw-preview": 1,
+            "gev-recent-imagery-box-preview": 2
+          }
+        },
+        "motionDetectionOff": {
+          "cpuFrameP50Ms": 3.9,
+          "cpuFrameP95Ms": 35.3,
+          "cpuFrameMeanMs": 9.84,
+          "cpuFrames": 272,
+          "tickFrameP50Ms": 6.1,
+          "tickFrameP95Ms": 37.2,
+          "tickFrameMeanMs": 11.56,
+          "tickFrames": 272,
+          "gpuFrameP50Ms": 9.75,
+          "gpuFrameP95Ms": 14.18,
+          "gpuFrameMeanMs": 10.51,
+          "gpuFrames": 272,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 53.8,
+          "rafFps": 53.8,
+          "ticksPerSec": 53.8,
+          "rendersPerSec": 53.8,
+          "frameP50Ms": 16.7,
+          "frameP95Ms": 33.4,
+          "frameMaxMs": 49.7,
+          "longTasks": 1,
+          "longTaskMs": 61,
+          "scriptMsPerSec": 638.5,
+          "taskMsPerSec": 701.4,
+          "heapMiB": 264,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 18,
+          "readPixelsMs": 73.8,
+          "getBufferSubDataCalls": 1042,
+          "getBufferSubDataMs": 379.9,
+          "getHeightCalls": 297,
+          "getHeightMs": 450.6,
+          "pickFromRayCalls": 2,
+          "pickFromRayMs": 52.4,
+          "sampleHeightCalls": 2,
+          "sampleHeightMs": 40.6
+        }
+      },
+      "military": {
+        "activationMs": 840,
+        "firstDataMs": 840,
+        "count": 98,
+        "enabled": true,
+        "error": null,
+        "heapOnMiB": 144.7,
+        "heapDeltaMiB": 12.6,
+        "retainedMiB": 14.4,
+        "rest": {
+          "perWindow": {
+            "cpuFrameP50Ms": [
+              2.7,
+              2.7,
+              3.1
+            ],
+            "cpuFrameMeanMs": [
+              2.8,
+              2.78,
+              2.94
+            ],
+            "tickFrameMeanMs": [
+              3.02,
+              3,
+              3.14
+            ],
+            "gpuFrameP50Ms": [
+              11.29,
+              9.82,
+              9.69
+            ],
+            "gpuFrameMeanMs": [
+              11.28,
+              10.34,
+              10.01
+            ],
+            "taskMsPerSec": [
+              154.1,
+              192.8,
+              154.7
+            ]
+          },
+          "cpuFrameP50Ms": 2.7,
+          "cpuFrameP95Ms": 4,
+          "cpuFrameMeanMs": 2.8,
+          "cpuFrames": 60,
+          "tickFrameP50Ms": 3,
+          "tickFrameP95Ms": 4.2,
+          "tickFrameMeanMs": 3,
+          "tickFrames": 60,
+          "gpuFrameP50Ms": 9.8,
+          "gpuFrameP95Ms": 12.7,
+          "gpuFrameMeanMs": 10.3,
+          "gpuFrames": 60,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 60.1,
+          "rafFps": 60.1,
+          "ticksPerSec": 60.1,
+          "rendersPerSec": 12,
+          "frameP50Ms": 16.7,
+          "frameP95Ms": 17,
+          "frameMaxMs": 17.2,
+          "longTasks": 0,
+          "longTaskMs": 0,
+          "scriptMsPerSec": 106.8,
+          "taskMsPerSec": 154.7,
+          "heapMiB": 152.4,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 0,
+          "readPixelsMs": 0,
+          "getBufferSubDataCalls": 0,
+          "getBufferSubDataMs": 0,
+          "getHeightCalls": 0,
+          "getHeightMs": 0,
+          "pickFromRayCalls": 0,
+          "pickFromRayMs": 0
+        },
+        "motion": {
+          "perWindow": {
+            "cpuFrameP50Ms": [
+              2.7,
+              2.5,
+              2.3
+            ],
+            "cpuFrameMeanMs": [
+              2.96,
+              2.9,
+              2.7
+            ],
+            "tickFrameMeanMs": [
+              4.79,
+              4.79,
+              5.18
+            ],
+            "gpuFrameP50Ms": [
+              9.59,
+              9.48,
+              9.41
+            ],
+            "gpuFrameMeanMs": [
+              10.79,
+              10.6,
+              9.87
+            ],
+            "taskMsPerSec": [
+              402.6,
+              375,
+              412.3
+            ]
+          },
+          "cpuFrameP50Ms": 2.5,
+          "cpuFrameP95Ms": 5.2,
+          "cpuFrameMeanMs": 2.9,
+          "cpuFrames": 300,
+          "tickFrameP50Ms": 4.3,
+          "tickFrameP95Ms": 7.9,
+          "tickFrameMeanMs": 4.8,
+          "tickFrames": 300,
+          "gpuFrameP50Ms": 9.5,
+          "gpuFrameP95Ms": 14.7,
+          "gpuFrameMeanMs": 10.6,
+          "gpuFrames": 300,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 59.8,
+          "rafFps": 59.8,
+          "ticksPerSec": 59.8,
+          "rendersPerSec": 59.8,
+          "frameP50Ms": 16.7,
+          "frameP95Ms": 17,
+          "frameMaxMs": 33.4,
+          "longTasks": 0,
+          "longTaskMs": 0,
+          "scriptMsPerSec": 312.3,
+          "taskMsPerSec": 402.6,
+          "heapMiB": 179.9,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 3,
+          "readPixelsMs": 25.3,
+          "getBufferSubDataCalls": 1126,
+          "getBufferSubDataMs": 445.5,
+          "getHeightCalls": 322,
+          "getHeightMs": 531.5,
+          "pickFromRayCalls": 1,
+          "pickFromRayMs": 28.2
+        },
+        "sceneCounts": {
+          "primitivesShown": 12,
+          "billboards": 24,
+          "billboardsOnScreen": 0,
+          "points": 0,
+          "pointsOnScreen": 0,
+          "models": 1,
+          "modelsOnScreen": 0,
+          "onGroundAircraftOnScreen": 0,
+          "entities": {
+            "gev-annotations": 0,
+            "gev-draw-preview": 1,
+            "gev-recent-imagery-box-preview": 2
+          }
+        },
+        "motionDetectionOff": {
+          "cpuFrameP50Ms": 2,
+          "cpuFrameP95Ms": 4,
+          "cpuFrameMeanMs": 2.26,
+          "cpuFrames": 301,
+          "tickFrameP50Ms": 3.3,
+          "tickFrameP95Ms": 6.4,
+          "tickFrameMeanMs": 3.71,
+          "tickFrames": 301,
+          "gpuFrameP50Ms": 9.4,
+          "gpuFrameP95Ms": 15.52,
+          "gpuFrameMeanMs": 10.73,
+          "gpuFrames": 301,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 60,
+          "rafFps": 60,
+          "ticksPerSec": 60,
+          "rendersPerSec": 60,
+          "frameP50Ms": 16.7,
+          "frameP95Ms": 17,
+          "frameMaxMs": 17.2,
+          "longTasks": 0,
+          "longTaskMs": 0,
+          "scriptMsPerSec": 229.8,
+          "taskMsPerSec": 300.1,
+          "heapMiB": 189.7,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 0,
+          "readPixelsMs": 0,
+          "getBufferSubDataCalls": 1132,
+          "getBufferSubDataMs": 329.4,
+          "getHeightCalls": 323,
+          "getHeightMs": 401.4,
+          "pickFromRayCalls": 0,
+          "pickFromRayMs": 0
+        }
+      },
+      "telegeography-submarine-cables": {
+        "activationMs": 4,
+        "firstDataMs": 1372,
+        "count": 2629,
+        "enabled": true,
+        "error": null,
+        "heapOnMiB": 262.5,
+        "heapDeltaMiB": 129.4,
+        "retainedMiB": 10.8,
+        "rest": {
+          "perWindow": {
+            "cpuFrameP50Ms": [
+              2.6,
+              null,
+              null
+            ],
+            "cpuFrameMeanMs": [
+              2.97,
+              null,
+              null
+            ],
+            "tickFrameMeanMs": [
+              3.54,
+              null,
+              null
+            ],
+            "gpuFrameP50Ms": [
+              20.99,
+              null,
+              null
+            ],
+            "gpuFrameMeanMs": [
+              66.57,
+              null,
+              null
+            ],
+            "taskMsPerSec": [
+              209.8,
+              155.1,
+              156.2
+            ]
+          },
+          "cpuFrameP50Ms": 2.6,
+          "cpuFrameP95Ms": 5.3,
+          "cpuFrameMeanMs": 3,
+          "cpuFrames": 0,
+          "tickFrameP50Ms": 3.2,
+          "tickFrameP95Ms": 6.2,
+          "tickFrameMeanMs": 3.5,
+          "tickFrames": 0,
+          "gpuFrameP50Ms": 21,
+          "gpuFrameP95Ms": 337.4,
+          "gpuFrameMeanMs": 66.6,
+          "gpuFrames": 0,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 60,
+          "rafFps": 60,
+          "ticksPerSec": 60,
+          "rendersPerSec": 0,
+          "frameP50Ms": 16.7,
+          "frameP95Ms": 17,
+          "frameMaxMs": 17.1,
+          "longTasks": 0,
+          "longTaskMs": 0,
+          "scriptMsPerSec": 111.5,
+          "taskMsPerSec": 156.2,
+          "heapMiB": 280.1,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 0,
+          "readPixelsMs": 0,
+          "getBufferSubDataCalls": 0,
+          "getBufferSubDataMs": 0,
+          "getHeightCalls": 0,
+          "getHeightMs": 0,
+          "pickFromRayCalls": 0,
+          "pickFromRayMs": 0
+        },
+        "motion": {
+          "perWindow": {
+            "cpuFrameP50Ms": [
+              2.3,
+              2.1,
+              2.1
+            ],
+            "cpuFrameMeanMs": [
+              11.2,
+              10.98,
+              11.09
+            ],
+            "tickFrameMeanMs": [
+              25,
+              27.87,
+              26.11
+            ],
+            "gpuFrameP50Ms": [
+              21.74,
+              21.59,
+              21.63
+            ],
+            "gpuFrameMeanMs": [
+              25.66,
+              27.26,
+              27.41
+            ],
+            "taskMsPerSec": [
+              869.1,
+              907.2,
+              890.5
+            ]
+          },
+          "cpuFrameP50Ms": 2.1,
+          "cpuFrameP95Ms": 17.6,
+          "cpuFrameMeanMs": 11.1,
+          "cpuFrames": 153,
+          "tickFrameP50Ms": 19.1,
+          "tickFrameP95Ms": 49.5,
+          "tickFrameMeanMs": 26.1,
+          "tickFrames": 153,
+          "gpuFrameP50Ms": 21.6,
+          "gpuFrameP95Ms": 25.8,
+          "gpuFrameMeanMs": 27.3,
+          "gpuFrames": 153,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 30.4,
+          "rafFps": 30.4,
+          "ticksPerSec": 30.4,
+          "rendersPerSec": 30.4,
+          "frameP50Ms": 16.8,
+          "frameP95Ms": 66.7,
+          "frameMaxMs": 566.7,
+          "longTasks": 9,
+          "longTaskMs": 1622,
+          "scriptMsPerSec": 839.8,
+          "taskMsPerSec": 890.5,
+          "heapMiB": 293.4,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 0,
+          "readPixelsMs": 0,
+          "getBufferSubDataCalls": 13062,
+          "getBufferSubDataMs": 3010.4,
+          "getHeightCalls": 2832,
+          "getHeightMs": 3476.2,
+          "pickFromRayCalls": 0,
+          "pickFromRayMs": 0
+        },
+        "sceneCounts": {
+          "primitivesShown": 17,
+          "billboards": 1,
+          "billboardsOnScreen": 0,
+          "points": 2,
+          "pointsOnScreen": 0,
+          "models": 0,
+          "modelsOnScreen": 0,
+          "onGroundAircraftOnScreen": 0,
+          "entities": {
+            "gev-annotations": 0,
+            "gev-draw-preview": 1,
+            "gev-recent-imagery-box-preview": 2,
+            "TeleGeography Submarine Cables": 1913,
+            "TeleGeography Landing Points": 1917,
+            "TeleGeography Cable References": 2629
+          }
+        },
+        "motionDetectionOff": {
+          "cpuFrameP50Ms": 2.2,
+          "cpuFrameP95Ms": 20.2,
+          "cpuFrameMeanMs": 12.21,
+          "cpuFrames": 146,
+          "tickFrameP50Ms": 16.3,
+          "tickFrameP95Ms": 65.7,
+          "tickFrameMeanMs": 27.92,
+          "tickFrames": 146,
+          "gpuFrameP50Ms": 21.59,
+          "gpuFrameP95Ms": 27.05,
+          "gpuFrameMeanMs": 29.93,
+          "gpuFrames": 146,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 27.6,
+          "rafFps": 27.6,
+          "ticksPerSec": 27.6,
+          "rendersPerSec": 27.6,
+          "frameP50Ms": 16.9,
+          "frameP95Ms": 83.3,
+          "frameMaxMs": 583.4,
+          "longTasks": 14,
+          "longTaskMs": 2339,
+          "scriptMsPerSec": 841.1,
+          "taskMsPerSec": 889,
+          "heapMiB": 297.1,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 6,
+          "readPixelsMs": 293.5,
+          "getBufferSubDataCalls": 14138,
+          "getBufferSubDataMs": 3094.4,
+          "getHeightCalls": 3063,
+          "getHeightMs": 3603.9,
+          "pickFromRayCalls": 2,
+          "pickFromRayMs": 296.1
+        }
+      },
+      "local-datacenters": {
+        "activationMs": 261,
+        "firstDataMs": 261,
+        "count": 4362,
+        "enabled": true,
+        "error": null,
+        "heapOnMiB": 293.2,
+        "heapDeltaMiB": 166.9,
+        "retainedMiB": 25.5,
+        "rest": {
+          "perWindow": {
+            "cpuFrameP50Ms": [
+              null,
+              2.8,
+              null
+            ],
+            "cpuFrameMeanMs": [
+              null,
+              2.89,
+              null
+            ],
+            "tickFrameMeanMs": [
+              null,
+              4.14,
+              null
+            ],
+            "gpuFrameP50Ms": [
+              null,
+              10.98,
+              null
+            ],
+            "gpuFrameMeanMs": [
+              null,
+              11.37,
+              null
+            ],
+            "taskMsPerSec": [
+              156.2,
+              185.1,
+              160.9
+            ]
+          },
+          "cpuFrameP50Ms": 2.8,
+          "cpuFrameP95Ms": 3.7,
+          "cpuFrameMeanMs": 2.9,
+          "cpuFrames": 0,
+          "tickFrameP50Ms": 4.2,
+          "tickFrameP95Ms": 5,
+          "tickFrameMeanMs": 4.1,
+          "tickFrames": 0,
+          "gpuFrameP50Ms": 11,
+          "gpuFrameP95Ms": 12.8,
+          "gpuFrameMeanMs": 11.4,
+          "gpuFrames": 0,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 60,
+          "rafFps": 60,
+          "ticksPerSec": 60,
+          "rendersPerSec": 0,
+          "frameP50Ms": 16.7,
+          "frameP95Ms": 17,
+          "frameMaxMs": 17.1,
+          "longTasks": 0,
+          "longTaskMs": 0,
+          "scriptMsPerSec": 121.6,
+          "taskMsPerSec": 160.9,
+          "heapMiB": 349.5,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 0,
+          "readPixelsMs": 0,
+          "getBufferSubDataCalls": 0,
+          "getBufferSubDataMs": 0,
+          "getHeightCalls": 0,
+          "getHeightMs": 0,
+          "pickFromRayCalls": 0,
+          "pickFromRayMs": 0,
+          "sampleHeightCalls": 0,
+          "sampleHeightMs": 0
+        },
+        "motion": {
+          "perWindow": {
+            "cpuFrameP50Ms": [
+              2.4,
+              2.1,
+              2.1
+            ],
+            "cpuFrameMeanMs": [
+              6.64,
+              6.13,
+              8.4
+            ],
+            "tickFrameMeanMs": [
+              9.56,
+              8.8,
+              11.25
+            ],
+            "gpuFrameP50Ms": [
+              11.08,
+              10.96,
+              10.97
+            ],
+            "gpuFrameMeanMs": [
+              13.77,
+              12.74,
+              14.7
+            ],
+            "taskMsPerSec": [
+              565.9,
+              511.9,
+              612.3
+            ]
+          },
+          "cpuFrameP50Ms": 2.1,
+          "cpuFrameP95Ms": 12.6,
+          "cpuFrameMeanMs": 6.6,
+          "cpuFrames": 255,
+          "tickFrameP50Ms": 4.7,
+          "tickFrameP95Ms": 18.4,
+          "tickFrameMeanMs": 9.6,
+          "tickFrames": 255,
+          "gpuFrameP50Ms": 11,
+          "gpuFrameP95Ms": 13.8,
+          "gpuFrameMeanMs": 13.8,
+          "gpuFrames": 255,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 50.7,
+          "rafFps": 50.7,
+          "ticksPerSec": 50.7,
+          "rendersPerSec": 50.7,
+          "frameP50Ms": 16.7,
+          "frameP95Ms": 17.1,
+          "frameMaxMs": 266.7,
+          "longTasks": 6,
+          "longTaskMs": 825,
+          "scriptMsPerSec": 501,
+          "taskMsPerSec": 565.9,
+          "heapMiB": 395.9,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 14,
+          "readPixelsMs": 95.8,
+          "getBufferSubDataCalls": 11026,
+          "getBufferSubDataMs": 933.9,
+          "getHeightCalls": 2209,
+          "getHeightMs": 1269.9,
+          "pickFromRayCalls": 0,
+          "pickFromRayMs": 0,
+          "sampleHeightCalls": 2,
+          "sampleHeightMs": 59.6
+        },
+        "sceneCounts": {
+          "primitivesShown": 13,
+          "billboards": 10,
+          "billboardsOnScreen": 0,
+          "points": 160,
+          "pointsOnScreen": 16,
+          "models": 0,
+          "modelsOnScreen": 0,
+          "onGroundAircraftOnScreen": 0,
+          "entities": {
+            "gev-annotations": 0,
+            "gev-draw-preview": 1,
+            "gev-recent-imagery-box-preview": 2,
+            "Datacenters": 4362
+          }
+        },
+        "motionDetectionOff": {
+          "cpuFrameP50Ms": 2.1,
+          "cpuFrameP95Ms": 16.5,
+          "cpuFrameMeanMs": 6.62,
+          "cpuFrames": 255,
+          "tickFrameP50Ms": 4.6,
+          "tickFrameP95Ms": 20.7,
+          "tickFrameMeanMs": 9.29,
+          "tickFrames": 255,
+          "gpuFrameP50Ms": 10.95,
+          "gpuFrameP95Ms": 12.96,
+          "gpuFrameMeanMs": 12.39,
+          "gpuFrames": 255,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 50.8,
+          "rafFps": 50.8,
+          "ticksPerSec": 50.8,
+          "rendersPerSec": 50.8,
+          "frameP50Ms": 16.7,
+          "frameP95Ms": 17,
+          "frameMaxMs": 266.6,
+          "longTasks": 6,
+          "longTaskMs": 891,
+          "scriptMsPerSec": 482.8,
+          "taskMsPerSec": 530.9,
+          "heapMiB": 426.9,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 3,
+          "readPixelsMs": 11.7,
+          "getBufferSubDataCalls": 12730,
+          "getBufferSubDataMs": 973.9,
+          "getHeightCalls": 2582,
+          "getHeightMs": 1371.8,
+          "pickFromRayCalls": 1,
+          "pickFromRayMs": 12.8,
+          "sampleHeightCalls": 0,
+          "sampleHeightMs": 0
+        }
+      },
+      "local-dams": {
+        "activationMs": 84,
+        "firstDataMs": 84,
+        "count": 716,
+        "enabled": true,
+        "error": null,
+        "heapOnMiB": 172.9,
+        "heapDeltaMiB": 39.7,
+        "retainedMiB": 11.5,
+        "rest": {
+          "perWindow": {
+            "cpuFrameP50Ms": [
+              null,
+              2,
+              null
+            ],
+            "cpuFrameMeanMs": [
+              null,
+              2.08,
+              null
+            ],
+            "tickFrameMeanMs": [
+              null,
+              2.32,
+              null
+            ],
+            "gpuFrameP50Ms": [
+              null,
+              9.94,
+              null
+            ],
+            "gpuFrameMeanMs": [
+              null,
+              9.92,
+              null
+            ],
+            "taskMsPerSec": [
+              98.8,
+              107.8,
+              95.8
+            ]
+          },
+          "cpuFrameP50Ms": 2,
+          "cpuFrameP95Ms": 2.9,
+          "cpuFrameMeanMs": 2.1,
+          "cpuFrames": 0,
+          "tickFrameP50Ms": 2.2,
+          "tickFrameP95Ms": 3.2,
+          "tickFrameMeanMs": 2.3,
+          "tickFrames": 0,
+          "gpuFrameP50Ms": 9.9,
+          "gpuFrameP95Ms": 10.1,
+          "gpuFrameMeanMs": 9.9,
+          "gpuFrames": 0,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 48.7,
+          "rafFps": 60,
+          "ticksPerSec": 48.7,
+          "rendersPerSec": 0,
+          "frameP50Ms": 16.7,
+          "frameP95Ms": 17,
+          "frameMaxMs": 17.2,
+          "longTasks": 0,
+          "longTaskMs": 0,
+          "scriptMsPerSec": 61.4,
+          "taskMsPerSec": 98.8,
+          "heapMiB": 176.6,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 0,
+          "readPixelsMs": 0,
+          "getBufferSubDataCalls": 0,
+          "getBufferSubDataMs": 0,
+          "getHeightCalls": 0,
+          "getHeightMs": 0,
+          "pickFromRayCalls": 0,
+          "pickFromRayMs": 0
+        },
+        "motion": {
+          "perWindow": {
+            "cpuFrameP50Ms": [
+              1.8,
+              1.6,
+              1.6
+            ],
+            "cpuFrameMeanMs": [
+              1.96,
+              1.71,
+              1.78
+            ],
+            "tickFrameMeanMs": [
+              2.84,
+              2.5,
+              2.61
+            ],
+            "gpuFrameP50Ms": [
+              9.86,
+              9.84,
+              9.86
+            ],
+            "gpuFrameMeanMs": [
+              10.08,
+              10.01,
+              10.1
+            ],
+            "taskMsPerSec": [
+              195.4,
+              174.8,
+              200
+            ]
+          },
+          "cpuFrameP50Ms": 1.6,
+          "cpuFrameP95Ms": 2.9,
+          "cpuFrameMeanMs": 1.8,
+          "cpuFrames": 238,
+          "tickFrameP50Ms": 2.4,
+          "tickFrameP95Ms": 4,
+          "tickFrameMeanMs": 2.6,
+          "tickFrames": 238,
+          "gpuFrameP50Ms": 9.9,
+          "gpuFrameP95Ms": 11.3,
+          "gpuFrameMeanMs": 10.1,
+          "gpuFrames": 238,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 47.4,
+          "rafFps": 60,
+          "ticksPerSec": 47.4,
+          "rendersPerSec": 47.4,
+          "frameP50Ms": 16.7,
+          "frameP95Ms": 17,
+          "frameMaxMs": 17.2,
+          "longTasks": 0,
+          "longTaskMs": 0,
+          "scriptMsPerSec": 139.4,
+          "taskMsPerSec": 195.4,
+          "heapMiB": 190.9,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 3,
+          "readPixelsMs": 5,
+          "getBufferSubDataCalls": 910,
+          "getBufferSubDataMs": 117,
+          "getHeightCalls": 264,
+          "getHeightMs": 158.6,
+          "pickFromRayCalls": 1,
+          "pickFromRayMs": 6
+        },
+        "sceneCounts": {
+          "primitivesShown": 13,
+          "billboards": 0,
+          "billboardsOnScreen": 0,
+          "points": 2,
+          "pointsOnScreen": 0,
+          "models": 0,
+          "modelsOnScreen": 0,
+          "onGroundAircraftOnScreen": 0,
+          "entities": {
+            "gev-annotations": 0,
+            "gev-draw-preview": 1,
+            "gev-recent-imagery-box-preview": 2,
+            "Dams": 716
+          }
+        },
+        "motionDetectionOff": {
+          "cpuFrameP50Ms": 1.5,
+          "cpuFrameP95Ms": 2.7,
+          "cpuFrameMeanMs": 1.64,
+          "cpuFrames": 241,
+          "tickFrameP50Ms": 2.3,
+          "tickFrameP95Ms": 3.6,
+          "tickFrameMeanMs": 2.46,
+          "tickFrames": 241,
+          "gpuFrameP50Ms": 9.87,
+          "gpuFrameP95Ms": 11.82,
+          "gpuFrameMeanMs": 10.22,
+          "gpuFrames": 241,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 48.1,
+          "rafFps": 60,
+          "ticksPerSec": 48.1,
+          "rendersPerSec": 48.1,
+          "frameP50Ms": 16.7,
+          "frameP95Ms": 17,
+          "frameMaxMs": 17.2,
+          "longTasks": 0,
+          "longTaskMs": 0,
+          "scriptMsPerSec": 125.5,
+          "taskMsPerSec": 170.3,
+          "heapMiB": 191.2,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 0,
+          "readPixelsMs": 0,
+          "getBufferSubDataCalls": 912,
+          "getBufferSubDataMs": 109.5,
+          "getHeightCalls": 265,
+          "getHeightMs": 151.2,
+          "pickFromRayCalls": 0,
+          "pickFromRayMs": 0
+        }
+      }
+    },
+    "leaks": {
+      "flights": {
+        "keptAfter1MiB": 32.2,
+        "keptAfter3MiB": 32.3,
+        "growthMiB": 0.1
+      },
+      "military": {
+        "keptAfter1MiB": 4.1,
+        "keptAfter3MiB": 4.7,
+        "growthMiB": 0.6
+      },
+      "telegeography-submarine-cables": {
+        "keptAfter1MiB": 6,
+        "keptAfter3MiB": 7.3,
+        "growthMiB": 1.3
+      },
+      "local-datacenters": {
+        "keptAfter1MiB": 8.4,
+        "keptAfter3MiB": 9.9,
+        "growthMiB": 1.5
+      },
+      "local-dams": {
+        "keptAfter1MiB": 4.5,
+        "keptAfter3MiB": 5.2,
+        "growthMiB": 0.7
+      }
+    },
+    "detection": {
+      "counts": {
+        "flights": 12637
+      },
+      "off": {
+        "rest": {
+          "perWindow": {
+            "cpuFrameP50Ms": [
+              23.9,
+              23.9,
+              24.3
+            ],
+            "cpuFrameMeanMs": [
+              24.98,
+              24.35,
+              25.45
+            ],
+            "tickFrameMeanMs": [
+              25.15,
+              24.54,
+              25.62
+            ],
+            "gpuFrameP50Ms": [
+              10.74,
+              11.42,
+              10.49
+            ],
+            "gpuFrameMeanMs": [
+              10.87,
+              11.47,
+              10.7
+            ],
+            "taskMsPerSec": [
+              414.9,
+              403.8,
+              400.4
+            ]
+          },
+          "cpuFrameP50Ms": 23.9,
+          "cpuFrameP95Ms": 33.5,
+          "cpuFrameMeanMs": 25,
+          "cpuFrames": 60,
+          "tickFrameP50Ms": 24,
+          "tickFrameP95Ms": 33.9,
+          "tickFrameMeanMs": 25.1,
+          "tickFrames": 60,
+          "gpuFrameP50Ms": 10.7,
+          "gpuFrameP95Ms": 13.8,
+          "gpuFrameMeanMs": 10.9,
+          "gpuFrames": 60,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 59,
+          "rafFps": 59,
+          "ticksPerSec": 59,
+          "rendersPerSec": 12,
+          "frameP50Ms": 16.7,
+          "frameP95Ms": 17,
+          "frameMaxMs": 33.4,
+          "longTasks": 0,
+          "longTaskMs": 0,
+          "scriptMsPerSec": 362.6,
+          "taskMsPerSec": 403.8,
+          "heapMiB": 232.7,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 6,
+          "readPixelsMs": 7.3,
+          "getBufferSubDataCalls": 0,
+          "getBufferSubDataMs": 0,
+          "getHeightCalls": 0,
+          "getHeightMs": 0,
+          "pickFromRayCalls": 0,
+          "pickFromRayMs": 0,
+          "sampleHeightCalls": 1,
+          "sampleHeightMs": 13.3
+        },
+        "motion": {
+          "perWindow": {
+            "cpuFrameP50Ms": [
+              6.5,
+              6.3,
+              6.7
+            ],
+            "cpuFrameMeanMs": [
+              11.73,
+              11.92,
+              11.83
+            ],
+            "tickFrameMeanMs": [
+              13.39,
+              13.49,
+              13.47
+            ],
+            "gpuFrameP50Ms": [
+              9.82,
+              9.96,
+              9.78
+            ],
+            "gpuFrameMeanMs": [
+              10.39,
+              10.39,
+              10.38
+            ],
+            "taskMsPerSec": [
+              753.4,
+              780.6,
+              748.6
+            ]
+          },
+          "cpuFrameP50Ms": 6.5,
+          "cpuFrameP95Ms": 35.9,
+          "cpuFrameMeanMs": 11.8,
+          "cpuFrames": 254,
+          "tickFrameP50Ms": 8.4,
+          "tickFrameP95Ms": 37.1,
+          "tickFrameMeanMs": 13.5,
+          "tickFrames": 254,
+          "gpuFrameP50Ms": 9.8,
+          "gpuFrameP95Ms": 13.9,
+          "gpuFrameMeanMs": 10.4,
+          "gpuFrames": 254,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 50.3,
+          "rafFps": 50.3,
+          "ticksPerSec": 50.3,
+          "rendersPerSec": 50.3,
+          "frameP50Ms": 16.7,
+          "frameP95Ms": 33.5,
+          "frameMaxMs": 66.6,
+          "longTasks": 3,
+          "longTaskMs": 191,
+          "scriptMsPerSec": 687.6,
+          "taskMsPerSec": 753.4,
+          "heapMiB": 205.2,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 42,
+          "readPixelsMs": 64.5,
+          "getBufferSubDataCalls": 978,
+          "getBufferSubDataMs": 338.8,
+          "getHeightCalls": 273,
+          "getHeightMs": 390.6,
+          "pickFromRayCalls": 1,
+          "pickFromRayMs": 14,
+          "sampleHeightCalls": 7,
+          "sampleHeightMs": 91.1
+        },
+        "sceneCounts": {
+          "primitivesShown": 123,
+          "billboards": 1565,
+          "billboardsOnScreen": 0,
+          "points": 0,
+          "pointsOnScreen": 0,
+          "models": 112,
+          "modelsOnScreen": 11,
+          "onGroundAircraftOnScreen": 5,
+          "entities": {
+            "gev-annotations": 0,
+            "gev-draw-preview": 1,
+            "gev-recent-imagery-box-preview": 2
+          }
+        }
+      },
+      "d25": {
+        "rest": {
+          "perWindow": {
+            "cpuFrameP50Ms": [
+              27.3,
+              29.9,
+              29.5
+            ],
+            "cpuFrameMeanMs": [
+              24.54,
+              30.24,
+              30.49
+            ],
+            "tickFrameMeanMs": [
+              24.75,
+              30.42,
+              30.67
+            ],
+            "gpuFrameP50Ms": [
+              9.75,
+              10.71,
+              10.34
+            ],
+            "gpuFrameMeanMs": [
+              10.43,
+              10.95,
+              10.75
+            ],
+            "taskMsPerSec": [
+              480.9,
+              487.8,
+              482.6
+            ]
+          },
+          "cpuFrameP50Ms": 29.5,
+          "cpuFrameP95Ms": 38.8,
+          "cpuFrameMeanMs": 30.2,
+          "cpuFrames": 63,
+          "tickFrameP50Ms": 29.8,
+          "tickFrameP95Ms": 39,
+          "tickFrameMeanMs": 30.4,
+          "tickFrames": 63,
+          "gpuFrameP50Ms": 10.3,
+          "gpuFrameP95Ms": 13.2,
+          "gpuFrameMeanMs": 10.8,
+          "gpuFrames": 63,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 57,
+          "rafFps": 57,
+          "ticksPerSec": 57,
+          "rendersPerSec": 12.5,
+          "frameP50Ms": 16.7,
+          "frameP95Ms": 33.1,
+          "frameMaxMs": 33.7,
+          "longTasks": 0,
+          "longTaskMs": 0,
+          "scriptMsPerSec": 433,
+          "taskMsPerSec": 482.6,
+          "heapMiB": 235.9,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 3,
+          "readPixelsMs": 5,
+          "getBufferSubDataCalls": 4,
+          "getBufferSubDataMs": 1.2,
+          "getHeightCalls": 1,
+          "getHeightMs": 2.5,
+          "pickFromRayCalls": 1,
+          "pickFromRayMs": 7.6,
+          "sampleHeightCalls": 0,
+          "sampleHeightMs": 0
+        },
+        "motion": {
+          "perWindow": {
+            "cpuFrameP50Ms": [
+              6.4,
+              6.4,
+              8
+            ],
+            "cpuFrameMeanMs": [
+              13.96,
+              13.35,
+              15.1
+            ],
+            "tickFrameMeanMs": [
+              16.11,
+              15.46,
+              17.57
+            ],
+            "gpuFrameP50Ms": [
+              9.61,
+              9.63,
+              9.64
+            ],
+            "gpuFrameMeanMs": [
+              10.22,
+              10.41,
+              10.14
+            ],
+            "taskMsPerSec": [
+              831.9,
+              810.4,
+              874.5
+            ]
+          },
+          "cpuFrameP50Ms": 6.4,
+          "cpuFrameP95Ms": 40.8,
+          "cpuFrameMeanMs": 14,
+          "cpuFrames": 242,
+          "tickFrameP50Ms": 9.6,
+          "tickFrameP95Ms": 42.7,
+          "tickFrameMeanMs": 16.1,
+          "tickFrames": 242,
+          "gpuFrameP50Ms": 9.6,
+          "gpuFrameP95Ms": 14.1,
+          "gpuFrameMeanMs": 10.2,
+          "gpuFrames": 242,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 48.1,
+          "rafFps": 48.1,
+          "ticksPerSec": 48.1,
+          "rendersPerSec": 48.1,
+          "frameP50Ms": 16.7,
+          "frameP95Ms": 33.6,
+          "frameMaxMs": 66.6,
+          "longTasks": 5,
+          "longTaskMs": 294,
+          "scriptMsPerSec": 780.2,
+          "taskMsPerSec": 831.9,
+          "heapMiB": 226.6,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 9,
+          "readPixelsMs": 21.4,
+          "getBufferSubDataCalls": 950,
+          "getBufferSubDataMs": 449,
+          "getHeightCalls": 261,
+          "getHeightMs": 497.5,
+          "pickFromRayCalls": 0,
+          "pickFromRayMs": 0,
+          "sampleHeightCalls": 1,
+          "sampleHeightMs": 15
+        },
+        "sceneCounts": {
+          "primitivesShown": 125,
+          "billboards": 1573,
+          "billboardsOnScreen": 0,
+          "points": 0,
+          "pointsOnScreen": 0,
+          "models": 114,
+          "modelsOnScreen": 11,
+          "onGroundAircraftOnScreen": 5,
+          "entities": {
+            "gev-annotations": 0,
+            "gev-draw-preview": 1,
+            "gev-recent-imagery-box-preview": 2
+          }
+        }
+      },
+      "d50": {
+        "rest": {
+          "perWindow": {
+            "cpuFrameP50Ms": [
+              28.8,
+              30.6,
+              29.5
+            ],
+            "cpuFrameMeanMs": [
+              27.23,
+              31.66,
+              30.75
+            ],
+            "tickFrameMeanMs": [
+              27.41,
+              31.83,
+              30.92
+            ],
+            "gpuFrameP50Ms": [
+              9.87,
+              9.93,
+              9.74
+            ],
+            "gpuFrameMeanMs": [
+              10.25,
+              10.55,
+              10.06
+            ],
+            "taskMsPerSec": [
+              521.9,
+              481,
+              474.2
+            ]
+          },
+          "cpuFrameP50Ms": 29.5,
+          "cpuFrameP95Ms": 40.4,
+          "cpuFrameMeanMs": 30.8,
+          "cpuFrames": 60,
+          "tickFrameP50Ms": 29.6,
+          "tickFrameP95Ms": 40.6,
+          "tickFrameMeanMs": 30.9,
+          "tickFrames": 60,
+          "gpuFrameP50Ms": 9.9,
+          "gpuFrameP95Ms": 12,
+          "gpuFrameMeanMs": 10.3,
+          "gpuFrames": 60,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 56.4,
+          "rafFps": 56.4,
+          "ticksPerSec": 56.4,
+          "rendersPerSec": 12,
+          "frameP50Ms": 16.7,
+          "frameP95Ms": 33.3,
+          "frameMaxMs": 33.7,
+          "longTasks": 0,
+          "longTaskMs": 0,
+          "scriptMsPerSec": 440.5,
+          "taskMsPerSec": 481,
+          "heapMiB": 212.3,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 0,
+          "readPixelsMs": 0,
+          "getBufferSubDataCalls": 0,
+          "getBufferSubDataMs": 0,
+          "getHeightCalls": 0,
+          "getHeightMs": 0,
+          "pickFromRayCalls": 0,
+          "pickFromRayMs": 0,
+          "sampleHeightCalls": 0,
+          "sampleHeightMs": 0
+        },
+        "motion": {
+          "perWindow": {
+            "cpuFrameP50Ms": [
+              9.2,
+              10.2,
+              10
+            ],
+            "cpuFrameMeanMs": [
+              16.59,
+              16.4,
+              15.94
+            ],
+            "tickFrameMeanMs": [
+              19.07,
+              19.11,
+              18.68
+            ],
+            "gpuFrameP50Ms": [
+              9.76,
+              9.78,
+              9.7
+            ],
+            "gpuFrameMeanMs": [
+              10.59,
+              10.44,
+              10.45
+            ],
+            "taskMsPerSec": [
+              909.9,
+              924.6,
+              917.6
+            ]
+          },
+          "cpuFrameP50Ms": 10,
+          "cpuFrameP95Ms": 42.6,
+          "cpuFrameMeanMs": 16.4,
+          "cpuFrames": 223,
+          "tickFrameP50Ms": 13.2,
+          "tickFrameP95Ms": 45.4,
+          "tickFrameMeanMs": 19.1,
+          "tickFrames": 223,
+          "gpuFrameP50Ms": 9.8,
+          "gpuFrameP95Ms": 14.5,
+          "gpuFrameMeanMs": 10.4,
+          "gpuFrames": 223,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 44.5,
+          "rafFps": 44.5,
+          "ticksPerSec": 44.5,
+          "rendersPerSec": 44.5,
+          "frameP50Ms": 16.8,
+          "frameP95Ms": 49.8,
+          "frameMaxMs": 83.6,
+          "longTasks": 7,
+          "longTaskMs": 383,
+          "scriptMsPerSec": 855.1,
+          "taskMsPerSec": 917.6,
+          "heapMiB": 216.4,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 3,
+          "readPixelsMs": 21.3,
+          "getBufferSubDataCalls": 910,
+          "getBufferSubDataMs": 526.6,
+          "getHeightCalls": 245,
+          "getHeightMs": 585.9,
+          "pickFromRayCalls": 0,
+          "pickFromRayMs": 0,
+          "sampleHeightCalls": 0,
+          "sampleHeightMs": 0
+        },
+        "sceneCounts": {
+          "primitivesShown": 124,
+          "billboards": 1571,
+          "billboardsOnScreen": 0,
+          "points": 0,
+          "pointsOnScreen": 0,
+          "models": 113,
+          "modelsOnScreen": 12,
+          "onGroundAircraftOnScreen": 6,
+          "entities": {
+            "gev-annotations": 0,
+            "gev-draw-preview": 1,
+            "gev-recent-imagery-box-preview": 2
+          }
+        }
+      },
+      "d100": {
+        "rest": {
+          "perWindow": {
+            "cpuFrameP50Ms": [
+              31.3,
+              34.7,
+              31.5
+            ],
+            "cpuFrameMeanMs": [
+              29,
+              35.29,
+              31.24
+            ],
+            "tickFrameMeanMs": [
+              29.19,
+              35.48,
+              31.46
+            ],
+            "gpuFrameP50Ms": [
+              9.74,
+              9.63,
+              9.86
+            ],
+            "gpuFrameMeanMs": [
+              10.21,
+              9.96,
+              10.14
+            ],
+            "taskMsPerSec": [
+              523.9,
+              538.5,
+              482.6
+            ]
+          },
+          "cpuFrameP50Ms": 31.5,
+          "cpuFrameP95Ms": 44,
+          "cpuFrameMeanMs": 31.2,
+          "cpuFrames": 63,
+          "tickFrameP50Ms": 31.7,
+          "tickFrameP95Ms": 44.2,
+          "tickFrameMeanMs": 31.5,
+          "tickFrames": 63,
+          "gpuFrameP50Ms": 9.7,
+          "gpuFrameP95Ms": 11.6,
+          "gpuFrameMeanMs": 10.1,
+          "gpuFrames": 63,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 52.5,
+          "rafFps": 52.5,
+          "ticksPerSec": 52.5,
+          "rendersPerSec": 12.6,
+          "frameP50Ms": 16.7,
+          "frameP95Ms": 33.4,
+          "frameMaxMs": 50.1,
+          "longTasks": 1,
+          "longTaskMs": 56,
+          "scriptMsPerSec": 479,
+          "taskMsPerSec": 523.9,
+          "heapMiB": 240.3,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 18,
+          "readPixelsMs": 23.1,
+          "getBufferSubDataCalls": 10,
+          "getBufferSubDataMs": 1,
+          "getHeightCalls": 1,
+          "getHeightMs": 3.1,
+          "pickFromRayCalls": 1,
+          "pickFromRayMs": 6.7,
+          "sampleHeightCalls": 2,
+          "sampleHeightMs": 39.4
+        },
+        "motion": {
+          "perWindow": {
+            "cpuFrameP50Ms": [
+              10.4,
+              10.4,
+              10.3
+            ],
+            "cpuFrameMeanMs": [
+              17.57,
+              16.65,
+              16.68
+            ],
+            "tickFrameMeanMs": [
+              20.2,
+              19.48,
+              19.51
+            ],
+            "gpuFrameP50Ms": [
+              9.75,
+              9.67,
+              9.7
+            ],
+            "gpuFrameMeanMs": [
+              10.37,
+              10.5,
+              10.45
+            ],
+            "taskMsPerSec": [
+              920,
+              913.7,
+              934.3
+            ]
+          },
+          "cpuFrameP50Ms": 10.4,
+          "cpuFrameP95Ms": 45.6,
+          "cpuFrameMeanMs": 16.7,
+          "cpuFrames": 219,
+          "tickFrameP50Ms": 13.8,
+          "tickFrameP95Ms": 47.1,
+          "tickFrameMeanMs": 19.5,
+          "tickFrames": 219,
+          "gpuFrameP50Ms": 9.7,
+          "gpuFrameP95Ms": 14.2,
+          "gpuFrameMeanMs": 10.4,
+          "gpuFrames": 219,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 43.7,
+          "rafFps": 43.7,
+          "ticksPerSec": 43.7,
+          "rendersPerSec": 43.7,
+          "frameP50Ms": 16.8,
+          "frameP95Ms": 49.9,
+          "frameMaxMs": 66.9,
+          "longTasks": 8,
+          "longTaskMs": 421,
+          "scriptMsPerSec": 871.9,
+          "taskMsPerSec": 920,
+          "heapMiB": 216.4,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 6,
+          "readPixelsMs": 27,
+          "getBufferSubDataCalls": 888,
+          "getBufferSubDataMs": 550.2,
+          "getHeightCalls": 240,
+          "getHeightMs": 606.7,
+          "pickFromRayCalls": 0,
+          "pickFromRayMs": 0,
+          "sampleHeightCalls": 1,
+          "sampleHeightMs": 13.4
+        },
+        "sceneCounts": {
+          "primitivesShown": 129,
+          "billboards": 1568,
+          "billboardsOnScreen": 0,
+          "points": 0,
+          "pointsOnScreen": 0,
+          "models": 118,
+          "modelsOnScreen": 14,
+          "onGroundAircraftOnScreen": 5,
+          "entities": {
+            "gev-annotations": 0,
+            "gev-draw-preview": 1,
+            "gev-recent-imagery-box-preview": 2
+          }
+        }
+      }
+    },
+    "styles": {
+      "normal": {
+        "rest": {
+          "perWindow": {
+            "cpuFrameP50Ms": [
+              25.2,
+              24.9,
+              24.5
+            ],
+            "cpuFrameMeanMs": [
+              26.05,
+              26.04,
+              25
+            ],
+            "tickFrameMeanMs": [
+              26.26,
+              26.22,
+              25.19
+            ],
+            "gpuFrameP50Ms": [
+              9.75,
+              9.84,
+              9.67
+            ],
+            "gpuFrameMeanMs": [
+              10.06,
+              10.36,
+              9.99
+            ],
+            "taskMsPerSec": [
+              432.5,
+              446.5,
+              423.2
+            ]
+          },
+          "cpuFrameP50Ms": 24.9,
+          "cpuFrameP95Ms": 33.6,
+          "cpuFrameMeanMs": 26,
+          "cpuFrames": 63,
+          "tickFrameP50Ms": 25.2,
+          "tickFrameP95Ms": 33.8,
+          "tickFrameMeanMs": 26.2,
+          "tickFrames": 63,
+          "gpuFrameP50Ms": 9.8,
+          "gpuFrameP95Ms": 11.8,
+          "gpuFrameMeanMs": 10.1,
+          "gpuFrames": 63,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 58.5,
+          "rafFps": 58.5,
+          "ticksPerSec": 58.5,
+          "rendersPerSec": 12.5,
+          "frameP50Ms": 16.7,
+          "frameP95Ms": 17.1,
+          "frameMaxMs": 33.6,
+          "longTasks": 0,
+          "longTaskMs": 0,
+          "scriptMsPerSec": 386.3,
+          "taskMsPerSec": 432.5,
+          "heapMiB": 219.6,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 0,
+          "readPixelsMs": 0,
+          "pickFromRayCalls": 0,
+          "pickFromRayMs": 0,
+          "pickPositionCalls": 0,
+          "pickPositionMs": 0,
+          "getHeightCalls": 0,
+          "getHeightMs": 0,
+          "getBufferSubDataCalls": 0,
+          "getBufferSubDataMs": 0,
+          "sampleHeightCalls": 0,
+          "sampleHeightMs": 0
+        },
+        "motion": {
+          "perWindow": {
+            "cpuFrameP50Ms": [
+              9,
+              8.2,
+              7.8
+            ],
+            "cpuFrameMeanMs": [
+              14.14,
+              13.94,
+              13.59
+            ],
+            "tickFrameMeanMs": [
+              16.52,
+              16.18,
+              15.85
+            ],
+            "gpuFrameP50Ms": [
+              9.74,
+              9.67,
+              9.65
+            ],
+            "gpuFrameMeanMs": [
+              10.55,
+              10.48,
+              10.34
+            ],
+            "taskMsPerSec": [
+              883.4,
+              854.4,
+              855.9
+            ]
+          },
+          "cpuFrameP50Ms": 8.2,
+          "cpuFrameP95Ms": 38.6,
+          "cpuFrameMeanMs": 13.9,
+          "cpuFrames": 242,
+          "tickFrameP50Ms": 11.1,
+          "tickFrameP95Ms": 39.9,
+          "tickFrameMeanMs": 16.2,
+          "tickFrames": 242,
+          "gpuFrameP50Ms": 9.7,
+          "gpuFrameP95Ms": 14.7,
+          "gpuFrameMeanMs": 10.5,
+          "gpuFrames": 242,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 48.2,
+          "rafFps": 48.2,
+          "ticksPerSec": 48.2,
+          "rendersPerSec": 48.2,
+          "frameP50Ms": 16.7,
+          "frameP95Ms": 33.6,
+          "frameMaxMs": 100.2,
+          "longTasks": 4,
+          "longTaskMs": 250,
+          "scriptMsPerSec": 793,
+          "taskMsPerSec": 855.9,
+          "heapMiB": 231.6,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 42,
+          "readPixelsMs": 92.4,
+          "pickFromRayCalls": 1,
+          "pickFromRayMs": 22.5,
+          "pickPositionCalls": 0,
+          "pickPositionMs": 0,
+          "getHeightCalls": 260,
+          "getHeightMs": 526.5,
+          "getBufferSubDataCalls": 904,
+          "getBufferSubDataMs": 473.5,
+          "sampleHeightCalls": 7,
+          "sampleHeightMs": 89.2
+        },
+        "sceneCounts": {
+          "primitivesShown": 128,
+          "billboards": 1570,
+          "billboardsOnScreen": 0,
+          "points": 0,
+          "pointsOnScreen": 0,
+          "models": 117,
+          "modelsOnScreen": 15,
+          "onGroundAircraftOnScreen": 5,
+          "entities": {
+            "gev-annotations": 0,
+            "gev-draw-preview": 1,
+            "gev-recent-imagery-box-preview": 2
+          }
+        },
+        "pageErrors": 0
+      },
+      "normal-sharpen-off": {
+        "rest": {
+          "perWindow": {
+            "cpuFrameP50Ms": [
+              25.1,
+              24.6,
+              25.5
+            ],
+            "cpuFrameMeanMs": [
+              25.25,
+              23.54,
+              25.21
+            ],
+            "tickFrameMeanMs": [
+              25.45,
+              23.72,
+              25.39
+            ],
+            "gpuFrameP50Ms": [
+              8.26,
+              8.13,
+              8.36
+            ],
+            "gpuFrameMeanMs": [
+              8.67,
+              8.54,
+              8.65
+            ],
+            "taskMsPerSec": [
+              419.6,
+              438.5,
+              430.6
+            ]
+          },
+          "cpuFrameP50Ms": 25.1,
+          "cpuFrameP95Ms": 34.1,
+          "cpuFrameMeanMs": 25.2,
+          "cpuFrames": 65,
+          "tickFrameP50Ms": 25.4,
+          "tickFrameP95Ms": 34.3,
+          "tickFrameMeanMs": 25.4,
+          "tickFrames": 65,
+          "gpuFrameP50Ms": 8.3,
+          "gpuFrameP95Ms": 10.2,
+          "gpuFrameMeanMs": 8.7,
+          "gpuFrames": 65,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 58.2,
+          "rafFps": 58.2,
+          "ticksPerSec": 58.2,
+          "rendersPerSec": 13,
+          "frameP50Ms": 16.7,
+          "frameP95Ms": 17.1,
+          "frameMaxMs": 33.6,
+          "longTasks": 0,
+          "longTaskMs": 0,
+          "scriptMsPerSec": 388.3,
+          "taskMsPerSec": 430.6,
+          "heapMiB": 203.3,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 9,
+          "readPixelsMs": 10.7,
+          "getBufferSubDataCalls": 0,
+          "getBufferSubDataMs": 0,
+          "getHeightCalls": 0,
+          "getHeightMs": 0,
+          "pickFromRayCalls": 0,
+          "pickFromRayMs": 0,
+          "sampleHeightCalls": 1,
+          "sampleHeightMs": 22.8
+        },
+        "motion": {
+          "perWindow": {
+            "cpuFrameP50Ms": [
+              6.6,
+              8.9,
+              8.9
+            ],
+            "cpuFrameMeanMs": [
+              12.4,
+              14.39,
+              13.9
+            ],
+            "tickFrameMeanMs": [
+              14.57,
+              16.84,
+              16.21
+            ],
+            "gpuFrameP50Ms": [
+              8.13,
+              8.13,
+              8.12
+            ],
+            "gpuFrameMeanMs": [
+              8.87,
+              8.73,
+              8.94
+            ],
+            "taskMsPerSec": [
+              833.7,
+              877.2,
+              874.7
+            ]
+          },
+          "cpuFrameP50Ms": 8.9,
+          "cpuFrameP95Ms": 36.5,
+          "cpuFrameMeanMs": 13.9,
+          "cpuFrames": 246,
+          "tickFrameP50Ms": 11.7,
+          "tickFrameP95Ms": 39.4,
+          "tickFrameMeanMs": 16.2,
+          "tickFrames": 246,
+          "gpuFrameP50Ms": 8.1,
+          "gpuFrameP95Ms": 13,
+          "gpuFrameMeanMs": 8.9,
+          "gpuFrames": 246,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 48.8,
+          "rafFps": 48.8,
+          "ticksPerSec": 48.8,
+          "rendersPerSec": 48.8,
+          "frameP50Ms": 16.7,
+          "frameP95Ms": 33.5,
+          "frameMaxMs": 66.7,
+          "longTasks": 4,
+          "longTaskMs": 252,
+          "scriptMsPerSec": 809.9,
+          "taskMsPerSec": 874.7,
+          "heapMiB": 209.4,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 36,
+          "readPixelsMs": 54,
+          "getBufferSubDataCalls": 888,
+          "getBufferSubDataMs": 498.4,
+          "getHeightCalls": 262,
+          "getHeightMs": 542.1,
+          "pickFromRayCalls": 0,
+          "pickFromRayMs": 0,
+          "sampleHeightCalls": 6,
+          "sampleHeightMs": 76.9
+        },
+        "sceneCounts": {
+          "primitivesShown": 130,
+          "billboards": 1559,
+          "billboardsOnScreen": 0,
+          "points": 0,
+          "pointsOnScreen": 0,
+          "models": 119,
+          "modelsOnScreen": 13,
+          "onGroundAircraftOnScreen": 4,
+          "entities": {
+            "gev-annotations": 0,
+            "gev-draw-preview": 1,
+            "gev-recent-imagery-box-preview": 2
+          }
+        },
+        "pageErrors": 0
+      },
+      "normal-stages-removed": {
+        "rest": {
+          "perWindow": {
+            "cpuFrameP50Ms": [
+              25.5,
+              25.3,
+              24.8
+            ],
+            "cpuFrameMeanMs": [
+              27.19,
+              23.86,
+              26.07
+            ],
+            "tickFrameMeanMs": [
+              27.41,
+              24.06,
+              26.26
+            ],
+            "gpuFrameP50Ms": [
+              8.18,
+              8.79,
+              8.33
+            ],
+            "gpuFrameMeanMs": [
+              8.41,
+              9.09,
+              8.88
+            ],
+            "taskMsPerSec": [
+              427.4,
+              453.3,
+              430.7
+            ]
+          },
+          "cpuFrameP50Ms": 25.3,
+          "cpuFrameP95Ms": 34.8,
+          "cpuFrameMeanMs": 26.1,
+          "cpuFrames": 63,
+          "tickFrameP50Ms": 25.5,
+          "tickFrameP95Ms": 35,
+          "tickFrameMeanMs": 26.3,
+          "tickFrames": 63,
+          "gpuFrameP50Ms": 8.3,
+          "gpuFrameP95Ms": 10.6,
+          "gpuFrameMeanMs": 8.9,
+          "gpuFrames": 63,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 57.7,
+          "rafFps": 57.7,
+          "ticksPerSec": 57.7,
+          "rendersPerSec": 12.6,
+          "frameP50Ms": 16.7,
+          "frameP95Ms": 17.1,
+          "frameMaxMs": 50,
+          "longTasks": 1,
+          "longTaskMs": 53,
+          "scriptMsPerSec": 388.5,
+          "taskMsPerSec": 430.7,
+          "heapMiB": 201.8,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 18,
+          "readPixelsMs": 21.9,
+          "getBufferSubDataCalls": 0,
+          "getBufferSubDataMs": 0,
+          "getHeightCalls": 0,
+          "getHeightMs": 0,
+          "pickFromRayCalls": 0,
+          "pickFromRayMs": 0,
+          "sampleHeightCalls": 2,
+          "sampleHeightMs": 39
+        },
+        "motion": {
+          "perWindow": {
+            "cpuFrameP50Ms": [
+              6.6,
+              7.7,
+              8.8
+            ],
+            "cpuFrameMeanMs": [
+              12.33,
+              14.07,
+              14.34
+            ],
+            "tickFrameMeanMs": [
+              14.43,
+              16.14,
+              16.72
+            ],
+            "gpuFrameP50Ms": [
+              7.91,
+              7.95,
+              7.9
+            ],
+            "gpuFrameMeanMs": [
+              8.8,
+              8.52,
+              8.6
+            ],
+            "taskMsPerSec": [
+              827.8,
+              842.8,
+              878.7
+            ]
+          },
+          "cpuFrameP50Ms": 7.7,
+          "cpuFrameP95Ms": 37.9,
+          "cpuFrameMeanMs": 14.1,
+          "cpuFrames": 245,
+          "tickFrameP50Ms": 10.8,
+          "tickFrameP95Ms": 40.4,
+          "tickFrameMeanMs": 16.1,
+          "tickFrames": 245,
+          "gpuFrameP50Ms": 7.9,
+          "gpuFrameP95Ms": 12.5,
+          "gpuFrameMeanMs": 8.6,
+          "gpuFrames": 245,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 48.8,
+          "rafFps": 48.8,
+          "ticksPerSec": 48.8,
+          "rendersPerSec": 48.8,
+          "frameP50Ms": 16.7,
+          "frameP95Ms": 33.6,
+          "frameMaxMs": 66.9,
+          "longTasks": 4,
+          "longTaskMs": 279,
+          "scriptMsPerSec": 792.3,
+          "taskMsPerSec": 842.8,
+          "heapMiB": 255.4,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 36,
+          "readPixelsMs": 53.6,
+          "getBufferSubDataCalls": 914,
+          "getBufferSubDataMs": 450.1,
+          "getHeightCalls": 264,
+          "getHeightMs": 506.2,
+          "pickFromRayCalls": 0,
+          "pickFromRayMs": 0,
+          "sampleHeightCalls": 6,
+          "sampleHeightMs": 73.3
+        },
+        "sceneCounts": {
+          "primitivesShown": 131,
+          "billboards": 1559,
+          "billboardsOnScreen": 0,
+          "points": 0,
+          "pointsOnScreen": 0,
+          "models": 120,
+          "modelsOnScreen": 14,
+          "onGroundAircraftOnScreen": 4,
+          "entities": {
+            "gev-annotations": 0,
+            "gev-draw-preview": 1,
+            "gev-recent-imagery-box-preview": 2
+          }
+        },
+        "stagesRemaining": 0,
+        "pageErrors": 0
+      },
+      "retro": {
+        "rest": {
+          "perWindow": {
+            "cpuFrameP50Ms": [
+              6,
+              5.9,
+              6.2
+            ],
+            "cpuFrameMeanMs": [
+              11.42,
+              11.75,
+              11.71
+            ],
+            "tickFrameMeanMs": [
+              11.66,
+              11.94,
+              11.92
+            ],
+            "gpuFrameP50Ms": [
+              10.84,
+              10.88,
+              10.8
+            ],
+            "gpuFrameMeanMs": [
+              11.5,
+              12,
+              11.56
+            ],
+            "taskMsPerSec": [
+              720.7,
+              715.1,
+              711.8
+            ]
+          },
+          "cpuFrameP50Ms": 6,
+          "cpuFrameP95Ms": 31.7,
+          "cpuFrameMeanMs": 11.7,
+          "cpuFrames": 263,
+          "tickFrameP50Ms": 6.2,
+          "tickFrameP95Ms": 32,
+          "tickFrameMeanMs": 11.9,
+          "tickFrames": 263,
+          "gpuFrameP50Ms": 10.8,
+          "gpuFrameP95Ms": 16.4,
+          "gpuFrameMeanMs": 11.6,
+          "gpuFrames": 263,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 52.4,
+          "rafFps": 52.4,
+          "ticksPerSec": 52.4,
+          "rendersPerSec": 52.4,
+          "frameP50Ms": 16.7,
+          "frameP95Ms": 33.3,
+          "frameMaxMs": 132.9,
+          "longTasks": 2,
+          "longTaskMs": 276,
+          "scriptMsPerSec": 647.8,
+          "taskMsPerSec": 715.1,
+          "heapMiB": 235.1,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 18,
+          "readPixelsMs": 187.4,
+          "getBufferSubDataCalls": 0,
+          "getBufferSubDataMs": 0,
+          "getHeightCalls": 0,
+          "getHeightMs": 0,
+          "pickFromRayCalls": 0,
+          "pickFromRayMs": 0,
+          "sampleHeightCalls": 2,
+          "sampleHeightMs": 178.7
+        },
+        "motion": {
+          "perWindow": {
+            "cpuFrameP50Ms": [
+              6.3,
+              6.8,
+              6.4
+            ],
+            "cpuFrameMeanMs": [
+              13.17,
+              14.03,
+              13.24
+            ],
+            "tickFrameMeanMs": [
+              16.3,
+              16.76,
+              15.7
+            ],
+            "gpuFrameP50Ms": [
+              10.86,
+              10.93,
+              10.97
+            ],
+            "gpuFrameMeanMs": [
+              11.96,
+              12.02,
+              12.12
+            ],
+            "taskMsPerSec": [
+              895.8,
+              884.5,
+              879.7
+            ]
+          },
+          "cpuFrameP50Ms": 6.4,
+          "cpuFrameP95Ms": 37.8,
+          "cpuFrameMeanMs": 13.2,
+          "cpuFrames": 237,
+          "tickFrameP50Ms": 10.1,
+          "tickFrameP95Ms": 41.8,
+          "tickFrameMeanMs": 16.3,
+          "tickFrames": 237,
+          "gpuFrameP50Ms": 10.9,
+          "gpuFrameP95Ms": 16.9,
+          "gpuFrameMeanMs": 12,
+          "gpuFrames": 237,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 47.2,
+          "rafFps": 47.2,
+          "ticksPerSec": 47.2,
+          "rendersPerSec": 47.2,
+          "frameP50Ms": 16.7,
+          "frameP95Ms": 33.7,
+          "frameMaxMs": 132.8,
+          "longTasks": 4,
+          "longTaskMs": 370,
+          "scriptMsPerSec": 780.2,
+          "taskMsPerSec": 884.5,
+          "heapMiB": 267.4,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 36,
+          "readPixelsMs": 152.5,
+          "getBufferSubDataCalls": 914,
+          "getBufferSubDataMs": 550.2,
+          "getHeightCalls": 255,
+          "getHeightMs": 600.1,
+          "pickFromRayCalls": 0,
+          "pickFromRayMs": 0,
+          "sampleHeightCalls": 6,
+          "sampleHeightMs": 173.4
+        },
+        "sceneCounts": {
+          "primitivesShown": 132,
+          "billboards": 1554,
+          "billboardsOnScreen": 0,
+          "points": 0,
+          "pointsOnScreen": 0,
+          "models": 121,
+          "modelsOnScreen": 14,
+          "onGroundAircraftOnScreen": 4,
+          "entities": {
+            "gev-annotations": 0,
+            "gev-draw-preview": 1,
+            "gev-recent-imagery-box-preview": 2
+          }
+        },
+        "pageErrors": 0
+      },
+      "surveillance": {
+        "rest": {
+          "perWindow": {
+            "cpuFrameP50Ms": [
+              5.5,
+              5.5,
+              6.3
+            ],
+            "cpuFrameMeanMs": [
+              11.46,
+              11.46,
+              13.68
+            ],
+            "tickFrameMeanMs": [
+              11.71,
+              11.67,
+              13.92
+            ],
+            "gpuFrameP50Ms": [
+              10.62,
+              10.6,
+              10.76
+            ],
+            "gpuFrameMeanMs": [
+              11.51,
+              11.63,
+              11.79
+            ],
+            "taskMsPerSec": [
+              700.4,
+              696.3,
+              774.9
+            ]
+          },
+          "cpuFrameP50Ms": 5.5,
+          "cpuFrameP95Ms": 30.9,
+          "cpuFrameMeanMs": 11.5,
+          "cpuFrames": 267,
+          "tickFrameP50Ms": 5.8,
+          "tickFrameP95Ms": 31.2,
+          "tickFrameMeanMs": 11.7,
+          "tickFrames": 267,
+          "gpuFrameP50Ms": 10.6,
+          "gpuFrameP95Ms": 16.3,
+          "gpuFrameMeanMs": 11.6,
+          "gpuFrames": 267,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 52.4,
+          "rafFps": 52.4,
+          "ticksPerSec": 52.4,
+          "rendersPerSec": 52.4,
+          "frameP50Ms": 16.7,
+          "frameP95Ms": 33.3,
+          "frameMaxMs": 133.4,
+          "longTasks": 4,
+          "longTaskMs": 424,
+          "scriptMsPerSec": 635,
+          "taskMsPerSec": 700.4,
+          "heapMiB": 270.1,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 30,
+          "readPixelsMs": 284.4,
+          "getBufferSubDataCalls": 0,
+          "getBufferSubDataMs": 0,
+          "getHeightCalls": 0,
+          "getHeightMs": 0,
+          "pickFromRayCalls": 0,
+          "pickFromRayMs": 0,
+          "sampleHeightCalls": 3,
+          "sampleHeightMs": 304.9
+        },
+        "motion": {
+          "perWindow": {
+            "cpuFrameP50Ms": [
+              6.2,
+              6,
+              8.4
+            ],
+            "cpuFrameMeanMs": [
+              12.9,
+              13.04,
+              14.87
+            ],
+            "tickFrameMeanMs": [
+              15.32,
+              15.49,
+              17.55
+            ],
+            "gpuFrameP50Ms": [
+              10.6,
+              10.5,
+              10.65
+            ],
+            "gpuFrameMeanMs": [
+              11.52,
+              11.25,
+              11.57
+            ],
+            "taskMsPerSec": [
+              854,
+              831.1,
+              908.8
+            ]
+          },
+          "cpuFrameP50Ms": 6.2,
+          "cpuFrameP95Ms": 37.5,
+          "cpuFrameMeanMs": 13,
+          "cpuFrames": 241,
+          "tickFrameP50Ms": 9.7,
+          "tickFrameP95Ms": 38.7,
+          "tickFrameMeanMs": 15.5,
+          "tickFrames": 241,
+          "gpuFrameP50Ms": 10.6,
+          "gpuFrameP95Ms": 16.2,
+          "gpuFrameMeanMs": 11.5,
+          "gpuFrames": 241,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 47.9,
+          "rafFps": 48.6,
+          "ticksPerSec": 47.9,
+          "rendersPerSec": 47.9,
+          "frameP50Ms": 16.7,
+          "frameP95Ms": 33.6,
+          "frameMaxMs": 83.3,
+          "longTasks": 5,
+          "longTaskMs": 369,
+          "scriptMsPerSec": 765.4,
+          "taskMsPerSec": 854,
+          "heapMiB": 303.8,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 45,
+          "readPixelsMs": 121.6,
+          "getBufferSubDataCalls": 906,
+          "getBufferSubDataMs": 523.7,
+          "getHeightCalls": 260,
+          "getHeightMs": 575.3,
+          "pickFromRayCalls": 0,
+          "pickFromRayMs": 0,
+          "sampleHeightCalls": 8,
+          "sampleHeightMs": 193.6
+        },
+        "sceneCounts": {
+          "primitivesShown": 135,
+          "billboards": 1552,
+          "billboardsOnScreen": 0,
+          "points": 0,
+          "pointsOnScreen": 0,
+          "models": 124,
+          "modelsOnScreen": 16,
+          "onGroundAircraftOnScreen": 5,
+          "entities": {
+            "gev-annotations": 0,
+            "gev-draw-preview": 1,
+            "gev-recent-imagery-box-preview": 2
+          }
+        },
+        "pageErrors": 0
+      },
+      "thermal": {
+        "rest": {
+          "perWindow": {
+            "cpuFrameP50Ms": [
+              11.2,
+              20.3,
+              9.5
+            ],
+            "cpuFrameMeanMs": [
+              25.29,
+              33.06,
+              23.97
+            ],
+            "tickFrameMeanMs": [
+              25.6,
+              33.36,
+              24.25
+            ],
+            "gpuFrameP50Ms": [
+              11.04,
+              11.11,
+              11.07
+            ],
+            "gpuFrameMeanMs": [
+              12.36,
+              12.22,
+              12.72
+            ],
+            "taskMsPerSec": [
+              963.2,
+              994,
+              960.3
+            ]
+          },
+          "cpuFrameP50Ms": 11.2,
+          "cpuFrameP95Ms": 63.4,
+          "cpuFrameMeanMs": 25.3,
+          "cpuFrames": 174,
+          "tickFrameP50Ms": 11.7,
+          "tickFrameP95Ms": 63.7,
+          "tickFrameMeanMs": 25.6,
+          "tickFrames": 174,
+          "gpuFrameP50Ms": 11.1,
+          "gpuFrameP95Ms": 17.5,
+          "gpuFrameMeanMs": 12.4,
+          "gpuFrames": 174,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 34.3,
+          "rafFps": 35.1,
+          "ticksPerSec": 34.3,
+          "rendersPerSec": 34.3,
+          "frameP50Ms": 16.8,
+          "frameP95Ms": 66.7,
+          "frameMaxMs": 100,
+          "longTasks": 46,
+          "longTaskMs": 2734,
+          "scriptMsPerSec": 897,
+          "taskMsPerSec": 963.2,
+          "heapMiB": 276.1,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 27,
+          "readPixelsMs": 39.2,
+          "getBufferSubDataCalls": 0,
+          "getBufferSubDataMs": 0,
+          "getHeightCalls": 0,
+          "getHeightMs": 0,
+          "pickFromRayCalls": 0,
+          "pickFromRayMs": 0,
+          "sampleHeightCalls": 3,
+          "sampleHeightMs": 88.7
+        },
+        "motion": {
+          "perWindow": {
+            "cpuFrameP50Ms": [
+              33.6,
+              46.4,
+              14.6
+            ],
+            "cpuFrameMeanMs": [
+              36.68,
+              39.18,
+              34.16
+            ],
+            "tickFrameMeanMs": [
+              41.85,
+              43.97,
+              38.7
+            ],
+            "gpuFrameP50Ms": [
+              10.93,
+              10.84,
+              10.72
+            ],
+            "gpuFrameMeanMs": [
+              12.89,
+              11.64,
+              11.87
+            ],
+            "taskMsPerSec": [
+              1005,
+              1010.1,
+              1002.6
+            ]
+          },
+          "cpuFrameP50Ms": 33.6,
+          "cpuFrameP95Ms": 82.3,
+          "cpuFrameMeanMs": 36.7,
+          "cpuFrames": 108,
+          "tickFrameP50Ms": 39.8,
+          "tickFrameP95Ms": 88.3,
+          "tickFrameMeanMs": 41.9,
+          "tickFrames": 108,
+          "gpuFrameP50Ms": 10.8,
+          "gpuFrameP95Ms": 16.8,
+          "gpuFrameMeanMs": 11.9,
+          "gpuFrames": 108,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 21.2,
+          "rafFps": 21.2,
+          "ticksPerSec": 21.2,
+          "rendersPerSec": 21.2,
+          "frameP50Ms": 33.5,
+          "frameP95Ms": 99.9,
+          "frameMaxMs": 174.9,
+          "longTasks": 55,
+          "longTaskMs": 3980,
+          "scriptMsPerSec": 931.3,
+          "taskMsPerSec": 1005,
+          "heapMiB": 239.4,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 60,
+          "readPixelsMs": 97.6,
+          "getBufferSubDataCalls": 482,
+          "getBufferSubDataMs": 493.9,
+          "getHeightCalls": 118,
+          "getHeightMs": 535.4,
+          "pickFromRayCalls": 0,
+          "pickFromRayMs": 0,
+          "sampleHeightCalls": 10,
+          "sampleHeightMs": 153
+        },
+        "sceneCounts": {
+          "primitivesShown": 135,
+          "billboards": 1570,
+          "billboardsOnScreen": 0,
+          "points": 0,
+          "pointsOnScreen": 0,
+          "models": 124,
+          "modelsOnScreen": 18,
+          "onGroundAircraftOnScreen": 6,
+          "entities": {
+            "gev-annotations": 0,
+            "gev-draw-preview": 1,
+            "gev-recent-imagery-box-preview": 2
+          }
+        },
+        "pageErrors": 0
+      },
+      "anime": {
+        "rest": {
+          "perWindow": {
+            "cpuFrameP50Ms": [
+              40.4,
+              45.7,
+              46.8
+            ],
+            "cpuFrameMeanMs": [
+              41.25,
+              45.3,
+              46.98
+            ],
+            "tickFrameMeanMs": [
+              41.5,
+              45.57,
+              47.23
+            ],
+            "gpuFrameP50Ms": [
+              11.76,
+              10.36,
+              10.34
+            ],
+            "gpuFrameMeanMs": [
+              11.42,
+              10.72,
+              10.54
+            ],
+            "taskMsPerSec": [
+              628.9,
+              696,
+              696.7
+            ]
+          },
+          "cpuFrameP50Ms": 45.7,
+          "cpuFrameP95Ms": 66.7,
+          "cpuFrameMeanMs": 45.3,
+          "cpuFrames": 60,
+          "tickFrameP50Ms": 45.9,
+          "tickFrameP95Ms": 67.1,
+          "tickFrameMeanMs": 45.6,
+          "tickFrames": 60,
+          "gpuFrameP50Ms": 10.4,
+          "gpuFrameP95Ms": 12.8,
+          "gpuFrameMeanMs": 10.7,
+          "gpuFrames": 60,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 43.4,
+          "rafFps": 46.2,
+          "ticksPerSec": 43.4,
+          "rendersPerSec": 12,
+          "frameP50Ms": 16.7,
+          "frameP95Ms": 50.1,
+          "frameMaxMs": 83.1,
+          "longTasks": 25,
+          "longTaskMs": 1467,
+          "scriptMsPerSec": 623,
+          "taskMsPerSec": 696,
+          "heapMiB": 223.5,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 9,
+          "readPixelsMs": 31.5,
+          "getBufferSubDataCalls": 0,
+          "getBufferSubDataMs": 0,
+          "getHeightCalls": 0,
+          "getHeightMs": 0,
+          "pickFromRayCalls": 0,
+          "pickFromRayMs": 0,
+          "sampleHeightCalls": 1,
+          "sampleHeightMs": 45.4
+        },
+        "motion": {
+          "perWindow": {
+            "cpuFrameP50Ms": [
+              45,
+              35.8,
+              20.3
+            ],
+            "cpuFrameMeanMs": [
+              37.51,
+              37.66,
+              35.62
+            ],
+            "tickFrameMeanMs": [
+              42.21,
+              42.61,
+              40.17
+            ],
+            "gpuFrameP50Ms": [
+              11.82,
+              11.01,
+              9.93
+            ],
+            "gpuFrameMeanMs": [
+              12.55,
+              11.74,
+              10.99
+            ],
+            "taskMsPerSec": [
+              998.3,
+              994,
+              997
+            ]
+          },
+          "cpuFrameP50Ms": 35.8,
+          "cpuFrameP95Ms": 78.7,
+          "cpuFrameMeanMs": 37.5,
+          "cpuFrames": 112,
+          "tickFrameP50Ms": 38.9,
+          "tickFrameP95Ms": 83,
+          "tickFrameMeanMs": 42.2,
+          "tickFrames": 112,
+          "gpuFrameP50Ms": 11,
+          "gpuFrameP95Ms": 17.1,
+          "gpuFrameMeanMs": 11.7,
+          "gpuFrames": 112,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 21.8,
+          "rafFps": 21.8,
+          "ticksPerSec": 21.8,
+          "rendersPerSec": 21.8,
+          "frameP50Ms": 33.6,
+          "frameP95Ms": 91.6,
+          "frameMaxMs": 150,
+          "longTasks": 53,
+          "longTaskMs": 3825,
+          "scriptMsPerSec": 930.8,
+          "taskMsPerSec": 997,
+          "heapMiB": 287.1,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 42,
+          "readPixelsMs": 68.3,
+          "getBufferSubDataCalls": 520,
+          "getBufferSubDataMs": 474.2,
+          "getHeightCalls": 126,
+          "getHeightMs": 526.4,
+          "pickFromRayCalls": 0,
+          "pickFromRayMs": 0,
+          "sampleHeightCalls": 6,
+          "sampleHeightMs": 137.8
+        },
+        "sceneCounts": {
+          "primitivesShown": 134,
+          "billboards": 1585,
+          "billboardsOnScreen": 1,
+          "points": 0,
+          "pointsOnScreen": 0,
+          "models": 123,
+          "modelsOnScreen": 18,
+          "onGroundAircraftOnScreen": 8,
+          "entities": {
+            "gev-annotations": 0,
+            "gev-draw-preview": 1,
+            "gev-recent-imagery-box-preview": 2
+          }
+        },
+        "pageErrors": 0
+      },
+      "noir": {
+        "rest": {
+          "perWindow": {
+            "cpuFrameP50Ms": [
+              41.8,
+              44,
+              40.3
+            ],
+            "cpuFrameMeanMs": [
+              40.78,
+              44.31,
+              40.97
+            ],
+            "tickFrameMeanMs": [
+              41.06,
+              44.57,
+              41.19
+            ],
+            "gpuFrameP50Ms": [
+              10.64,
+              10.71,
+              11.4
+            ],
+            "gpuFrameMeanMs": [
+              11,
+              11.17,
+              11.36
+            ],
+            "taskMsPerSec": [
+              644.8,
+              657.3,
+              617.3
+            ]
+          },
+          "cpuFrameP50Ms": 41.8,
+          "cpuFrameP95Ms": 60.8,
+          "cpuFrameMeanMs": 41,
+          "cpuFrames": 60,
+          "tickFrameP50Ms": 42,
+          "tickFrameP95Ms": 60.9,
+          "tickFrameMeanMs": 41.2,
+          "tickFrames": 60,
+          "gpuFrameP50Ms": 10.7,
+          "gpuFrameP95Ms": 13.4,
+          "gpuFrameMeanMs": 11.2,
+          "gpuFrames": 60,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 46.3,
+          "rafFps": 53,
+          "ticksPerSec": 46.3,
+          "rendersPerSec": 12,
+          "frameP50Ms": 16.7,
+          "frameP95Ms": 49.9,
+          "frameMaxMs": 83.1,
+          "longTasks": 16,
+          "longTaskMs": 912,
+          "scriptMsPerSec": 574.8,
+          "taskMsPerSec": 644.8,
+          "heapMiB": 222.4,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 27,
+          "readPixelsMs": 37.9,
+          "pickFromRayCalls": 0,
+          "pickFromRayMs": 0,
+          "pickPositionCalls": 0,
+          "pickPositionMs": 0,
+          "getBufferSubDataCalls": 0,
+          "getBufferSubDataMs": 0,
+          "getHeightCalls": 0,
+          "getHeightMs": 0,
+          "sampleHeightCalls": 3,
+          "sampleHeightMs": 67.5
+        },
+        "motion": {
+          "perWindow": {
+            "cpuFrameP50Ms": [
+              16.1,
+              14.5,
+              14.7
+            ],
+            "cpuFrameMeanMs": [
+              34.09,
+              34.73,
+              33.35
+            ],
+            "tickFrameMeanMs": [
+              38.69,
+              39.16,
+              37.76
+            ],
+            "gpuFrameP50Ms": [
+              10.03,
+              9.88,
+              9.92
+            ],
+            "gpuFrameMeanMs": [
+              11.45,
+              10.84,
+              11.13
+            ],
+            "taskMsPerSec": [
+              996,
+              1004,
+              1013.5
+            ]
+          },
+          "cpuFrameP50Ms": 14.7,
+          "cpuFrameP95Ms": 75.8,
+          "cpuFrameMeanMs": 34.1,
+          "cpuFrames": 119,
+          "tickFrameP50Ms": 19.6,
+          "tickFrameP95Ms": 81.3,
+          "tickFrameMeanMs": 38.7,
+          "tickFrames": 119,
+          "gpuFrameP50Ms": 9.9,
+          "gpuFrameP95Ms": 16.5,
+          "gpuFrameMeanMs": 11.1,
+          "gpuFrames": 119,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 23.6,
+          "rafFps": 23.8,
+          "ticksPerSec": 23.6,
+          "rendersPerSec": 23.6,
+          "frameP50Ms": 33.4,
+          "frameP95Ms": 83.7,
+          "frameMaxMs": 149.9,
+          "longTasks": 53,
+          "longTaskMs": 3739,
+          "scriptMsPerSec": 946.9,
+          "taskMsPerSec": 1004,
+          "heapMiB": 310,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 54,
+          "readPixelsMs": 98.6,
+          "pickFromRayCalls": 0,
+          "pickFromRayMs": 0,
+          "pickPositionCalls": 0,
+          "pickPositionMs": 0,
+          "getBufferSubDataCalls": 560,
+          "getBufferSubDataMs": 484.9,
+          "getHeightCalls": 135,
+          "getHeightMs": 530.1,
+          "sampleHeightCalls": 9,
+          "sampleHeightMs": 153.8
+        },
+        "sceneCounts": {
+          "primitivesShown": 134,
+          "billboards": 1575,
+          "billboardsOnScreen": 0,
+          "points": 0,
+          "pointsOnScreen": 0,
+          "models": 123,
+          "modelsOnScreen": 20,
+          "onGroundAircraftOnScreen": 9,
+          "entities": {
+            "gev-annotations": 0,
+            "gev-draw-preview": 1,
+            "gev-recent-imagery-box-preview": 2
+          }
+        },
+        "pageErrors": 0
+      },
+      "snow": {
+        "rest": {
+          "perWindow": {
+            "cpuFrameP50Ms": [
+              16.1,
+              18,
+              9.9
+            ],
+            "cpuFrameMeanMs": [
+              27.44,
+              28.74,
+              26.94
+            ],
+            "tickFrameMeanMs": [
+              27.75,
+              29.01,
+              27.21
+            ],
+            "gpuFrameP50Ms": [
+              12.01,
+              11.85,
+              12.14
+            ],
+            "gpuFrameMeanMs": [
+              13.11,
+              13.13,
+              13.35
+            ],
+            "taskMsPerSec": [
+              983.3,
+              1005.5,
+              938.7
+            ]
+          },
+          "cpuFrameP50Ms": 16.1,
+          "cpuFrameP95Ms": 67.2,
+          "cpuFrameMeanMs": 27.4,
+          "cpuFrames": 161,
+          "tickFrameP50Ms": 16.5,
+          "tickFrameP95Ms": 67.5,
+          "tickFrameMeanMs": 27.8,
+          "tickFrames": 161,
+          "gpuFrameP50Ms": 12,
+          "gpuFrameP95Ms": 18,
+          "gpuFrameMeanMs": 13.1,
+          "gpuFrames": 161,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 31.9,
+          "rafFps": 31.9,
+          "ticksPerSec": 31.9,
+          "rendersPerSec": 31.9,
+          "frameP50Ms": 16.9,
+          "frameP95Ms": 66.8,
+          "frameMaxMs": 99.7,
+          "longTasks": 47,
+          "longTaskMs": 2867,
+          "scriptMsPerSec": 923.1,
+          "taskMsPerSec": 983.3,
+          "heapMiB": 190.8,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 45,
+          "readPixelsMs": 58.3,
+          "pickFromRayCalls": 0,
+          "pickFromRayMs": 0,
+          "pickPositionCalls": 0,
+          "pickPositionMs": 0,
+          "getBufferSubDataCalls": 0,
+          "getBufferSubDataMs": 0,
+          "getHeightCalls": 0,
+          "getHeightMs": 0,
+          "sampleHeightCalls": 5,
+          "sampleHeightMs": 133.8
+        },
+        "motion": {
+          "perWindow": {
+            "cpuFrameP50Ms": [
+              23.8,
+              20.1,
+              56.9
+            ],
+            "cpuFrameMeanMs": [
+              35.4,
+              35.61,
+              42.83
+            ],
+            "tickFrameMeanMs": [
+              39.76,
+              39.91,
+              48.29
+            ],
+            "gpuFrameP50Ms": [
+              11.6,
+              11.59,
+              11.61
+            ],
+            "gpuFrameMeanMs": [
+              13.27,
+              12.71,
+              13.32
+            ],
+            "taskMsPerSec": [
+              1003.4,
+              989.4,
+              1016.7
+            ]
+          },
+          "cpuFrameP50Ms": 23.8,
+          "cpuFrameP95Ms": 77.8,
+          "cpuFrameMeanMs": 35.6,
+          "cpuFrames": 113,
+          "tickFrameP50Ms": 28.2,
+          "tickFrameP95Ms": 81.5,
+          "tickFrameMeanMs": 39.9,
+          "tickFrames": 113,
+          "gpuFrameP50Ms": 11.6,
+          "gpuFrameP95Ms": 19.6,
+          "gpuFrameMeanMs": 13.3,
+          "gpuFrames": 113,
+          "gpuDisjoint": 0,
+          "gpuUnread": 0,
+          "fps": 22.3,
+          "rafFps": 22.3,
+          "ticksPerSec": 22.3,
+          "rendersPerSec": 22.3,
+          "frameP50Ms": 33.3,
+          "frameP95Ms": 83.7,
+          "frameMaxMs": 150,
+          "longTasks": 53,
+          "longTaskMs": 3759,
+          "scriptMsPerSec": 942.4,
+          "taskMsPerSec": 1003.4,
+          "heapMiB": 230.8,
+          "tilesLoadedAtStart": 1,
+          "readPixelsCalls": 51,
+          "readPixelsMs": 73.5,
+          "pickFromRayCalls": 0,
+          "pickFromRayMs": 0,
+          "pickPositionCalls": 0,
+          "pickPositionMs": 0,
+          "getBufferSubDataCalls": 540,
+          "getBufferSubDataMs": 483.5,
+          "getHeightCalls": 130,
+          "getHeightMs": 531.5,
+          "sampleHeightCalls": 7,
+          "sampleHeightMs": 126.5
+        },
+        "sceneCounts": {
+          "primitivesShown": 136,
+          "billboards": 1576,
+          "billboardsOnScreen": 0,
+          "points": 0,
+          "pointsOnScreen": 0,
+          "models": 125,
+          "modelsOnScreen": 18,
+          "onGroundAircraftOnScreen": 8,
+          "entities": {
+            "gev-annotations": 0,
+            "gev-draw-preview": 1,
+            "gev-recent-imagery-box-preview": 2
+          }
+        },
+        "pageErrors": 0
+      }
+    },
+    "hudPick": {
+      "builds": 10,
+      "contextMsPerBuild": 226.5,
+      "pickFromRayPerBuild": 1.1,
+      "readPixelsPerBuild": 6.3,
+      "readPixelsMsPerBuild": 25.9
+    },
+    "combined": {
+      "counts": {
+        "flights": 12656,
+        "military": 90,
+        "satellites": 827,
+        "telegeography-submarine-cables": 2629,
+        "local-datacenters": 4362
+      },
+      "rest": {
+        "perWindow": {
+          "cpuFrameP50Ms": [
+            45.5,
+            50.9,
+            59.8
+          ],
+          "cpuFrameMeanMs": [
+            53.5,
+            67.31,
+            78.03
+          ],
+          "tickFrameMeanMs": [
+            56.01,
+            69.61,
+            80.39
+          ],
+          "gpuFrameP50Ms": [
+            34.2,
+            33.92,
+            34.07
+          ],
+          "gpuFrameMeanMs": [
+            44.08,
+            50.03,
+            48.49
+          ],
+          "taskMsPerSec": [
+            1054.6,
+            1012,
+            1049.8
+          ]
+        },
+        "cpuFrameP50Ms": 50.9,
+        "cpuFrameP95Ms": 311.1,
+        "cpuFrameMeanMs": 67.3,
+        "cpuFrames": 70,
+        "tickFrameP50Ms": 53.2,
+        "tickFrameP95Ms": 313.9,
+        "tickFrameMeanMs": 69.6,
+        "tickFrames": 70,
+        "gpuFrameP50Ms": 34.1,
+        "gpuFrameP95Ms": 267.5,
+        "gpuFrameMeanMs": 48.5,
+        "gpuFrames": 70,
+        "gpuDisjoint": 0,
+        "gpuUnread": 0,
+        "fps": 12.7,
+        "rafFps": 12.7,
+        "ticksPerSec": 12.7,
+        "rendersPerSec": 12.7,
+        "frameP50Ms": 50,
+        "frameP95Ms": 116.7,
+        "frameMaxMs": 766.6,
+        "longTasks": 44,
+        "longTaskMs": 4728,
+        "scriptMsPerSec": 983.4,
+        "taskMsPerSec": 1049.8,
+        "heapMiB": 469.4,
+        "tilesLoadedAtStart": 1,
+        "readPixelsCalls": 30,
+        "readPixelsMs": 827.5,
+        "getHeightCalls": 2496,
+        "getHeightMs": 737,
+        "getBufferSubDataCalls": 5598,
+        "getBufferSubDataMs": 506.1,
+        "pickFromRayCalls": 0,
+        "pickFromRayMs": 0,
+        "sampleHeightCalls": 3,
+        "sampleHeightMs": 881.6
+      },
+      "motion": {
+        "perWindow": {
+          "cpuFrameP50Ms": [
+            71,
+            62,
+            114.3
+          ],
+          "cpuFrameMeanMs": [
+            83.35,
+            77.37,
+            303.21
+          ],
+          "tickFrameMeanMs": [
+            92.21,
+            84.99,
+            329.38
+          ],
+          "gpuFrameP50Ms": [
+            34.01,
+            33.32,
+            37.81
+          ],
+          "gpuFrameMeanMs": [
+            50.11,
+            45.14,
+            138.56
+          ],
+          "taskMsPerSec": [
+            1024,
+            1294.6,
+            1048.2
+          ]
+        },
+        "cpuFrameP50Ms": 71,
+        "cpuFrameP95Ms": 294.9,
+        "cpuFrameMeanMs": 83.3,
+        "cpuFrames": 50,
+        "tickFrameP50Ms": 79.5,
+        "tickFrameP95Ms": 301.1,
+        "tickFrameMeanMs": 92.2,
+        "tickFrames": 50,
+        "gpuFrameP50Ms": 34,
+        "gpuFrameP95Ms": 174.8,
+        "gpuFrameMeanMs": 50.1,
+        "gpuFrames": 50,
+        "gpuDisjoint": 0,
+        "gpuUnread": 0,
+        "fps": 9.8,
+        "rafFps": 9.8,
+        "ticksPerSec": 9.8,
+        "rendersPerSec": 9.8,
+        "frameP50Ms": 83.4,
+        "frameP95Ms": 316.7,
+        "frameMaxMs": 816.4,
+        "longTasks": 43,
+        "longTaskMs": 6057,
+        "scriptMsPerSec": 1002.7,
+        "taskMsPerSec": 1048.2,
+        "heapMiB": 508.6,
+        "tilesLoadedAtStart": 1,
+        "readPixelsCalls": 74,
+        "readPixelsMs": 2007.1,
+        "getHeightCalls": 2186,
+        "getHeightMs": 1129.7,
+        "getBufferSubDataCalls": 5616,
+        "getBufferSubDataMs": 845.6,
+        "pickFromRayCalls": 0,
+        "pickFromRayMs": 0,
+        "sampleHeightCalls": 10,
+        "sampleHeightMs": 2129.1
+      },
+      "sceneCounts": {
+        "primitivesShown": 165,
+        "billboards": 1583,
+        "billboardsOnScreen": 0,
+        "points": 989,
+        "pointsOnScreen": 16,
+        "models": 141,
+        "modelsOnScreen": 18,
+        "onGroundAircraftOnScreen": 8,
+        "entities": {
+          "gev-annotations": 0,
+          "gev-draw-preview": 1,
+          "gev-recent-imagery-box-preview": 2,
+          "TeleGeography Submarine Cables": 1913,
+          "TeleGeography Landing Points": 1917,
+          "TeleGeography Cable References": 2629,
+          "Datacenters": 4362
+        }
+      },
+      "heapMiB": 441.3
+    }
+  },
+  "bundle": {
+    "jsMiB": 7.86,
+    "cssKiB": 401,
+    "largestJs": [
+      "index-BdIRQXZy.js 3.49 MiB",
+      "egm96-universal.esm-D6y_VLZc.js 2.64 MiB",
+      "mapillary.module-CNpf_Czj.js 1.01 MiB",
+      "hls-bsuTaLC4.js 0.57 MiB",
+      "index-CO63J3Gk.js 0.08 MiB"
+    ]
+  }
+}
