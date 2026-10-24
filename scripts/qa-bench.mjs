@@ -182,9 +182,13 @@ const COMBINED = [
  * - heap, retained heap, startup timings and bytes repeated within ~5 %;
  * - layer activation swung 2-4x with the network (CCTV 4.3-15.5 s), so it is
  *   reported, not gated, until layers have recorded fixtures.
- * fps and rAF frame times follow the display, so they are not gated; the
- * work-per-frame metrics get thresholds once an A/A pair has measured their
- * noise.
+ * fps and rAF frame times follow the display, so they are not gated. Work per
+ * frame, from the 2026-10-23 A/A pair: mean CPU and GPU ms per frame and
+ * main-thread task ms/s repeated within ~15 % on Google 3D, hence twice that;
+ * the combined scene (35-44 %) and cables GPU (25 %) vary more, so a crossing
+ * there counts only if it appears against both A runs.
+ * On Esri, CPU ms per frame sat at ~31-40 or ~12-14 ms and one run switched
+ * mid-run (cause unknown), so Esri is gated on GPU ms only (CPU_GATED_BASEMAPS).
  */
 const THRESHOLDS = {
   heapMiB: 0.1,
@@ -194,7 +198,14 @@ const THRESHOLDS = {
   tilesLoadedMs: 0.2,
   settledMs: 0.15,
   networkMiB: 0.1,
+  cpuFrameMeanMs: 0.3,
+  gpuFrameMeanMs: 0.3,
+  taskMsPerSec: 0.3,
 };
+
+/** Metrics gated only when the baseline was measured on these basemaps. */
+const CPU_METRICS = new Set(['cpuFrameMeanMs', 'taskMsPerSec']);
+const CPU_GATED_BASEMAPS = new Set(['photoreal']);
 
 /** Heap growth between on/off cycle 1 and 3 that counts as a leak (MiB). */
 const LEAK_GROWTH_LIMIT_MIB = 3;
@@ -1069,6 +1080,7 @@ function flatten(object, prefix = '', out = {}) {
 function compare(current, baseline) {
   const now = flatten(current.scenarios);
   const then = flatten(baseline.scenarios);
+  const cpuGated = CPU_GATED_BASEMAPS.has(baseline.conditions?.basemap);
   const rows = [];
   for (const [key, value] of Object.entries(now)) {
     const was = then[key];
@@ -1076,6 +1088,7 @@ function compare(current, baseline) {
     const metric = key.split('.').at(-1);
     const limit = THRESHOLDS[metric];
     if (limit === undefined) continue;
+    if (CPU_METRICS.has(metric) && !cpuGated) continue;
     const change = (value - was) / Math.abs(was);
     const regressed = limit < 0 ? change < limit : change > limit;
     rows.push({ key, was, now: value, change: round(change * 100), regressed });
