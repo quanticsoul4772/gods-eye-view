@@ -241,7 +241,17 @@ export class IntelHUD {
     // session, so this flips once — and both altitude readouts have to move
     // together when it does (see the repaint in _updateCameraData).
     this._geoidCorrectionApplied = false;
+    // A summary built for one view must not land on the next: a reply in
+    // flight when the camera starts moving is dropped (the revision moves),
+    // and none is requested until it settles, so a mid-flight view (Spain
+    // on the way to Lisbon) never becomes the label.
+    this._cameraMoving = false;
+    this._onCameraMoveStart = () => {
+      this._cameraMoving = true;
+      this._summaryRevision++;
+    };
     this._onCameraMoveEnd = () => {
+      this._cameraMoving = false;
       this._markSummaryDirty();
       // The 250 ms telemetry timer and 15 s semantic-summary timer must not
       // leave the prior city on-screen after a long CCTV focus flight.
@@ -266,6 +276,7 @@ export class IntelHUD {
     this._scratchTarget = new Cesium.Cartesian3();
 
     this._buildDOM();
+    this.viewer.camera.moveStart.addEventListener(this._onCameraMoveStart);
     this.viewer.camera.moveEnd.addEventListener(this._onCameraMoveEnd);
     this._startTimers();
   }
@@ -776,6 +787,8 @@ export class IntelHUD {
       return;
     }
     if (!force && !this._summaryDirty) return;
+    // Left dirty: the next summary tick after the camera settles asks again.
+    if (this._cameraMoving) return;
     if (this.summaryPolicy.canRequest?.() === false) return;
 
     const revision = this._summaryRevision;
@@ -1097,6 +1110,7 @@ export class IntelHUD {
     clearInterval(this._timestampInterval);
     clearInterval(this._summaryInterval);
     clearInterval(this._summaryTypingInterval);
+    this.viewer.camera.moveStart.removeEventListener(this._onCameraMoveStart);
     this.viewer.camera.moveEnd.removeEventListener(this._onCameraMoveEnd);
     this._dataManagerUnsubscribe?.();
     this._summaryRequest?.abort();
