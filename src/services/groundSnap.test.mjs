@@ -47,6 +47,18 @@ test('a 3D tileset is measured with a pick, since its skin sits off the terrain'
   assert.deepEqual(viewer.calls, { picks: 1, globe: 0 });
 });
 
+test('an airport cluster gets four pick renders per 250 ms window, and a clock that stepped back opens a new one', (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+  const viewer = makeViewer({ tileset: { show: true, tilesLoaded: true } });
+  const snap = createGroundSnap({ groundFloor });
+  const icaos = ['a00001', 'a00002', 'a00003', 'a00004', 'a00005', 'a00006'];
+  for (const icao of icaos) snap.heightFor(viewer, icao, atDenverAirport);
+  assert.equal(viewer.calls.picks, 4);
+  t.mock.timers.setTime(1_000_000 - 60_000);
+  for (const icao of icaos) snap.heightFor(viewer, icao, atDenverAirport);
+  assert.equal(viewer.calls.picks, 6, 'the two denied aircraft sample in the new window');
+});
+
 test('a hidden tileset does not count as the ground', () => {
   const viewer = makeViewer({ tileset: { show: false, tilesLoaded: true } });
   const snap = createGroundSnap({ groundFloor });

@@ -321,7 +321,9 @@ export function createGroundSnap({ groundFloor }) {
     if (entry && now < entry.nextRetryMs) return heldSnapM(entry, surfacePos); // backoff in force
     // Per-window budget: deny WITHOUT a retry stamp so the overflow simply
     // tries again next tick instead of waiting out a backoff it didn't earn.
-    if (now - windowStartMs > SAMPLE_WINDOW_MS) {
+    // A clock that stepped back also opens a new window, or none would open
+    // until it caught up.
+    if (now < windowStartMs || now - windowStartMs > SAMPLE_WINDOW_MS) {
       windowStartMs = now;
       windowCount = 0;
     }
