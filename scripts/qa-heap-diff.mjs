@@ -44,6 +44,9 @@ const CYCLES = Number(opt('--cycles', '1'));
 const WHILE_ON = argv.includes('--while-on');
 /** Map stack to measure on (e.g. esri-imagery), as in qa-bench. */
 const BASEMAP = opt('--basemap', null);
+/** Camera as lat,lon,range m,pitch deg (e.g. 43.2932,5.3726,20000,-35);
+ *  the app's opening view when omitted. */
+const LOOK = opt('--look', null)?.split(',').map(Number) ?? null;
 const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
 const outDir = path.join('qa-shots', 'heap', `${stamp}-${LAYER}`);
 fs.mkdirSync(outDir, { recursive: true });
@@ -397,6 +400,20 @@ try {
         window.__godsEyeView.voiceCommands.runner('set_map_stack', { stack }),
       BASEMAP,
     );
+  if (LOOK)
+    await page.evaluate(([lat, lon, range, pitch]) => {
+      const v = window.__godsEyeView.viewer;
+      const rad = Math.PI / 180;
+      v.camera.lookAt(
+        v.scene.globe.ellipsoid.cartographicToCartesian({
+          longitude: lon * rad,
+          latitude: lat * rad,
+          height: 0,
+        }),
+        { heading: 0, pitch: pitch * rad, range },
+      );
+      v.camera.lookAtTransform(v.camera.transform.constructor.IDENTITY);
+    }, LOOK);
   await pause(8000);
   const enable = () =>
     page.evaluate(async (id) => {

@@ -693,6 +693,23 @@ async function measureWindow(
           tickStart = performance.now();
           if (motion) v.camera.rotateRight(0.002);
         });
+        // The whole render tick, which cpuFrame* does not see: before
+        // preUpdate, CesiumWidget.render runs scene.initializeFrame (the
+        // camera's ground-height pick, a GPU readback on Google 3D) and the
+        // clock tick (every data source's entity updates). Rendered ticks only.
+        const widget = v.cesiumWidget;
+        const ownRender = Object.hasOwn(widget, 'render');
+        const widgetRender = widget.render;
+        const tickMs = [];
+        widget.render = function benchRender(...args) {
+          const start = performance.now();
+          const rendersBefore = renders;
+          try {
+            return widgetRender.apply(this, args);
+          } finally {
+            if (renders > rendersBefore) tickMs.push(performance.now() - start);
+          }
+        };
         if (motion) scene.requestRender();
         const t0 = performance.now();
         let last = t0;
@@ -716,6 +733,8 @@ async function measureWindow(
           removeRender();
           removePreRender();
           removeTick();
+          if (ownRender) widget.render = widgetRender;
+          else delete widget.render;
           const elapsed = (performance.now() - t0) / 1000;
           // Queries still in flight report within a few frames.
           if (timer)
@@ -732,6 +751,10 @@ async function measureWindow(
             cpuFrameP95Ms: percentile(cpuMs, 0.95),
             cpuFrameMeanMs: mean(cpuMs),
             cpuFrames: cpuMs.length,
+            tickFrameP50Ms: percentile(tickMs, 0.5),
+            tickFrameP95Ms: percentile(tickMs, 0.95),
+            tickFrameMeanMs: mean(tickMs),
+            tickFrames: tickMs.length,
             gpuFrameP50Ms: timer ? percentile(gpuMs, 0.5) : null,
             gpuFrameMeanMs: timer ? mean(gpuMs) : null,
             gpuFrameP95Ms: timer ? percentile(gpuMs, 0.95) : null,
@@ -774,6 +797,13 @@ async function measureWindow(
     // them from run to run; the mean moves with their proportions instead.
     cpuFrameMeanMs: round(inPage.cpuFrameMeanMs, 2),
     cpuFrames: inPage.cpuFrames,
+    // The whole render tick (camera height and entity updates included):
+    // cpuFrame* moved 12 -> 4 ms for a change whose readback wait only moved
+    // into the camera's height pick before preUpdate (2026-10-24).
+    tickFrameP50Ms: round(inPage.tickFrameP50Ms, 2),
+    tickFrameP95Ms: round(inPage.tickFrameP95Ms, 2),
+    tickFrameMeanMs: round(inPage.tickFrameMeanMs, 2),
+    tickFrames: inPage.tickFrames,
     gpuFrameP50Ms: round(inPage.gpuFrameP50Ms, 2),
     gpuFrameP95Ms: round(inPage.gpuFrameP95Ms, 2),
     gpuFrameMeanMs: round(inPage.gpuFrameMeanMs, 2),
@@ -814,6 +844,7 @@ async function measureWindow(
 const PER_WINDOW = [
   'cpuFrameP50Ms',
   'cpuFrameMeanMs',
+  'tickFrameMeanMs',
   'gpuFrameP50Ms',
   'gpuFrameMeanMs',
   'taskMsPerSec',
