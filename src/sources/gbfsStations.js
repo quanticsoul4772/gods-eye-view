@@ -105,6 +105,14 @@ export function parseStationInformation(payload) {
   return stationMap;
 }
 
+/** A station's last_reported time in POSIX seconds, or null. */
+function reportedSeconds(value) {
+  if (typeof value !== 'string' || /^\s*\d+(\.\d+)?\s*$/.test(value))
+    return toNonNegativeInteger(value);
+  const ms = Date.parse(value);
+  return Number.isFinite(ms) ? Math.floor(ms / 1000) : null;
+}
+
 /**
  * Parse a GBFS station_status payload into a Map of real-time availability.
  * @param {Object} payload - Parsed station_status.json response.
@@ -119,7 +127,10 @@ export function parseStationStatus(payload) {
     const stationId = String(raw?.station_id ?? raw?.id ?? '').trim();
     if (!stationId) continue;
 
-    const bikes = toNonNegativeInteger(raw?.num_bikes_available);
+    // GBFS 3.0 renamed num_bikes_available to num_vehicles_available.
+    const bikes = toNonNegativeInteger(
+      raw?.num_bikes_available ?? raw?.num_vehicles_available,
+    );
     const docks = toNonNegativeInteger(raw?.num_docks_available);
     statusMap.set(stationId, {
       stationId,
@@ -128,7 +139,8 @@ export function parseStationStatus(payload) {
       isInstalled: normalizeGbfsBool(raw?.is_installed, true),
       isRenting: normalizeGbfsBool(raw?.is_renting, true),
       isReturning: normalizeGbfsBool(raw?.is_returning, true),
-      lastReported: toNonNegativeInteger(raw?.last_reported),
+      // POSIX seconds before GBFS 3.0, an RFC 3339 timestamp from 3.0 on.
+      lastReported: reportedSeconds(raw?.last_reported),
     });
   }
 

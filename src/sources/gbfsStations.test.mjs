@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { parseStationInformation } from './gbfsStations.js';
+import { parseStationInformation, parseStationStatus } from './gbfsStations.js';
 
 const station = (fields = {}) => ({
   station_id: 's1',
@@ -196,4 +196,51 @@ test('normalizing a localized name leaves the feed document unchanged', () => {
   const original = structuredClone(payload);
   parseStationInformation(payload);
   assert.deepEqual(payload, original);
+});
+
+test('GBFS v3 status reads num_vehicles_available and an RFC 3339 last_reported', () => {
+  // Impulsyon (La Roche-sur-Yon), GBFS 3.0, 2026-10-24.
+  const v3 = parseStationStatus({
+    version: '3.0',
+    data: {
+      stations: [
+        {
+          is_installed: true,
+          is_renting: true,
+          is_returning: true,
+          last_reported: '2026-10-25T00:02:43+02:00',
+          num_docks_available: 8,
+          num_docks_disabled: 0,
+          num_vehicles_available: 3,
+          num_vehicles_disabled: 0,
+          station_id: 'stn_3HtRmaXZEbds75vYRrGbKq',
+        },
+      ],
+    },
+  }).get('stn_3HtRmaXZEbds75vYRrGbKq');
+  assert.equal(v3.bikesAvailable, 3);
+  assert.equal(v3.docksAvailable, 8);
+  assert.equal(v3.lastReported, Date.parse('2026-10-24T22:02:43Z') / 1000);
+});
+
+test('GBFS v2 status keeps num_bikes_available and POSIX last_reported', () => {
+  const v2 = parseStationStatus({
+    data: {
+      stations: [
+        {
+          station_id: 's1',
+          num_bikes_available: 4,
+          num_docks_available: 9,
+          last_reported: 1792886563,
+        },
+      ],
+    },
+  }).get('s1');
+  assert.equal(v2.bikesAvailable, 4);
+  assert.equal(v2.docksAvailable, 9);
+  assert.equal(v2.lastReported, 1792886563);
+  const asText = parseStationStatus({
+    data: { stations: [{ station_id: 's2', last_reported: '1792886563' }] },
+  }).get('s2');
+  assert.equal(asText.lastReported, 1792886563, 'seconds sent as a string');
 });
