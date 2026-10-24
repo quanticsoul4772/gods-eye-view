@@ -75,6 +75,7 @@ function installHudEnvironment() {
     ].map((id) => [id, { textContent: '' }]),
   );
   const previousDocument = globalThis.document;
+  const cameraListeners = {};
   globalThis.document = {
     getElementById: (id) => elements.get(id) ?? null,
     querySelectorAll: () => [],
@@ -98,13 +99,25 @@ function installHudEnvironment() {
       },
       // A 60° vertical field of view, 900 device pixels tall.
       frustum: { fovy: Math.PI / 3 },
-      moveEnd: { addEventListener() {}, removeEventListener() {} },
+      moveStart: {
+        addEventListener(listener) {
+          cameraListeners.moveStart = listener;
+        },
+        removeEventListener() {},
+      },
+      moveEnd: {
+        addEventListener(listener) {
+          cameraListeners.moveEnd = listener;
+        },
+        removeEventListener() {},
+      },
     },
     scene: { drawingBufferWidth: 1440, drawingBufferHeight: 900 },
   };
   return {
     elements,
     viewer,
+    cameraListeners,
     restore() {
       if (previousDocument === undefined) delete globalThis.document;
       else globalThis.document = previousDocument;
@@ -338,6 +351,71 @@ test('WINDOW is the ground the view spans at the view centre, not a horizon box'
     assert.match(env.elements.get('hud-gsd').textContent, /^GSD: 1\.28m/);
   } finally {
     hud?.destroy();
+    env.restore();
+  }
+});
+
+test('a summary for one view never lands on the next: dropped once the camera moves, none asked mid-move', async () => {
+  const env = installHudEnvironment();
+  const previousWindow = globalThis.window;
+  globalThis.window = globalThis;
+  const pending = [];
+  const summaryService = {
+    summarize: (context) =>
+      new Promise((resolve) => {
+        pending.push({
+          context,
+          reply: (summary) =>
+            resolve({ ok: true, status: 200, data: { summary, error: null } }),
+        });
+      }),
+  };
+  let hud;
+  try {
+    hud = new IntelHUD(env.viewer, { summaryService });
+    let place = 'Yellowstone';
+    hud._summaryContext = async () => ({ place });
+    const summary = () => env.elements.get('hud-summary').textContent;
+    const settle = () => new Promise((resolve) => setImmediate(resolve));
+    hud._updateCameraData();
+
+    // Asked over Yellowstone; the camera leaves before the reply lands.
+    const first = hud._updateSummary(false, true);
+    await settle();
+    assert.equal(pending.length, 1);
+    env.cameraListeners.moveStart();
+    pending[0].reply('Canyon Junction Wyoming');
+    await first;
+    assert.doesNotMatch(
+      summary(),
+      /Canyon Junction/,
+      'a reply for the old view is dropped',
+    );
+
+    // Mid-flight (over Spain on the way to Lisbon) nothing is asked.
+    place = 'Obejo';
+    await hud._updateSummary(false, true);
+    await settle();
+    assert.equal(
+      pending.length,
+      1,
+      'no summary request while the camera moves',
+    );
+
+    // Settled over Lisbon: the next tick asks for, and paints, the new view.
+    place = 'Lisboa';
+    env.cameraListeners.moveEnd();
+    const settled = hud._updateSummary(false, true);
+    await settle();
+    assert.equal(pending.length, 2);
+    assert.deepEqual(pending[1].context, { place: 'Lisboa' });
+    pending[1].reply('Lisboa Rua Soeiro Pereira Gomes');
+    await settled;
+    assert.equal(summary(), 'Lisboa Rua Soeiro Pereira Gomes');
+  } finally {
+    hud?.destroy();
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
     env.restore();
   }
 });
