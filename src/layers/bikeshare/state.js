@@ -51,6 +51,8 @@ export function createState({ services }) {
   // adds from the keyless source directory once they are fetched on enable.
   layerState._cities = new Map(CITY_BY_ID);
   layerState._systemsReady = false;
+  /** The systems-list load started on enable (null before, or without a list). */
+  layerState._systemsLoaded = null;
 
   /** Monotonic generation counter; incremented on each proximity check to cancel stale work. */
 

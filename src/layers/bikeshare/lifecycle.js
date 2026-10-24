@@ -108,7 +108,8 @@ export function createLifecycle({
       // Directory systems join once the server's list arrives; only then is
       // "no system here" known, so that status and its count wait for it.
       if (typeof source?.getSystems === 'function')
-        void source
+        // Kept so coverageHere can wait for the full list.
+        layerState._systemsLoaded = source
           .getSystems()
           .then((systems) => {
             let added = 0;
