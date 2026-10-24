@@ -42,6 +42,7 @@
  *   node scripts/qa-bench.mjs --allow-software        permit SwiftShader (numbers are relative only)
  *   node scripts/qa-bench.mjs --camera fleet-oblique  view the contiguous US from 5,000 km at -55°
  *   node scripts/qa-bench.mjs --camera airport-atl    Atlanta airfield from 4 km at -35° (aircraft on the ground)
+ *   node scripts/qa-bench.mjs --camera coast-mrs      Marseille from 20 km at -35° (cable landing pins)
  *   node scripts/qa-bench.mjs --readback-stacks       attribute GPU readbacks to callers (dev server, untimed)
  *
  * Every window also counts synchronous GPU readbacks (WebGL readPixels and
@@ -95,7 +96,9 @@ const PARK = { lat: 30.27, lon: -97.74, height: 60_000, pitch: -90 };
  * which most aircraft are off screen; `fleet-oblique` looks at the middle of
  * the contiguous US from 5,000 km at -55°, so the whole fleet is drawn;
  * `airport-atl` looks at Atlanta's airfield from 4 km at -35°, so aircraft
- * on the ground (whose models ask the ground snap for heights) are in view.
+ * on the ground (whose models ask the ground snap for heights) are in view;
+ * `coast-mrs` looks at Marseille's cable landings from 20 km at -35°, so
+ * landing pins are in view.
  */
 const CAMERAS = {
   park: null,
@@ -112,6 +115,13 @@ const CAMERAS = {
     heading: 0,
     pitch: -35,
     range: 4_000,
+  },
+  'coast-mrs': {
+    lon: 5.3726,
+    lat: 43.2932,
+    heading: 0,
+    pitch: -35,
+    range: 20_000,
   },
 };
 const CAMERA = opt('--camera', 'park');
