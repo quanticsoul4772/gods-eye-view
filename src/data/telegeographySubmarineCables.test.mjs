@@ -1831,3 +1831,53 @@ test('every part of a multi-part cable is styled, pickable and attributed to its
     env.layer.destroy(env.viewer);
   }
 });
+
+test('a cable part shows while its own line is in view, wherever its cable is referenced', async () => {
+  // The camera sits over (-40, 35). The cable's reference point is on the far
+  // side of the globe, as is its second part; its first part is in view.
+  const cables = {
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        id: 'split',
+        properties: {
+          id: 'split',
+          name: 'Split Cable',
+          color: '#ff0000',
+          coordinates: [140, -35],
+        },
+        geometry: {
+          type: 'MultiLineString',
+          coordinates: [
+            [
+              [-40, 35],
+              [-30, 40],
+            ],
+            [
+              [140, -35],
+              [150, -30],
+            ],
+          ],
+        },
+      },
+    ],
+  };
+  const source = {
+    label: 'TeleGeography',
+    async fetch() {
+      return { cables, landingPoints: LANDING_FIXTURE };
+    },
+  };
+  const env = await createRealCableLayerHarness({ source });
+  try {
+    env.raiseSweep();
+    const [near, far] = env.dataSources.find((ds) =>
+      /Submarine Cables/.test(ds.name || ''),
+    ).entities.values;
+    assert.equal(near.show, true, 'the part in view is shown');
+    assert.equal(far.show, false, 'the part over the horizon is hidden');
+  } finally {
+    env.layer.destroy(env.viewer);
+  }
+});

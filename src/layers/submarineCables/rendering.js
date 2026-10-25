@@ -225,7 +225,10 @@ export function createRendering({ state }) {
         updateCableReferenceStem(record, cameraPos, canvasHeight, fov);
     }
     for (const record of state._surfaceRecords) {
-      const visible = occluder.isPointVisible(record.base);
+      // A line shows while any of its sample points is over the horizon.
+      const visible = record.bases.some((base) =>
+        occluder.isPointVisible(base),
+      );
       if (record.entity.show !== visible) {
         record.entity.show = visible;
       }
