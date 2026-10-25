@@ -1754,3 +1754,80 @@ test('another GeoJSON source renders with its own label and rebuilds from accept
     env.layer.destroy(env.viewer);
   }
 });
+
+test('every part of a multi-part cable is styled, pickable and attributed to its own cable', async () => {
+  const cables = JSON.parse(
+    readFileSync(
+      new URL(
+        './local_data/telegeography_submarine_cables/cable-geo.json',
+        import.meta.url,
+      ),
+      'utf8',
+    ),
+  );
+  // Each drawn line, keyed by its positions to the metre (Cartesian, so a
+  // longitude of 180 and -180 agree), names its own cable.
+  const key = (positions) =>
+    positions
+      .map(({ x, y, z }) => [x, y, z].map(Math.round).join(','))
+      .join(';');
+  const owner = new Map();
+  let partCount = 0;
+  for (const feature of cables.features)
+    for (const line of feature.geometry.coordinates) {
+      owner.set(
+        key(line.map(([lon, lat]) => Cesium.Cartesian3.fromDegrees(lon, lat))),
+        feature.properties,
+      );
+      partCount += 1;
+    }
+  const source = {
+    label: 'TeleGeography',
+    async fetch() {
+      return { cables, landingPoints: LANDING_FIXTURE };
+    },
+  };
+  const env = await createRealCableLayerHarness({ source });
+  try {
+    const cableSource = env.dataSources.find((ds) =>
+      /Submarine Cables/.test(ds.name || ''),
+    );
+    const entities = cableSource.entities.values;
+    assert.equal(entities.length, partCount, 'one entity per drawn part');
+    assert.ok(
+      partCount > cables.features.length,
+      'the data has multi-part cables',
+    );
+    for (const entity of entities) {
+      const cable = owner.get(
+        key(entity.polyline.positions.getValue(Cesium.JulianDate.now())),
+      );
+      assert.ok(cable, `${entity.id} draws a line of the data`);
+      assert.equal(entity.__gevTeleGeography?.label, cable.name, entity.id);
+      assert.ok(
+        Cesium.Color.fromCssColorString(cable.color)
+          .withAlpha(0.92)
+          .equals(entity.polyline.material.color.getValue()),
+        `${entity.id} carries ${cable.name}'s colour`,
+      );
+    }
+    const referenceSource = env.dataSources.find((ds) =>
+      /References/.test(ds.name || ''),
+    );
+    const cableStems = referenceSource.entities.values.filter((entity) =>
+      entity.id.startsWith('cable-reference-'),
+    );
+    assert.equal(
+      cableStems.length,
+      cables.features.length,
+      'one stem per cable',
+    );
+    assert.equal(
+      env.layer.getStats().count,
+      cables.features.length + LANDING_FIXTURE.features.length,
+      'the count is of cables, not parts',
+    );
+  } finally {
+    env.layer.destroy(env.viewer);
+  }
+});
