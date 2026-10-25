@@ -3,6 +3,7 @@ import {
   BIKESHARE_MODES,
   STATUS_POLL_MS,
   VEHICLE_ACTIVATION_ALTITUDE_M,
+  VEHICLE_ENTER_ALTITUDE_M,
 } from './policy.js';
 import { listedSourcesText } from '../../sources/sourceDirectory.js';
 import { modeHasStations, modeHasVehicles } from './vehicles.js';
@@ -44,28 +45,55 @@ export function createControls({ state: layerState, services, parts, source }) {
     updateInterval: STATUS_POLL_MS,
 
     /**
-     * What the stations mode can show at the current view, read now rather
-     * than from the debounced proximity state: whether a system covers the
-     * view centre and, when none does, how many listed sources there can't be
-     * shown (null when unknown). Null in vehicles-only mode, which has its
-     * own feeds.
-     * @returns {Promise<{covered: boolean, listed: number|null, altitudeGateOpen: boolean, center?: {lat: number, lon: number}}|null>}
+     * What the layer's mode can show at the current view, read now rather
+     * than from the debounced proximity state: whether a docking system (in
+     * stations mode) or a shared-vehicle system (in vehicles mode) covers the
+     * view centre, the same range tests the layer loads by, and, when none
+     * does, how many listed sources there can't be shown (null when unknown).
+     * The altitude gate is open when a covering part of the mode would show
+     * at this height (vehicles show only lower down).
+     * @returns {Promise<{covered: boolean, listed: number|null, altitudeGateOpen: boolean, center?: {lat: number, lon: number}}>}
      */
     async coverageHere() {
-      if (!modeHasStations(layerState._mode)) return null;
-      await layerState._systemsLoaded;
+      const mode = layerState._mode;
       const viewer = layerState._viewer;
-      const altitudeGateOpen = parts.viewport.shouldActivateAtAltitude(
-        parts.viewport.getCameraAltitude(viewer),
-      );
+      const altitude = parts.viewport.getCameraAltitude(viewer);
       const center = parts.viewport.getCameraCenterLatLon(viewer);
-      if (!center) return { covered: false, listed: null, altitudeGateOpen };
-      const covered = parts.viewport.computeInRangeCities(center).size > 0;
+      if (!center)
+        return { covered: false, listed: null, altitudeGateOpen: false };
+      let stations = false;
+      let vehicles = false;
+      let altitudeGateOpen = false;
+      if (modeHasStations(mode)) {
+        await layerState._systemsLoaded;
+        stations = parts.viewport.computeInRangeCities(center).size > 0;
+        if (stations)
+          altitudeGateOpen = parts.viewport.shouldActivateAtAltitude(altitude);
+      }
+      if (modeHasVehicles(mode)) {
+        // The list as the layer has it: wait for a load under way, start one
+        // if none was made, but don't re-ask before a failure's retry time.
+        if (
+          !layerState._vehicleSystemsReady &&
+          layerState._vehicleSystemsRetryAt <= Date.now()
+        )
+          await (layerState._vehicleSystemsLoading ??
+            parts.vehicles.loadSystems());
+        vehicles =
+          parts.viewport.computeInRangeCities(
+            center,
+            layerState._vehicleSystems,
+            0,
+          ).size > 0;
+        if (vehicles && altitude <= VEHICLE_ENTER_ALTITUDE_M)
+          altitudeGateOpen = true;
+      }
+      const covered = stations || vehicles;
       if (covered) return { covered, listed: null, altitudeGateOpen, center };
-      await source.listed?.request(center.lat, center.lon);
       return {
         covered,
-        listed: source.listed?.count(center.lat, center.lon) ?? null,
+        listed:
+          (await source.listed?.requestSettled(center.lat, center.lon)) ?? null,
         altitudeGateOpen,
         center,
       };

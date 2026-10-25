@@ -272,3 +272,29 @@ test('the directory route and client take several domains', async () => {
     /domain=hazards\.earthquakes&domain=hazards\.disasters/,
   );
 });
+
+test('a settled request waits behind another cell and returns its own count', async () => {
+  const releases = [];
+  const counter = createListedSourceCounter({
+    domain: 'bikeshare.stations',
+    directory: {
+      find: ({ bbox }) =>
+        new Promise((resolve) => {
+          releases.push(() =>
+            resolve({ total: bbox[0] === 38.5 ? 1 : 7, sources: [] }),
+          );
+        }),
+    },
+  });
+  // A proximity check's request for another cell is in flight; a plain
+  // request for Lisbon would be declined and leave its count unknown.
+  const other = counter.request(40.6, -79.6);
+  const lisbon = counter.requestSettled(38.72, -9.14);
+  releases[0]();
+  await other;
+  while (releases.length < 2)
+    await new Promise((resolve) => setImmediate(resolve));
+  releases[1]();
+  assert.equal(await lisbon, 1);
+  assert.equal(await counter.requestSettled(38.72, -9.14), 1, 'cached');
+});
