@@ -67,6 +67,36 @@ export function featureLabel(feature) {
   return String(props.name || props.id || feature?.id || '').trim();
 }
 
+/**
+ * One GeoJSON feature per drawn line. Cesium's GeoJsonDataSource makes one
+ * entity per part of a MultiLineString, so pairing entities with features by
+ * position hands every entity after the first multi-part cable the wrong
+ * cable, and the surplus entities none. Each part gets an id of its own
+ * (cable ids repeat in the TeleGeography data) that maps back to its cable.
+ * @param {object[]} features Normalized features (`normalizeFeatures`).
+ * @returns {{parts: object[], featureOf: Map<string, object>}}
+ */
+export function splitLineParts(features) {
+  const parts = [];
+  const featureOf = new Map();
+  features.forEach((feature, index) => {
+    const geometry = feature.geometry;
+    const pieces =
+      geometry?.type === 'MultiLineString'
+        ? geometry.coordinates.map((coordinates) => ({
+            type: 'LineString',
+            coordinates,
+          }))
+        : [geometry];
+    pieces.forEach((piece, part) => {
+      const id = `${feature.id}#${index}.${part}`;
+      parts.push({ ...feature, id, geometry: piece });
+      featureOf.set(id, feature);
+    });
+  });
+  return { parts, featureOf };
+}
+
 export function normalizeFeatures(json, kind) {
   const features = Array.isArray(json?.features) ? json.features : [];
   return features.map((feature, index) => {

@@ -3,6 +3,7 @@ import {
   featureLabel,
   featureReference,
   normalizeFeatures,
+  splitLineParts,
 } from './geometry.js';
 import * as Cesium from 'cesium';
 
@@ -47,9 +48,10 @@ export function createIngestion({ state, parts, source }) {
 
       const cableFeatures = normalizeFeatures(cableJson, 'cable');
       const landingFeatures = normalizeFeatures(landingJson, 'landing');
+      const cableParts = splitLineParts(cableFeatures);
 
       const cableDataSource = await Cesium.GeoJsonDataSource.load(
-        { type: 'FeatureCollection', features: cableFeatures },
+        { type: 'FeatureCollection', features: cableParts.parts },
         {
           clampToGround: true,
           stroke: state.cableColor.withAlpha(0.95),
@@ -131,8 +133,11 @@ export function createIngestion({ state, parts, source }) {
       state._referenceRecords = [];
       state._surfaceRecords = [];
 
-      cableEntities.forEach((entity, index) => {
-        const feature = cableFeatures[index];
+      // Every part is styled, pickable and swept as its own cable; the cable
+      // gets one reference stem, however many parts it is drawn in.
+      const stemmed = new Set();
+      cableEntities.forEach((entity) => {
+        const feature = cableParts.featureOf.get(entity.id);
         const reference = featureReference(feature);
         if (!reference) return;
 
@@ -146,6 +151,8 @@ export function createIngestion({ state, parts, source }) {
           entity,
           base: Cesium.Cartesian3.fromDegrees(reference.lon, reference.lat, 0),
         });
+        if (stemmed.has(feature)) return;
+        stemmed.add(feature);
         parts.rendering.addReferenceStem({
           reference,
           label: featureLabel(feature),
