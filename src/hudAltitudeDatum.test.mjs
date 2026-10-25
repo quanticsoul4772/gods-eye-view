@@ -355,7 +355,7 @@ test('WINDOW is the ground the view spans at the view centre, not a horizon box'
   }
 });
 
-test('a summary for one view never lands on the next: dropped once the camera moves, none asked mid-move', async () => {
+test('a summary asked for one view is dropped once the camera moves', async () => {
   const env = installHudEnvironment();
   const previousWindow = globalThis.window;
   globalThis.window = globalThis;
@@ -392,27 +392,18 @@ test('a summary for one view never lands on the next: dropped once the camera mo
       'a reply for the old view is dropped',
     );
 
-    // Mid-flight (over Spain on the way to Lisbon) nothing is asked.
-    place = 'Obejo';
-    await hud._updateSummary(false, true);
+    // A camera that keeps moving (a follow camera, an orbit) still asks on
+    // the normal cadence, and a reply that lands while it moves is painted.
+    place = 'Atlantic';
+    const moving = hud._updateSummary(false, true);
     await settle();
-    assert.equal(
-      pending.length,
-      1,
-      'no summary request while the camera moves',
-    );
-
-    // Settled over Lisbon: the next tick asks for, and paints, the new view.
-    place = 'Lisboa';
-    env.cameraListeners.moveEnd();
-    const settled = hud._updateSummary(false, true);
-    await settle();
-    assert.equal(pending.length, 2);
-    assert.deepEqual(pending[1].context, { place: 'Lisboa' });
-    pending[1].reply('Lisboa Rua Soeiro Pereira Gomes');
-    await settled;
-    assert.equal(summary(), 'Lisboa Rua Soeiro Pereira Gomes');
+    assert.equal(pending.length, 2, 'requests continue while moving');
+    assert.deepEqual(pending[1].context, { place: 'Atlantic' });
+    pending[1].reply('North Atlantic Ocean');
+    await moving;
+    assert.equal(summary(), 'North Atlantic Ocean');
   } finally {
+    for (const request of pending) request.reply('');
     hud?.destroy();
     if (previousWindow === undefined) delete globalThis.window;
     else globalThis.window = previousWindow;
