@@ -6009,7 +6009,8 @@ test('directory layer coverage: each enabled transit or bike-share layer reports
       note: "No Bikeshare source covers this view; the source directory lists 1 here that can't be shown (not yet verified, or its terms don't allow display).",
     },
   ]);
-  // A layer that is off, fails to answer, or has no stations mode says nothing.
+  // A layer that is off says nothing; one that fails to answer says its
+  // coverage is unknown, so an older entry is not left standing.
   dataManager.layers.set(
     'transit',
     layer(false, 'Transit', { covered: false, listed: 0 }),
@@ -6017,12 +6018,20 @@ test('directory layer coverage: each enabled transit or bike-share layer reports
   dataManager.layers.set('bikeshare', {
     enabled: true,
     module: {
+      name: 'Bikeshare',
       coverageHere: async () => {
         throw new Error('network');
       },
     },
   });
-  assert.deepEqual(await directoryLayerCoverage(dataManager), []);
+  assert.deepEqual(await directoryLayerCoverage(dataManager), [
+    {
+      layerId: 'bikeshare',
+      view: 'unknown',
+      covered: null,
+      note: "Couldn't check whether a Bikeshare source covers this view.",
+    },
+  ]);
   dataManager.layers.set('bikeshare', layer(true, 'Bikeshare', null));
   assert.deepEqual(await directoryLayerCoverage(dataManager), []);
 });
@@ -6132,7 +6141,7 @@ test('directory layer coverage: an interrupted flight is read where the camera i
   assert.equal('atDestination' in landed, false);
 });
 
-test('directory layer coverage: a layer that never answers is left out after 10 s', async (t) => {
+test('directory layer coverage: a layer that never answers is reported unknown after 10 s', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const dataManager = {
     layers: new Map([
@@ -6151,7 +6160,14 @@ test('directory layer coverage: a layer that never answers is left out after 10 
   const read = directoryLayerCoverage(dataManager);
   await new Promise((resolve) => setImmediate(resolve));
   t.mock.timers.tick(10_000);
-  assert.deepEqual(await read, []);
+  assert.deepEqual(await read, [
+    {
+      layerId: 'transit',
+      view: 'unknown',
+      covered: null,
+      note: "Couldn't check whether a Transit source covers this view.",
+    },
+  ]);
 });
 
 test('a failed place search leaves no flight for the next action to wait on', async () => {
@@ -6211,6 +6227,90 @@ test('a failed place search leaves no flight for the next action to wait on', as
     Date.now() - started < 5_000,
     'no wait for an arrival that never comes (the cap is 15 s)',
   );
+  assert.equal(
+    result.coverage?.[0]?.note,
+    'A Transit source covers this view.',
+  );
+});
+
+test('a failed search leaves an earlier flight still in progress for the next action to wait on', async () => {
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
+  const { viewer, styleManager } = createVoiceNavigationHarness();
+  let completeFlight = null;
+  viewer.camera.flyTo = (options) => {
+    completeFlight = options.complete;
+  };
+  viewer.camera.flyToBoundingSphere = (_sphere, options) => {
+    completeFlight = options.complete;
+  };
+  // Landing re-aims the camera; the harness has no orbit to keep.
+  viewer.camera.lookAt = () => {};
+  viewer.camera.lookAtTransform = () => {};
+  const layers = [{ id: 'transit', name: 'Transit', enabled: false }];
+  const dataManager = {
+    layers: new Map([
+      [
+        'transit',
+        {
+          enabled: false,
+          module: {
+            name: 'Transit',
+            coverageHere: async () => ({
+              covered: true,
+              listed: null,
+              altitudeGateOpen: true,
+              center: { lat: 30.27, lon: -97.74 },
+            }),
+          },
+        },
+      ],
+    ]),
+    isEnabled: (id) => layers.find((l) => l.id === id).enabled,
+    getAll: () => layers,
+    subscribe: () => () => {},
+    async setEnabled(id, on) {
+      layers.find((l) => l.id === id).enabled = on;
+      dataManager.layers.get(id).enabled = on;
+      return true;
+    },
+  };
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager,
+    dataManager,
+    searchNavigation: async () => {
+      throw new Error('geocoder unavailable');
+    },
+  });
+  // Flight A starts and is still flying when the result returns.
+  const flight = await runner('fly_to_location', {
+    latitude: 30.27,
+    longitude: -97.74,
+  });
+  assert.equal(flight.ok, true, flight.error);
+  assert.equal(typeof completeFlight, 'function');
+  // B's search fails; A is still in progress.
+  await assert.rejects(
+    runner('fly_to_location', { query: 'Nowhere Street 123, Atlantis' }),
+    /geocoder unavailable/,
+  );
+  let settled = false;
+  const turnOn = runner('set_layer_visibility', {
+    layerId: 'transit',
+    enabled: true,
+  }).then((result) => {
+    settled = true;
+    return result;
+  });
+  for (let i = 0; i < 5; i += 1)
+    await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(settled, false, 'waits for flight A to land');
+  completeFlight();
+  const result = await turnOn;
   assert.equal(
     result.coverage?.[0]?.note,
     'A Transit source covers this view.',

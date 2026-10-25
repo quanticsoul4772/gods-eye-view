@@ -57,6 +57,11 @@ export function createSourceDirectorySource({
 export const LISTED_SOURCES_CELL_DEG = 0.5;
 /** A count request gives up after this long, so one stuck request can't block the rest. */
 export const LISTED_SOURCES_TIMEOUT_MS = 10_000;
+/**
+ * Longest a coverage answer waits for its listed count, inside the 10 s an
+ * Ask action allows one layer's coverage (src/voice/gevActions.js).
+ */
+export const LISTED_SETTLED_WAIT_MS = 5_000;
 
 /**
  * How many sources the directory lists, but the app can't show, in the 0.5°
@@ -136,18 +141,31 @@ export function createListedSourceCounter({
     request,
     /**
      * Ask for a point's cell and wait for its count, behind a request for
-     * another cell already in flight (which `request` declines). A bounded
-     * number of tries, each under the request timeout.
+     * another cell already in flight (which `request` declines), for at
+     * most `waitMs` in all. A request still running then carries on and
+     * fills the cache for the next ask.
+     * @param {number} lat
+     * @param {number} lon
+     * @param {{waitMs?: number}} [options]
      * @returns {Promise<number|null>} The count, or null if none arrived.
      */
-    async requestSettled(lat, lon) {
+    async requestSettled(lat, lon, { waitMs = LISTED_SETTLED_WAIT_MS } = {}) {
+      const deadline = Date.now() + waitMs;
       for (
         let attempt = 0;
         attempt < 3 && this.count(lat, lon) === null;
         attempt += 1
       ) {
-        if (inFlight) await inFlight;
-        else await request(lat, lon);
+        const left = deadline - Date.now();
+        if (left <= 0) break;
+        let timer;
+        await Promise.race([
+          inFlight ?? request(lat, lon),
+          new Promise((resolve) => {
+            timer = setTimeout(resolve, left);
+          }),
+        ]);
+        clearTimeout(timer);
       }
       return this.count(lat, lon);
     },
