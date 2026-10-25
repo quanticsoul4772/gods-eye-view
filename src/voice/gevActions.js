@@ -310,6 +310,8 @@ const viewTargetCache = new WeakMap();
 /** Create application actions over the supplied scene and services. */
 /** Longest a coverage read waits for a flight still in progress. */
 const ARRIVAL_WAIT_MS = 15_000;
+/** Longest one layer's coverage answer may take (catalog and directory reads). */
+const COVERAGE_WAIT_MS = 10_000;
 
 /** Resolves when `promise` settles or `ms` pass; rejects if `signal` aborts. */
 function settledWithin(promise, ms, signal) {
@@ -353,14 +355,22 @@ export async function directoryLayerCoverage(
   const enabled = layerIds.filter((id) => dataManager.layers?.get(id)?.enabled);
   if (!enabled.length) return [];
   // Read the destination, not the flight: a fly_to_location result returns
-  // while the camera is still moving.
-  if (arrival) await settledWithin(arrival, ARRIVAL_WAIT_MS, signal);
+  // while the camera is still moving. A flight that was interrupted, or is
+  // still going when the wait ends, is read where the camera is, and says so.
+  const atDestination =
+    !arrival ||
+    (await settledWithin(arrival, ARRIVAL_WAIT_MS, signal)) === 'arrived';
   const notes = [];
   for (const layerId of enabled) {
     const entry = dataManager.layers.get(layerId);
     let here = null;
     try {
-      here = await entry.module?.coverageHere?.();
+      // Bounded: an answer can wait on a feed list or a directory count.
+      here = await settledWithin(
+        entry.module?.coverageHere?.(),
+        COVERAGE_WAIT_MS,
+        signal,
+      );
     } catch {
       here = null;
     }
@@ -369,11 +379,15 @@ export async function directoryLayerCoverage(
     const view = here.center
       ? `${here.center.lat.toFixed(2)}, ${here.center.lon.toFixed(2)}`
       : 'unknown';
+    const note = coverageNote(entry.module?.name || layerId, here);
     notes.push({
       layerId,
       view,
       covered: Boolean(here.covered),
-      note: coverageNote(entry.module?.name || layerId, here),
+      ...(atDestination ? {} : { atDestination: false }),
+      note: atDestination
+        ? note
+        : `The flight did not reach its destination; this is where the camera is. ${note}`,
     });
   }
   return notes;
@@ -416,8 +430,9 @@ export function createGevActionRunner({
     ? { ...SPEECH_BUILDERS, ...speechBuilders }
     : SPEECH_BUILDERS;
   const _layerEnabledAt = new Map();
-  // The last fly_to_location's arrival, so layer coverage is read at the
-  // destination even when a layer is turned on while the camera still flies.
+  // The arrival of a fly_to_location still in flight (null once it lands or
+  // is cancelled), so layer coverage is read at the destination even when a
+  // layer is turned on while the camera still flies.
   let pendingArrival = null;
   let analystEngine;
   const resolveRegionRing = (name, signal) =>
@@ -1103,9 +1118,16 @@ export function createGevActionRunner({
           runOptions,
         );
       }
-      const arrived = await flyToRequestedLocation(viewer, args, {
+      // This flight's arrival; pendingArrival holds it only while it flies,
+      // so a later action never waits on (or reports) a finished flight.
+      let flightArrival = null;
+      const flying = flyToRequestedLocation(viewer, args, {
         onArrival: (arrival) => {
+          flightArrival = arrival;
           pendingArrival = arrival;
+          void arrival.then(() => {
+            if (pendingArrival === arrival) pendingArrival = null;
+          });
         },
         onProgress: reportProgress,
         placeSearch,
@@ -1134,12 +1156,20 @@ export function createGevActionRunner({
           if (viewer.trackedEntity) stopAllTracking(viewer, dataManager);
         },
       });
+      let arrived;
+      try {
+        arrived = await flying;
+      } catch (error) {
+        // A failed or cancelled place search never starts a flight.
+        if (pendingArrival === flightArrival) pendingArrival = null;
+        throw error;
+      }
       if (arrived?.ok !== true) {
-        pendingArrival = null;
+        if (pendingArrival === flightArrival) pendingArrival = null;
         return arrived;
       }
       const coverage = await directoryLayerCoverage(dataManager, {
-        arrival: pendingArrival,
+        arrival: flightArrival,
         signal: runOptions.signal,
       });
       return coverage.length ? { ...arrived, coverage } : arrived;

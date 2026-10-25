@@ -72,7 +72,7 @@ export function createListedSourceCounter({
   timeoutMs = LISTED_SOURCES_TIMEOUT_MS,
 }) {
   const counts = new Map();
-  let inFlight = false;
+  let inFlight = null;
   let waiting = null;
   const cell = (lat, lon) => {
     const row = Math.floor(lat / LISTED_SOURCES_CELL_DEG);
@@ -95,7 +95,14 @@ export function createListedSourceCounter({
       waiting = { lat, lon };
       return false;
     }
-    inFlight = true;
+    return ask(target);
+  }
+  async function ask(target) {
+    // Settles when this request ends, for callers waiting their turn.
+    let done;
+    inFlight = new Promise((resolve) => {
+      done = resolve;
+    });
     try {
       const { total } = await directory.find({
         bbox: target.bbox,
@@ -110,7 +117,8 @@ export function createListedSourceCounter({
       // A failed or timed-out count is asked again on a later settled camera.
       return false;
     } finally {
-      inFlight = false;
+      inFlight = null;
+      done();
       if (waiting) {
         const next = waiting;
         waiting = null;
@@ -126,6 +134,23 @@ export function createListedSourceCounter({
     },
     /** Ask for a point's cell unless known; resolves true when a count arrived. */
     request,
+    /**
+     * Ask for a point's cell and wait for its count, behind a request for
+     * another cell already in flight (which `request` declines). A bounded
+     * number of tries, each under the request timeout.
+     * @returns {Promise<number|null>} The count, or null if none arrived.
+     */
+    async requestSettled(lat, lon) {
+      for (
+        let attempt = 0;
+        attempt < 3 && this.count(lat, lon) === null;
+        attempt += 1
+      ) {
+        if (inFlight) await inFlight;
+        else await request(lat, lon);
+      }
+      return this.count(lat, lon);
+    },
   };
 }
 

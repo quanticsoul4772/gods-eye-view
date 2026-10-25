@@ -6097,3 +6097,122 @@ test('directory layer coverage: asks after a flight in progress lands, not befor
   controller.abort();
   await assert.rejects(waiting);
 });
+
+test('directory layer coverage: an interrupted flight is read where the camera is, and says so', async () => {
+  const dataManager = {
+    layers: new Map([
+      [
+        'transit',
+        {
+          enabled: true,
+          module: {
+            name: 'Transit',
+            coverageHere: async () => ({
+              covered: true,
+              listed: null,
+              altitudeGateOpen: true,
+              center: { lat: 41.2, lon: -8.6 },
+            }),
+          },
+        },
+      ],
+    ]),
+  };
+  const [entry] = await directoryLayerCoverage(dataManager, {
+    arrival: Promise.resolve('cancelled'),
+  });
+  assert.equal(entry.atDestination, false);
+  assert.equal(
+    entry.note,
+    'The flight did not reach its destination; this is where the camera is. A Transit source covers this view.',
+  );
+  const [landed] = await directoryLayerCoverage(dataManager, {
+    arrival: Promise.resolve('arrived'),
+  });
+  assert.equal('atDestination' in landed, false);
+});
+
+test('directory layer coverage: a layer that never answers is left out after 10 s', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const dataManager = {
+    layers: new Map([
+      [
+        'transit',
+        {
+          enabled: true,
+          module: {
+            name: 'Transit',
+            coverageHere: () => new Promise(() => {}),
+          },
+        },
+      ],
+    ]),
+  };
+  const read = directoryLayerCoverage(dataManager);
+  await new Promise((resolve) => setImmediate(resolve));
+  t.mock.timers.tick(10_000);
+  assert.deepEqual(await read, []);
+});
+
+test('a failed place search leaves no flight for the next action to wait on', async () => {
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
+  const { viewer, styleManager } = createVoiceNavigationHarness();
+  const layers = [{ id: 'transit', name: 'Transit', enabled: false }];
+  const dataManager = {
+    layers: new Map([
+      [
+        'transit',
+        {
+          enabled: false,
+          module: {
+            name: 'Transit',
+            coverageHere: async () => ({
+              covered: true,
+              listed: null,
+              altitudeGateOpen: true,
+              center: { lat: 59.44, lon: 24.75 },
+            }),
+          },
+        },
+      ],
+    ]),
+    isEnabled: (id) => layers.find((l) => l.id === id).enabled,
+    getAll: () => layers,
+    subscribe: () => () => {},
+    async setEnabled(id, on) {
+      layers.find((l) => l.id === id).enabled = on;
+      dataManager.layers.get(id).enabled = on;
+      return true;
+    },
+  };
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager,
+    dataManager,
+    searchNavigation: async () => {
+      throw new Error('geocoder unavailable');
+    },
+  });
+  await assert.rejects(
+    runner('fly_to_location', { query: 'Nowhere Street 123, Atlantis' }),
+    /geocoder unavailable/,
+  );
+  const started = Date.now();
+  const result = await runner('set_layer_visibility', {
+    layerId: 'transit',
+    enabled: true,
+  });
+  assert.equal(result.ok, true, result.error);
+  assert.ok(
+    Date.now() - started < 5_000,
+    'no wait for an arrival that never comes (the cap is 15 s)',
+  );
+  assert.equal(
+    result.coverage?.[0]?.note,
+    'A Transit source covers this view.',
+  );
+});

@@ -207,10 +207,10 @@ export function createQueries({ state, parts, source }) {
         transitFeedsInRange(center.lat, center.lon, 0, parts.catalog.feeds())
           .length > 0;
       if (covered) return { covered, listed: null, altitudeGateOpen, center };
-      await source.listed?.request(center.lat, center.lon);
       return {
         covered,
-        listed: source.listed?.count(center.lat, center.lon) ?? null,
+        listed:
+          (await source.listed?.requestSettled(center.lat, center.lon)) ?? null,
         altitudeGateOpen,
         center,
       };
