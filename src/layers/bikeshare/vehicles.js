@@ -88,17 +88,23 @@ export function createVehicles({ state: layerState, services, parts, source }) {
   }
 
   /** Ask for the system list when it is missing and not waiting out a failure. */
+  /**
+   * Ask for the system list when it is missing and not waiting out a
+   * failure; a load that lands re-runs the proximity check.
+   * @returns {Promise<void>|null} The load under way, if any.
+   */
   function ensureSystems() {
     if (
       layerState._vehicleSystemsReady ||
       layerState._vehicleSystemsLoading ||
       layerState._vehicleSystemsRetryAt > Date.now()
     )
-      return;
+      return layerState._vehicleSystemsLoading;
     void loadSystems().then(() => {
       if (wanted() && layerState._vehicleSystemsReady)
         void parts.viewport.runProximityCheck();
     });
+    return layerState._vehicleSystemsLoading;
   }
 
   /** Show or hide the vehicles for the current mode; loads systems on first need. */
@@ -386,6 +392,7 @@ export function createVehicles({ state: layerState, services, parts, source }) {
     init,
     sync,
     loadSystems,
+    ensureSystems,
     proximity,
     poll,
     rebuild,

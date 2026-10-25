@@ -363,27 +363,33 @@ export async function directoryLayerCoverage(
   const notes = [];
   for (const layerId of enabled) {
     const entry = dataManager.layers.get(layerId);
-    let here = null;
+    if (typeof entry.module?.coverageHere !== 'function') continue;
+    const label = entry.module.name || layerId;
+    // Bounded: an answer can wait on a feed list or a directory count. A
+    // failed or late answer still gets an entry, saying coverage is unknown,
+    // so an older entry for this layer is never left standing as current.
+    let here;
     try {
-      // Bounded: an answer can wait on a feed list or a directory count.
       here = await settledWithin(
-        entry.module?.coverageHere?.(),
+        entry.module.coverageHere(),
         COVERAGE_WAIT_MS,
         signal,
       );
     } catch {
-      here = null;
+      here = undefined;
     }
     signal?.throwIfAborted();
-    if (!here) continue;
-    const view = here.center
+    if (here === null) continue;
+    const view = here?.center
       ? `${here.center.lat.toFixed(2)}, ${here.center.lon.toFixed(2)}`
       : 'unknown';
-    const note = coverageNote(entry.module?.name || layerId, here);
+    const note = here
+      ? coverageNote(label, here)
+      : `Couldn't check whether a ${label} source covers this view.`;
     notes.push({
       layerId,
       view,
-      covered: Boolean(here.covered),
+      covered: here ? Boolean(here.covered) : null,
       ...(atDestination ? {} : { atDestination: false }),
       note: atDestination
         ? note
@@ -434,6 +440,8 @@ export function createGevActionRunner({
   // is cancelled), so layer coverage is read at the destination even when a
   // layer is turned on while the camera still flies.
   let pendingArrival = null;
+  // Arrivals of flights still in progress.
+  const flyingArrivals = new Set();
   let analystEngine;
   const resolveRegionRing = (name, signal) =>
     annotationResolver.resolveRegionRingForQuery(name, signal, placeSearch);
@@ -1120,12 +1128,17 @@ export function createGevActionRunner({
       }
       // This flight's arrival; pendingArrival holds it only while it flies,
       // so a later action never waits on (or reports) a finished flight.
+      // An earlier flight still in progress is restored if this one never
+      // starts (a failed search), so the next action still waits for it.
       let flightArrival = null;
+      const earlierArrival = pendingArrival;
       const flying = flyToRequestedLocation(viewer, args, {
         onArrival: (arrival) => {
           flightArrival = arrival;
           pendingArrival = arrival;
+          flyingArrivals.add(arrival);
           void arrival.then(() => {
+            flyingArrivals.delete(arrival);
             if (pendingArrival === arrival) pendingArrival = null;
           });
         },
@@ -1161,11 +1174,17 @@ export function createGevActionRunner({
         arrived = await flying;
       } catch (error) {
         // A failed or cancelled place search never starts a flight.
-        if (pendingArrival === flightArrival) pendingArrival = null;
+        if (pendingArrival === flightArrival)
+          pendingArrival = flyingArrivals.has(earlierArrival)
+            ? earlierArrival
+            : null;
         throw error;
       }
       if (arrived?.ok !== true) {
-        if (pendingArrival === flightArrival) pendingArrival = null;
+        if (pendingArrival === flightArrival)
+          pendingArrival = flyingArrivals.has(earlierArrival)
+            ? earlierArrival
+            : null;
         return arrived;
       }
       const coverage = await directoryLayerCoverage(dataManager, {

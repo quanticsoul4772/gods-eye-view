@@ -4,6 +4,7 @@ import {
   STATUS_POLL_MS,
   VEHICLE_ACTIVATION_ALTITUDE_M,
   VEHICLE_ENTER_ALTITUDE_M,
+  VEHICLE_EXIT_ALTITUDE_M,
 } from './policy.js';
 import { listedSourcesText } from '../../sources/sourceDirectory.js';
 import { modeHasStations, modeHasVehicles } from './vehicles.js';
@@ -71,21 +72,23 @@ export function createControls({ state: layerState, services, parts, source }) {
           altitudeGateOpen = parts.viewport.shouldActivateAtAltitude(altitude);
       }
       if (modeHasVehicles(mode)) {
-        // The list as the layer has it: wait for a load under way, start one
-        // if none was made, but don't re-ask before a failure's retry time.
-        if (
-          !layerState._vehicleSystemsReady &&
-          layerState._vehicleSystemsRetryAt <= Date.now()
-        )
-          await (layerState._vehicleSystemsLoading ??
-            parts.vehicles.loadSystems());
+        // The list as the layer has it, through the layer's own path: wait for
+        // a load under way, or start one (which redraws when it lands), but
+        // not before a failure's retry time.
+        await parts.vehicles.ensureSystems();
         vehicles =
           parts.viewport.computeInRangeCities(
             center,
             layerState._vehicleSystems,
             0,
           ).size > 0;
-        if (vehicles && altitude <= VEHICLE_ENTER_ALTITUDE_M)
+        // The layer's gate, with its hysteresis: open below the enter height,
+        // and still open up to the exit height once it has opened.
+        if (
+          vehicles &&
+          (altitude <= VEHICLE_ENTER_ALTITUDE_M ||
+            (layerState._vehicleGate && altitude < VEHICLE_EXIT_ALTITUDE_M))
+        )
           altitudeGateOpen = true;
       }
       const covered = stations || vehicles;

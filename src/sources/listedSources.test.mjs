@@ -298,3 +298,17 @@ test('a settled request waits behind another cell and returns its own count', as
   assert.equal(await lisbon, 1);
   assert.equal(await counter.requestSettled(38.72, -9.14), 1, 'cached');
 });
+
+test('a settled request gives up after its wait, leaving the count to arrive later', async () => {
+  const counter = createListedSourceCounter({
+    domain: 'bikeshare.stations',
+    directory: { find: () => new Promise(() => {}) },
+  });
+  void counter.request(40.6, -79.6);
+  const started = Date.now();
+  assert.equal(
+    await counter.requestSettled(38.72, -9.14, { waitMs: 30 }),
+    null,
+  );
+  assert.ok(Date.now() - started < 1_000);
+});

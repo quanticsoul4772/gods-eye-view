@@ -3,7 +3,13 @@ import assert from 'node:assert/strict';
 import { createControls } from './controls.js';
 
 /** Controls over a stub viewport: one docking system and one vehicle system. */
-function coverageAt({ mode, center, altitude }) {
+function coverageAt({
+  mode,
+  center,
+  altitude,
+  vehicleGate = false,
+  asked = [],
+}) {
   const docks = new Map([['docks', { id: 'docks' }]]);
   const scooters = new Map([['scooters', { id: 'scooters' }]]);
   const state = {
@@ -13,12 +19,14 @@ function coverageAt({ mode, center, altitude }) {
     _vehicleSystems: scooters,
     _vehicleSystemsReady: true,
     _vehicleSystemsRetryAt: 0,
+    _vehicleGate: vehicleGate,
   };
   const inRange = {
     docks: center === 'docks',
     scooters: center === 'scooters',
   };
   const parts = {
+    vehicles: { ensureSystems: () => (asked.push('vehicle systems'), null) },
     viewport: {
       getCameraAltitude: () => altitude,
       getCameraCenterLatLon: () => ({ lat: 1, lon: 2 }),
@@ -54,6 +62,34 @@ test('bike-share coverage counts the shared vehicles its mode draws', async () =
       altitudeGateOpen: false,
       center: { lat: 1, lon: 2 },
     },
+  );
+  // The vehicle list is asked for through the layer's own path.
+  const asked = [];
+  await coverageAt({ mode: 'both', center: 'docks', altitude: 5_000, asked });
+  assert.deepEqual(asked, ['vehicle systems']);
+  // Between 14 and 16 km the vehicles' gate stays as the layer has it.
+  assert.equal(
+    (
+      await coverageAt({
+        mode: 'vehicles',
+        center: 'scooters',
+        altitude: 15_000,
+        vehicleGate: true,
+      })
+    ).altitudeGateOpen,
+    true,
+    'still shown after descending through 14 km',
+  );
+  assert.equal(
+    (
+      await coverageAt({
+        mode: 'vehicles',
+        center: 'scooters',
+        altitude: 15_000,
+      })
+    ).altitudeGateOpen,
+    false,
+    'not yet shown coming down from above',
   );
   // Scooters show only below 14 km; docks from much higher.
   assert.equal(
