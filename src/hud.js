@@ -242,16 +242,13 @@ export class IntelHUD {
     // together when it does (see the repaint in _updateCameraData).
     this._geoidCorrectionApplied = false;
     // A summary built for one view must not land on the next: a reply in
-    // flight when the camera starts moving is dropped (the revision moves),
-    // and none is requested until it settles, so a mid-flight view (Spain
-    // on the way to Lisbon) never becomes the label.
-    this._cameraMoving = false;
+    // flight when the camera starts moving is dropped (the revision moves).
+    // Requests during motion still go out on the normal cadence, so a
+    // follow camera or a continuous orbit keeps naming where it is.
     this._onCameraMoveStart = () => {
-      this._cameraMoving = true;
       this._summaryRevision++;
     };
     this._onCameraMoveEnd = () => {
-      this._cameraMoving = false;
       this._markSummaryDirty();
       // The 250 ms telemetry timer and 15 s semantic-summary timer must not
       // leave the prior city on-screen after a long CCTV focus flight.
@@ -787,8 +784,6 @@ export class IntelHUD {
       return;
     }
     if (!force && !this._summaryDirty) return;
-    // Left dirty: the next summary tick after the camera settles asks again.
-    if (this._cameraMoving) return;
     if (this.summaryPolicy.canRequest?.() === false) return;
 
     const revision = this._summaryRevision;
