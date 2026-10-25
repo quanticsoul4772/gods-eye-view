@@ -115,12 +115,30 @@ function angleDeg(a, b) {
   return (Math.acos(Math.min(1, Math.max(-1, dot))) * 180) / Math.PI;
 }
 
+function lonLatOf([x, y, z]) {
+  return [
+    (Math.atan2(y, x) * 180) / Math.PI,
+    (Math.asin(Math.max(-1, Math.min(1, z))) * 180) / Math.PI,
+  ];
+}
+
+/** The point a fraction `t` of the way along the great circle from a to b. */
+function slerp(a, b, t) {
+  const theta = (angleDeg(a, b) * Math.PI) / 180;
+  const sin = Math.sin(theta);
+  const wa = Math.sin((1 - t) * theta) / sin;
+  const wb = Math.sin(t * theta) / sin;
+  return [0, 1, 2].map((i) => wa * a[i] + wb * b[i]);
+}
+
 /**
- * The points a drawn line is horizon-tested at: its first vertex, each
- * vertex at least `spacingDeg` (great-circle) past the last one kept, and
- * its last vertex. One reference point per cable hid a part whose far end
- * was in view while that point was over the horizon; in the bundled data
- * some parts run more than 60° from it.
+ * The points a drawn line is horizon-tested at, no more than `spacingDeg`
+ * (great-circle) apart measured along it: its ends, the vertex before the
+ * distance since the last sample would pass the spacing, and points added
+ * along any segment longer than that. One reference point per cable hid a part whose far end was in view
+ * while that point was over the horizon, and testing vertices alone hid a
+ * long segment whose middle was in view while both its ends were not (the
+ * bundled data has segments over 50°).
  * @param {Array<[number, number]>} coordinates [lon, lat] vertices.
  * @param {number} [spacingDeg]
  * @returns {Array<[number, number]>}
@@ -131,14 +149,27 @@ export function lineSamplePoints(
 ) {
   const vertices = [];
   collectLonLat(coordinates, vertices);
-  if (vertices.length <= 2) return vertices;
+  if (vertices.length < 2) return vertices;
   const samples = [vertices[0]];
-  let kept = unitVector(...vertices[0]);
-  for (let i = 1; i < vertices.length - 1; i += 1) {
+  // Distance along the line since the last sample.
+  let run = 0;
+  let previous = unitVector(...vertices[0]);
+  for (let i = 1; i < vertices.length; i += 1) {
     const here = unitVector(...vertices[i]);
-    if (angleDeg(kept, here) < spacingDeg) continue;
-    samples.push(vertices[i]);
-    kept = here;
+    const segment = angleDeg(previous, here);
+    if (run > 0 && run + segment > spacingDeg) {
+      samples.push(vertices[i - 1]);
+      run = 0;
+    }
+    if (segment > spacingDeg) {
+      const steps = Math.ceil(segment / spacingDeg);
+      for (let step = 1; step < steps; step += 1)
+        samples.push(lonLatOf(slerp(previous, here, step / steps)));
+      run = segment / steps;
+    } else {
+      run += segment;
+    }
+    previous = here;
   }
   samples.push(vertices.at(-1));
   return samples;

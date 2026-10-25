@@ -1881,3 +1881,47 @@ test('a cable part shows while its own line is in view, wherever its cable is re
     env.layer.destroy(env.viewer);
   }
 });
+
+test('a long cable segment shows while its middle is in view, though both ends are over the horizon', async () => {
+  // The camera sits over (-40, 35) at 4,500 km, so the horizon is about 54°
+  // away. The segment runs along the -40/140 meridian through the camera's
+  // point, from 60° south of it to 60° away over the pole.
+  const cables = {
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        id: 'meridian',
+        properties: {
+          id: 'meridian',
+          name: 'Meridian Cable',
+          color: '#00ff00',
+          coordinates: [-40, -25],
+        },
+        geometry: {
+          type: 'LineString',
+          coordinates: [
+            [-40, -25],
+            [140, 85],
+          ],
+        },
+      },
+    ],
+  };
+  const source = {
+    label: 'TeleGeography',
+    async fetch() {
+      return { cables, landingPoints: LANDING_FIXTURE };
+    },
+  };
+  const env = await createRealCableLayerHarness({ source });
+  try {
+    env.raiseSweep();
+    const [segment] = env.dataSources.find((ds) =>
+      /Submarine Cables/.test(ds.name || ''),
+    ).entities.values;
+    assert.equal(segment.show, true);
+  } finally {
+    env.layer.destroy(env.viewer);
+  }
+});
