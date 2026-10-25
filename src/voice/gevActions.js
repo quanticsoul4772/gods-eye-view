@@ -308,6 +308,94 @@ const PLACE_PREFETCH_MIN_INTERVAL_MS = 10_000;
 const viewTargetCache = new WeakMap();
 
 /** Create application actions over the supplied scene and services. */
+/** Longest a coverage read waits for a flight still in progress. */
+const ARRIVAL_WAIT_MS = 15_000;
+
+/** Resolves when `promise` settles or `ms` pass; rejects if `signal` aborts. */
+function settledWithin(promise, ms, signal) {
+  signal?.throwIfAborted();
+  let timer = null;
+  let onAbort = null;
+  return Promise.race([
+    Promise.resolve(promise).catch(() => {}),
+    new Promise((resolve) => {
+      timer = setTimeout(resolve, ms);
+    }),
+    new Promise((_, reject) => {
+      onAbort = () => reject(signal.reason);
+      signal?.addEventListener('abort', onAbort, { once: true });
+    }),
+  ]).finally(() => {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
+  });
+}
+
+/** Layers fed by the keyless source directory, which covers only some places. */
+const DIRECTORY_LAYERS = Object.freeze(['transit', 'bikeshare']);
+
+/**
+ * What each enabled directory-fed layer can show at the current view, asked
+ * of the layer itself (`coverageHere`) once any flight in progress has
+ * landed, so a reply never says a layer is showing where nothing of it can
+ * appear (Lisbon bike share: its one feed is listed, but its terms don't
+ * allow display). Every enabled layer gets an entry, covered or not, with the
+ * view centre it describes, so a later action's entry visibly replaces one
+ * read before a flight.
+ * @param {object} dataManager
+ * @param {{layerIds?: string[], arrival?: Promise<unknown>|null, signal?: AbortSignal}} [options]
+ * @returns {Promise<Array<{layerId: string, view: string, covered: boolean, note: string}>>}
+ */
+export async function directoryLayerCoverage(
+  dataManager,
+  { layerIds = DIRECTORY_LAYERS, arrival = null, signal } = {},
+) {
+  const enabled = layerIds.filter((id) => dataManager.layers?.get(id)?.enabled);
+  if (!enabled.length) return [];
+  // Read the destination, not the flight: a fly_to_location result returns
+  // while the camera is still moving.
+  if (arrival) await settledWithin(arrival, ARRIVAL_WAIT_MS, signal);
+  const notes = [];
+  for (const layerId of enabled) {
+    const entry = dataManager.layers.get(layerId);
+    let here = null;
+    try {
+      here = await entry.module?.coverageHere?.();
+    } catch {
+      here = null;
+    }
+    signal?.throwIfAborted();
+    if (!here) continue;
+    const view = here.center
+      ? `${here.center.lat.toFixed(2)}, ${here.center.lon.toFixed(2)}`
+      : 'unknown';
+    notes.push({
+      layerId,
+      view,
+      covered: Boolean(here.covered),
+      note: coverageNote(entry.module?.name || layerId, here),
+    });
+  }
+  return notes;
+}
+
+/** The note for one layer's coverage at a view. */
+export function coverageNote(label, here) {
+  if (!here.covered) {
+    const listed = Number(here.listed) > 0 ? Number(here.listed) : 0;
+    return (
+      `No ${label} source covers this view` +
+      (listed
+        ? `; the source directory lists ${listed} here that can't be shown (not yet verified, or its terms don't allow display)`
+        : '') +
+      '.'
+    );
+  }
+  if (here.altitudeGateOpen === false)
+    return `${label} covers this area but shows only closer in; zoom in to see it.`;
+  return `A ${label} source covers this view.`;
+}
+
 export function createGevActionRunner({
   viewer,
   styleManager,
@@ -328,6 +416,9 @@ export function createGevActionRunner({
     ? { ...SPEECH_BUILDERS, ...speechBuilders }
     : SPEECH_BUILDERS;
   const _layerEnabledAt = new Map();
+  // The last fly_to_location's arrival, so layer coverage is read at the
+  // destination even when a layer is turned on while the camera still flies.
+  let pendingArrival = null;
   let analystEngine;
   const resolveRegionRing = (name, signal) =>
     annotationResolver.resolveRegionRingForQuery(name, signal, placeSearch);
@@ -535,6 +626,14 @@ export function createGevActionRunner({
       const alsoTurnedOff = layers
         .filter((item) => enabledBefore.has(item.id) && !item.enabled)
         .map((item) => item.name || item.id);
+      const coverage =
+        enabled && DIRECTORY_LAYERS.includes(layerId)
+          ? await directoryLayerCoverage(dataManager, {
+              layerIds: [layerId],
+              arrival: pendingArrival,
+              signal: runOptions.signal,
+            })
+          : [];
       return {
         ok: true,
         action: 'set_layer_visibility',
@@ -544,6 +643,7 @@ export function createGevActionRunner({
         ...lifecycleSummary,
         ...(snapshot?.feedState ? { feedState: snapshot.feedState } : {}),
         ...(snapshot?.source ? { source: snapshot.source } : {}),
+        ...(coverage.length ? { coverage } : {}),
       };
     }
 
@@ -1003,7 +1103,10 @@ export function createGevActionRunner({
           runOptions,
         );
       }
-      return flyToRequestedLocation(viewer, args, {
+      const arrived = await flyToRequestedLocation(viewer, args, {
+        onArrival: (arrival) => {
+          pendingArrival = arrival;
+        },
         onProgress: reportProgress,
         placeSearch,
         searchNavigation,
@@ -1031,6 +1134,15 @@ export function createGevActionRunner({
           if (viewer.trackedEntity) stopAllTracking(viewer, dataManager);
         },
       });
+      if (arrived?.ok !== true) {
+        pendingArrival = null;
+        return arrived;
+      }
+      const coverage = await directoryLayerCoverage(dataManager, {
+        arrival: pendingArrival,
+        signal: runOptions.signal,
+      });
+      return coverage.length ? { ...arrived, coverage } : arrived;
     }
 
     if (name === 'adjust_camera_zoom') {
@@ -3177,6 +3289,7 @@ async function flyToRequestedLocation(
     runImmediate = null,
     beginDeferred = null,
     reassertDeferred = null,
+    onArrival = null,
   } = {},
 ) {
   const requestedRangeM = Number(args.rangeM);
@@ -3201,21 +3314,20 @@ async function flyToRequestedLocation(
     action: 'fly_to_location',
     label,
   });
+  // Arrival is always tracked (onArrival hands it to the runner, which reads
+  // layers at the destination); only waitForArrival makes this result wait.
   let settleArrival = null;
-  const arrival =
-    args.waitForArrival === true
-      ? new Promise((resolve) => {
-          settleArrival = resolve;
-        })
-      : null;
-  const arrivalHooks = arrival
-    ? {
-        onComplete: () => settleArrival?.('arrived'),
-        onCancel: () => settleArrival?.('cancelled'),
-      }
-    : {};
+  const arrival = new Promise((resolve) => {
+    settleArrival = resolve;
+  });
+  onArrival?.(arrival);
+  const arrivalHooks = {
+    onComplete: () => settleArrival?.('arrived'),
+    onCancel: () => settleArrival?.('cancelled'),
+  };
   const afterArrival = async (result, label) => {
-    if (!arrival || result?.ok !== true) return result;
+    if (result?.ok !== true) settleArrival?.('cancelled');
+    if (args.waitForArrival !== true || result?.ok !== true) return result;
     onProgress('fly', label);
     const status = await arrival;
     settleArrival = null;

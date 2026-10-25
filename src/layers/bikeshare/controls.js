@@ -43,6 +43,34 @@ export function createControls({ state: layerState, services, parts, source }) {
 
     updateInterval: STATUS_POLL_MS,
 
+    /**
+     * What the stations mode can show at the current view, read now rather
+     * than from the debounced proximity state: whether a system covers the
+     * view centre and, when none does, how many listed sources there can't be
+     * shown (null when unknown). Null in vehicles-only mode, which has its
+     * own feeds.
+     * @returns {Promise<{covered: boolean, listed: number|null, altitudeGateOpen: boolean, center?: {lat: number, lon: number}}|null>}
+     */
+    async coverageHere() {
+      if (!modeHasStations(layerState._mode)) return null;
+      await layerState._systemsLoaded;
+      const viewer = layerState._viewer;
+      const altitudeGateOpen = parts.viewport.shouldActivateAtAltitude(
+        parts.viewport.getCameraAltitude(viewer),
+      );
+      const center = parts.viewport.getCameraCenterLatLon(viewer);
+      if (!center) return { covered: false, listed: null, altitudeGateOpen };
+      const covered = parts.viewport.computeInRangeCities(center).size > 0;
+      if (covered) return { covered, listed: null, altitudeGateOpen, center };
+      await source.listed?.request(center.lat, center.lon);
+      return {
+        covered,
+        listed: source.listed?.count(center.lat, center.lon) ?? null,
+        altitudeGateOpen,
+        center,
+      };
+    },
+
     /** Saved and URL-restored options: what the layer draws. */
     getParams() {
       return { mode: layerState._mode };

@@ -8,6 +8,7 @@ import {
 } from './policy.js';
 import { transitModeTier } from '../../data/transitPresetStyle.js';
 import { listedSourcesText } from '../../sources/sourceDirectory.js';
+import { transitFeedsInRange } from '../../data/transitFeeds.js';
 
 /**
  * The registry entry behind a vehicle. Live feeds answer first so a feed the
@@ -188,6 +189,33 @@ export function createQueries({ state, parts, source }) {
   }
 
   const methods = {
+    /**
+     * What this layer can show at the current view, read now rather than from
+     * the debounced proximity state: whether a pollable feed covers the view
+     * centre and, when none does, how many listed sources there can't be
+     * shown (null when the count isn't known).
+     * @returns {Promise<{covered: boolean, listed: number|null, altitudeGateOpen: boolean, center?: {lat: number, lon: number}}>}
+     */
+    async coverageHere() {
+      if (!state._catalogReady) await parts.catalog.load();
+      const altitudeGateOpen = parts.viewport.altitudeGateOpen(
+        parts.viewport.getCameraAltitude(),
+      );
+      const center = parts.viewport.getCameraCenterLatLon();
+      if (!center) return { covered: false, listed: null, altitudeGateOpen };
+      const covered =
+        transitFeedsInRange(center.lat, center.lon, 0, parts.catalog.feeds())
+          .length > 0;
+      if (covered) return { covered, listed: null, altitudeGateOpen, center };
+      await source.listed?.request(center.lat, center.lon);
+      return {
+        covered,
+        listed: source.listed?.count(center.lat, center.lon) ?? null,
+        altitudeGateOpen,
+        center,
+      };
+    },
+
     /**
      * Detection contract: buses, trams and trains are contacts like any other.
      * @param {{maxCount?: number, seed?: number}} [options]
