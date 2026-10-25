@@ -97,6 +97,53 @@ export function splitLineParts(features) {
   return { parts, featureOf };
 }
 
+/** Spacing of the points a drawn line is horizon-tested at. */
+export const LINE_SAMPLE_SPACING_DEG = 10;
+
+function unitVector(lon, lat) {
+  const lonR = (lon * Math.PI) / 180;
+  const latR = (lat * Math.PI) / 180;
+  return [
+    Math.cos(latR) * Math.cos(lonR),
+    Math.cos(latR) * Math.sin(lonR),
+    Math.sin(latR),
+  ];
+}
+
+function angleDeg(a, b) {
+  const dot = a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  return (Math.acos(Math.min(1, Math.max(-1, dot))) * 180) / Math.PI;
+}
+
+/**
+ * The points a drawn line is horizon-tested at: its first vertex, each
+ * vertex at least `spacingDeg` (great-circle) past the last one kept, and
+ * its last vertex. One reference point per cable hid a part whose far end
+ * was in view while that point was over the horizon; in the bundled data
+ * some parts run more than 60° from it.
+ * @param {Array<[number, number]>} coordinates [lon, lat] vertices.
+ * @param {number} [spacingDeg]
+ * @returns {Array<[number, number]>}
+ */
+export function lineSamplePoints(
+  coordinates,
+  spacingDeg = LINE_SAMPLE_SPACING_DEG,
+) {
+  const vertices = [];
+  collectLonLat(coordinates, vertices);
+  if (vertices.length <= 2) return vertices;
+  const samples = [vertices[0]];
+  let kept = unitVector(...vertices[0]);
+  for (let i = 1; i < vertices.length - 1; i += 1) {
+    const here = unitVector(...vertices[i]);
+    if (angleDeg(kept, here) < spacingDeg) continue;
+    samples.push(vertices[i]);
+    kept = here;
+  }
+  samples.push(vertices.at(-1));
+  return samples;
+}
+
 export function normalizeFeatures(json, kind) {
   const features = Array.isArray(json?.features) ? json.features : [];
   return features.map((feature, index) => {

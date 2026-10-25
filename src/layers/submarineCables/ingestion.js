@@ -2,6 +2,7 @@ import { msg, t } from '../../i18n/index.js';
 import {
   featureLabel,
   featureReference,
+  lineSamplePoints,
   normalizeFeatures,
   splitLineParts,
 } from './geometry.js';
@@ -133,8 +134,10 @@ export function createIngestion({ state, parts, source }) {
       state._referenceRecords = [];
       state._surfaceRecords = [];
 
-      // Every part is styled, pickable and swept as its own cable; the cable
-      // gets one reference stem, however many parts it is drawn in.
+      // Every part is styled and pickable as its own cable, and swept at
+      // points along its own line; the cable gets one reference stem,
+      // however many parts it is drawn in.
+      const partById = new Map(cableParts.parts.map((part) => [part.id, part]));
       const stemmed = new Set();
       cableEntities.forEach((entity) => {
         const feature = cableParts.featureOf.get(entity.id);
@@ -149,7 +152,9 @@ export function createIngestion({ state, parts, source }) {
         });
         state._surfaceRecords.push({
           entity,
-          base: Cesium.Cartesian3.fromDegrees(reference.lon, reference.lat, 0),
+          bases: lineSamplePoints(
+            partById.get(entity.id).geometry?.coordinates,
+          ).map(([lon, lat]) => Cesium.Cartesian3.fromDegrees(lon, lat, 0)),
         });
         if (stemmed.has(feature)) return;
         stemmed.add(feature);
@@ -175,7 +180,9 @@ export function createIngestion({ state, parts, source }) {
         });
         state._surfaceRecords.push({
           entity,
-          base: Cesium.Cartesian3.fromDegrees(reference.lon, reference.lat, 0),
+          bases: [
+            Cesium.Cartesian3.fromDegrees(reference.lon, reference.lat, 0),
+          ],
         });
         parts.rendering.addReferenceStem({
           reference,
