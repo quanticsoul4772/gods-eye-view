@@ -308,9 +308,13 @@ test('proxy: status counts recurring unflagged cells from the stored history', a
   const stored = {
     maskId: 'mask-a',
     days: Object.fromEntries(
+      // The two days before the fixture's own date, not before now: between
+      // 00:00 and 01:00 UTC the fixture's day is already yesterday.
       [2, 1]
         .map((days) =>
-          new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10),
+          new Date(Date.parse(today) - days * 86_400_000)
+            .toISOString()
+            .slice(0, 10),
         )
         .map((date) => [
           date,
