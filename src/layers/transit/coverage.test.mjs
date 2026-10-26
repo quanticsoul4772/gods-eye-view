@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createQueries } from './queries.js';
 
 /** coverageHere over a stub viewport at a view no static feed covers. */
-function coverageWith({ catalogFailed }) {
+function coverageWith({ catalogFailed, retryFixes = false }) {
   const state = {
     _catalogReady: true,
     _catalogFailed: catalogFailed,
@@ -11,7 +11,13 @@ function coverageWith({ catalogFailed }) {
     _vehicles: new Map(),
   };
   const parts = {
-    catalog: { load: async () => false, feeds: () => [] },
+    catalog: {
+      load: async () => {
+        if (retryFixes) state._catalogFailed = false;
+        return false;
+      },
+      feeds: () => [],
+    },
     viewport: {
       altitudeGateOpen: () => true,
       getCameraAltitude: () => 5_000,
@@ -28,4 +34,9 @@ test('transit coverage is unchecked, not "no feed", when the feed list failed to
     /could not be loaded/,
   );
   assert.equal((await coverageWith({ catalogFailed: false })).covered, false);
+});
+
+test('a failed transit feed list is asked for again on the next coverage check', async () => {
+  const here = await coverageWith({ catalogFailed: true, retryFixes: true });
+  assert.equal(here.covered, false, 'answered from the reloaded list');
 });

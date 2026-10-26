@@ -55,6 +55,8 @@ export function createState({ services }) {
   layerState._systemsLoaded = null;
   /** Whether the last directory-systems load failed (systems unknown). */
   layerState._systemsLoadFailed = false;
+  /** Counts directory-systems loads; only the newest sets the flags above. */
+  layerState._systemsLoadSeq = 0;
 
   /** Monotonic generation counter; incremented on each proximity check to cancel stale work. */
 

@@ -66,7 +66,10 @@ export function createControls({ state: layerState, services, parts, source }) {
       let vehicles = false;
       let altitudeGateOpen = false;
       if (modeHasStations(mode)) {
-        await layerState._systemsLoaded;
+        // A failed list is asked for again rather than read as "no system".
+        if (layerState._systemsLoadFailed)
+          await parts.lifecycle.loadDirectorySystems();
+        else await layerState._systemsLoaded;
         stations = parts.viewport.computeInRangeCities(center).size > 0;
         if (stations)
           altitudeGateOpen = parts.viewport.shouldActivateAtAltitude(altitude);

@@ -5,6 +5,7 @@ import { createControls } from './controls.js';
 /** Controls over a stub viewport: one docking system and one vehicle system. */
 function coverageAt({
   systemsLoadFailed = false,
+  retryFixes = false,
   vehicleSystemsReady = true,
   mode,
   center,
@@ -12,7 +13,10 @@ function coverageAt({
   vehicleGate = false,
   asked = [],
 }) {
-  const docks = new Map([['docks', { id: 'docks' }]]);
+  const docks = new Map([
+    ['docks', { id: 'docks' }],
+    ['directory', { id: 'directory' }],
+  ]);
   const scooters = new Map([['scooters', { id: 'scooters' }]]);
   const state = {
     _mode: mode,
@@ -24,18 +28,27 @@ function coverageAt({
     _vehicleSystemsRetryAt: 0,
     _vehicleGate: vehicleGate,
   };
-  const inRange = {
-    docks: center === 'docks',
-    scooters: center === 'scooters',
-  };
+  const inRange = (id) =>
+    ({
+      docks: center === 'docks',
+      scooters: center === 'scooters',
+      // A directory system is known only once the list has loaded.
+      directory: center === 'directory' && !state._systemsLoadFailed,
+    })[id];
   const parts = {
+    lifecycle: {
+      // The retry: either still failing, or the list arrives with the docks.
+      loadDirectorySystems: async () => {
+        if (retryFixes) state._systemsLoadFailed = false;
+      },
+    },
     vehicles: { ensureSystems: () => (asked.push('vehicle systems'), null) },
     viewport: {
       getCameraAltitude: () => altitude,
       getCameraCenterLatLon: () => ({ lat: 1, lon: 2 }),
       shouldActivateAtAltitude: (height) => height < 100_000,
       computeInRangeCities: (_center, systems = docks) =>
-        new Set([...systems.keys()].filter((id) => inRange[id])),
+        new Set([...systems.keys()].filter(inRange)),
     },
   };
   const source = { listed: { requestSettled: async () => 3 } };
@@ -137,5 +150,26 @@ test('bike-share coverage is unchecked, not "no system", when a system list fail
       })
     ).covered,
     true,
+  );
+});
+
+test('a failed bike-share system list is asked for again on the next coverage check', async () => {
+  const here = await coverageAt({
+    mode: 'stations',
+    center: 'directory',
+    altitude: 5_000,
+    systemsLoadFailed: true,
+    retryFixes: true,
+  });
+  assert.equal(here.covered, true);
+  await assert.rejects(
+    coverageAt({
+      mode: 'stations',
+      center: 'nowhere',
+      altitude: 5_000,
+      systemsLoadFailed: true,
+      retryFixes: false,
+    }),
+    /could not be loaded/,
   );
 });
