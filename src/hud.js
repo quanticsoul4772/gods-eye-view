@@ -222,6 +222,8 @@ export class IntelHUD {
     this._summaryDirty = true;
     this._summaryRequest = null;
     this._lastSummarySignature = '';
+    /** @type {{signature: string, text: string}|null} The last AI reply painted. */
+    this._lastSummaryReply = null;
     this._summaryRevision = 0;
     // One-shot guards so the very first summary lands immediately instead of
     // waiting for the 15s interval tick: B) swap the "Awaiting telemetry..."
@@ -816,9 +818,14 @@ export class IntelHUD {
         this._setSummaryText(fallbackText, animate);
       return;
     }
-    if (revision !== this._summaryRevision) return;
+    // Destroyed while the context was built: no request (it costs a call).
+    if (this._destroyed || revision !== this._summaryRevision) return;
     const signature = JSON.stringify(context);
     if (!force && signature === this._lastSummarySignature) {
+      // Same context as the last reply: repaint it (moveEnd may have
+      // painted the plain line over it) instead of paying for a new call.
+      if (this._lastSummaryReply?.signature === signature)
+        this._setSummaryText(this._lastSummaryReply.text, false);
       this._summaryDirty = false;
       return;
     }
@@ -848,12 +855,16 @@ export class IntelHUD {
       if (!response.ok || !data?.summary) {
         throw new Error(data?.error || `HTTP ${response.status}`);
       }
-      this._setSummaryText(
-        hudSummaryMatchesProvenance(data.summary, context.feedProvenance)
-          ? data.summary
-          : fallbackText,
-        animate,
+      const matches = hudSummaryMatchesProvenance(
+        data.summary,
+        context.feedProvenance,
       );
+      this._setSummaryText(matches ? data.summary : fallbackText, animate);
+      // The painted AI reply, kept so a later tick over the same context
+      // can repaint it without asking again.
+      this._lastSummaryReply = matches
+        ? { signature, text: data.summary }
+        : null;
     } catch (error) {
       // The 5 s timeout is a failure like any other; a move's abort (or
       // destroy's) is not.
@@ -910,14 +921,13 @@ export class IntelHUD {
 
   /**
    * The view changed (a camera move, the geoid flip, show): a request in
-   * flight is for the old view (the revision moves), and the signature is
-   * forgotten, since a plain line may now cover the AI one and the next
-   * tick must ask again even over the same place.
+   * flight is for the old view (the revision moves). A plain line may now
+   * cover the AI one; the next tick repaints the saved reply when the
+   * context is unchanged, without a new call.
    */
   _markSummaryDirty() {
     this._summaryDirty = true;
     this._summaryRevision++;
-    this._lastSummarySignature = null;
   }
 
   /**

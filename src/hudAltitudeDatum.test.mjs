@@ -526,7 +526,11 @@ test('after a dropped or timed-out request the next tick asks again, and a move 
     const typed = element.textContent;
     env.cameraListeners.moveStart();
     t.mock.timers.tick(2_000);
-    assert.equal(element.textContent, typed, 'no more characters after the move');
+    assert.equal(
+      element.textContent,
+      typed,
+      'no more characters after the move',
+    );
   } finally {
     hud?.destroy();
     if (previousWindow === undefined) delete globalThis.window;
@@ -535,7 +539,7 @@ test('after a dropped or timed-out request the next tick asks again, and a move 
   }
 });
 
-test('after a small move over the same place the AI line comes back; layer refreshes keep a reply; nothing paints after destroy', async () => {
+test('after a small move over the same place the saved AI line comes back without a call; layer refreshes keep a reply; nothing paints after destroy', async () => {
   const env = installHudEnvironment();
   const previousWindow = globalThis.window;
   globalThis.window = globalThis;
@@ -555,7 +559,8 @@ test('after a small move over the same place the AI line comes back; layer refre
   let hud;
   try {
     hud = new IntelHUD(env.viewer, { summaryService });
-    hud._summaryContext = async () => ({ place: 'Lisboa' });
+    let place = 'Lisboa';
+    hud._summaryContext = async () => ({ place });
     const element = env.elements.get('hud-summary');
     const settle = () => new Promise((resolve) => setImmediate(resolve));
     hud._updateCameraData();
@@ -568,14 +573,22 @@ test('after a small move over the same place the AI line comes back; layer refre
     assert.equal(element.textContent, 'Lisboa Rua Augusta Baixa');
 
     // A small nudge: moveEnd paints the plain line over it. The next tick,
-    // over the same place, asks again instead of skipping as unchanged.
+    // over the same place, repaints the saved reply without a new call.
     env.cameraListeners.moveStart();
     env.cameraListeners.moveEnd();
+    // (moveEnd paints the plain line only while the HUD is shown.)
+    element.textContent = 'plain telemetry line';
+    await hud._updateSummary(false);
+    assert.equal(pending.length, 1, 'no paid call for the same place');
+    assert.equal(element.textContent, 'Lisboa Rua Augusta Baixa');
+
+    // A changed place is asked about; a layer refresh while that request
+    // is out does not drop its reply.
+    place = 'Lisboa Baixa';
+    hud._markSummaryContentChanged();
     update = hud._updateSummary(false);
     await settle();
-    assert.equal(pending.length, 2, 'asked again after the nudge');
-
-    // A layer refresh while that request is out does not drop its reply.
+    assert.equal(pending.length, 2, 'a changed context is asked about');
     hud._markSummaryContentChanged();
     pending[1].reply('Lisboa Praça do Comércio');
     await update;
@@ -593,6 +606,38 @@ test('after a small move over the same place the AI line comes back; layer refre
     hud = null;
   } finally {
     hud?.destroy();
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+    env.restore();
+  }
+});
+
+test('a HUD destroyed while its summary context is built sends no request', async () => {
+  const env = installHudEnvironment();
+  const previousWindow = globalThis.window;
+  globalThis.window = globalThis;
+  let requests = 0;
+  const summaryService = {
+    summarize: async () => {
+      requests += 1;
+      return { ok: true, status: 200, data: { summary: 'x', error: null } };
+    },
+  };
+  try {
+    const hud = new IntelHUD(env.viewer, { summaryService });
+    let release;
+    hud._summaryContext = () =>
+      new Promise((resolve) => {
+        release = () => resolve({ place: 'Lisboa' });
+      });
+    hud._updateCameraData();
+    const update = hud._updateSummary(false);
+    await new Promise((resolve) => setImmediate(resolve));
+    hud.destroy();
+    release();
+    await update;
+    assert.equal(requests, 0);
+  } finally {
     if (previousWindow === undefined) delete globalThis.window;
     else globalThis.window = previousWindow;
     env.restore();
