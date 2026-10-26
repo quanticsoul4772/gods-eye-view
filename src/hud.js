@@ -250,12 +250,19 @@ export class IntelHUD {
     // with paints (the revision moves), a reply still typing stops, and the
     // summary is marked dirty so the next periodic tick asks about the view
     // the camera has moved to.
+    // While the camera moves the summary is the plain telemetry line,
+    // repainted on each telemetry tick, so a flight never shows the place it
+    // left; the AI line returns after the camera settles.
+    this._cameraMoving = false;
     this._onCameraMoveStart = () => {
+      this._cameraMoving = true;
       this._markSummaryDirty();
       this._summaryRequest?.abort();
       this._stopSummaryTyping();
+      if (this._visible) this._setSummaryText(this._composeSummary(), false);
     };
     this._onCameraMoveEnd = () => {
+      this._cameraMoving = false;
       this._markSummaryDirty();
       // The 250 ms telemetry timer and 15 s semantic-summary timer must not
       // leave the prior city on-screen after a long CCTV focus flight.
@@ -582,6 +589,9 @@ export class IntelHUD {
       this._markSummaryDirty();
       this._setSummaryText(this._composeSummary(), false);
     }
+
+    if (this._cameraMoving && this._visible)
+      this._setSummaryText(this._composeSummary(), false);
   }
 
   /**
