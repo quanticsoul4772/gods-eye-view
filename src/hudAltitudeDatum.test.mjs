@@ -534,3 +534,67 @@ test('after a dropped or timed-out request the next tick asks again, and a move 
     env.restore();
   }
 });
+
+test('after a small move over the same place the AI line comes back; layer refreshes keep a reply; nothing paints after destroy', async () => {
+  const env = installHudEnvironment();
+  const previousWindow = globalThis.window;
+  globalThis.window = globalThis;
+  const pending = [];
+  const summaryService = {
+    summarize: (context, { signal }) =>
+      new Promise((resolve, reject) => {
+        pending.push({
+          reply: (summary) =>
+            resolve({ ok: true, status: 200, data: { summary, error: null } }),
+        });
+        signal.addEventListener('abort', () =>
+          reject(Object.assign(new Error('aborted'), { name: 'AbortError' })),
+        );
+      }),
+  };
+  let hud;
+  try {
+    hud = new IntelHUD(env.viewer, { summaryService });
+    hud._summaryContext = async () => ({ place: 'Lisboa' });
+    const element = env.elements.get('hud-summary');
+    const settle = () => new Promise((resolve) => setImmediate(resolve));
+    hud._updateCameraData();
+
+    // The AI line lands.
+    let update = hud._updateSummary(false);
+    await settle();
+    pending[0].reply('Lisboa Rua Augusta Baixa');
+    await update;
+    assert.equal(element.textContent, 'Lisboa Rua Augusta Baixa');
+
+    // A small nudge: moveEnd paints the plain line over it. The next tick,
+    // over the same place, asks again instead of skipping as unchanged.
+    env.cameraListeners.moveStart();
+    env.cameraListeners.moveEnd();
+    update = hud._updateSummary(false);
+    await settle();
+    assert.equal(pending.length, 2, 'asked again after the nudge');
+
+    // A layer refresh while that request is out does not drop its reply.
+    hud._markSummaryContentChanged();
+    pending[1].reply('Lisboa Praça do Comércio');
+    await update;
+    assert.equal(element.textContent, 'Lisboa Praça do Comércio');
+
+    // Destroy during a request: the abort paints nothing afterwards.
+    hud._markSummaryDirty();
+    update = hud._updateSummary(false);
+    await settle();
+    element.textContent = 'before teardown';
+    hud.destroy();
+    await update;
+    assert.equal(element.textContent, 'before teardown');
+    assert.equal(hud._summaryTypingInterval, null);
+    hud = null;
+  } finally {
+    hud?.destroy();
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+    env.restore();
+  }
+});
