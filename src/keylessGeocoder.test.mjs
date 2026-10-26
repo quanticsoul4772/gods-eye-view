@@ -602,3 +602,87 @@ test('the Photon reverse request asks in English for one result', async () => {
   assert.equal(urls[0].searchParams.get('limit'), '1');
   assert.equal(urls[0].searchParams.get('lat'), '51.507');
 });
+
+test('"USA" and "UK" name their countries, and a trailing comma keeps the nearby answer', async () => {
+  const pubFirst = [PARIS_TEXAS_PUB, PARIS_TX];
+  assert.equal(selectQualifiedFeature(pubFirst, 'Paris, Texas, USA'), PARIS_TX);
+  // "Paris," names no region: the camera-biased pass still answers.
+  const fetchImpl = photonPair([PARIS_TX], []);
+  const result = await geocodeKeyless('Paris,', {
+    bias: '33.60,-95.60|33.70,-95.50',
+    fetchImpl,
+  });
+  assert.equal(Math.round(result.lat), 34, `got ${result.label}`);
+  assert.equal(fetchImpl.urls.length, 1);
+});
+
+test('a region match takes the place itself, not a place whose name starts with it', () => {
+  const station = {
+    geometry: { type: 'Point', coordinates: [4.86, 45.76] },
+    properties: {
+      osm_key: 'railway',
+      name: 'Paris Gare de Lyon',
+      city: 'Lyon',
+      country: 'France',
+      countrycode: 'FR',
+    },
+  };
+  const paris = {
+    geometry: { type: 'Point', coordinates: [2.35, 48.86] },
+    properties: {
+      osm_key: 'place',
+      name: 'Paris',
+      state: 'Île-de-France',
+      country: 'France',
+      countrycode: 'FR',
+    },
+  };
+  assert.equal(selectQualifiedFeature([station, paris], 'Paris, France'), paris);
+  assert.equal(selectQualifiedFeature([station], 'Paris, France'), null);
+});
+
+test('"UK" names the United Kingdom', () => {
+  const london = {
+    geometry: { type: 'Point', coordinates: [-0.13, 51.51] },
+    properties: {
+      osm_key: 'place',
+      name: 'London',
+      country: 'United Kingdom',
+      countrycode: 'GB',
+    },
+  };
+  const ontario = {
+    geometry: { type: 'Point', coordinates: [-81.25, 42.98] },
+    properties: {
+      osm_key: 'place',
+      name: 'London',
+      state: 'Ontario',
+      country: 'Canada',
+      countrycode: 'CA',
+    },
+  };
+  assert.equal(selectQualifiedFeature([ontario, london], 'London, UK'), london);
+});
+
+test('a nearby place whose own name has a comma still wins when nothing matches as place and region', async () => {
+  const store = (lon, lat, city) => ({
+    geometry: { type: 'Point', coordinates: [lon, lat] },
+    properties: {
+      osm_key: 'shop',
+      osm_value: 'houseware',
+      name: 'Bed, Bath & Beyond',
+      city,
+      countrycode: 'US',
+    },
+  });
+  const nearby = store(-104.94, 39.66, 'Denver');
+  const fetchImpl = photonPair([nearby], [store(-73.99, 40.74, 'New York')]);
+
+  const result = await geocodeKeyless('Bed, Bath & Beyond', {
+    bias: '39.60,-105.00|39.70,-104.90',
+    fetchImpl,
+  });
+
+  assert.match(result.label, /Denver/);
+  assert.equal(fetchImpl.urls.length, 2, 'the region checks ran first');
+});

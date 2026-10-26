@@ -51,10 +51,12 @@ export function terrainHeightsProxy() {
     return 'upstream request failed';
   };
   const UPSTREAM_CHUNK = 64;
-  // After a 429 the upstream is left alone for its Retry-After, or this long
-  // when it gives none (Re:Earth sends none). Every page poll used to retry
-  // straight away, so a busy route flight kept the limit in force.
+  // After a 429 the upstream is left alone for its Retry-After (at most
+  // RATE_LIMIT_PAUSE_MAX_MS, so a far-off date can't stop terrain until a
+  // restart), or RATE_LIMIT_PAUSE_MS when it gives none. Every page poll used
+  // to retry straight away, so a busy route flight kept the limit in force.
   const RATE_LIMIT_PAUSE_MS = 60_000;
+  const RATE_LIMIT_PAUSE_MAX_MS = 10 * 60_000;
   let rateLimitedUntil = 0;
   const MAX_POINTS = 2000;
 
@@ -150,6 +152,7 @@ export function terrainHeightsProxy() {
       // Rate-limited: asking again only extends the limit. Cached points are
       // still served; the rest resolve on the page through its geoid.
       const error = new Error('HTTP 429');
+      error.status = 429;
       error.coolingDown = true;
       throw error;
     }
@@ -158,15 +161,22 @@ export function terrainHeightsProxy() {
     for (let i = 0; i < points.length; i += UPSTREAM_CHUNK) {
       const chunk = points.slice(i, i + UPSTREAM_CHUNK);
       let chunkResults = [];
+      // Re-checked per chunk for requests that span several chunks.
       if (Date.now() >= rateLimitedUntil) {
         try {
           chunkResults = await fetchTerrainChunkWithRetry(chunk);
         } catch (error) {
           firstError = firstError || error;
-          if (error?.message === 'HTTP 429')
-            rateLimitedUntil =
+          // Concurrent 429s extend the pause, never cut it short.
+          if (error?.status === 429)
+            rateLimitedUntil = Math.max(
+              rateLimitedUntil,
               Date.now() +
-              (terrainRetryAfterMs(error.retryAfter) ?? RATE_LIMIT_PAUSE_MS);
+                Math.min(
+                  terrainRetryAfterMs(error.retryAfter) ?? RATE_LIMIT_PAUSE_MS,
+                  RATE_LIMIT_PAUSE_MAX_MS,
+                ),
+            );
         }
       }
       // Keep later chunks aligned even if a malformed upstream response omits
@@ -240,7 +250,7 @@ export function terrainHeightsProxy() {
             `[terrain-heights-proxy] refresh incomplete (${upstreamReason(
               failure,
             )}${
-              Date.now() < rateLimitedUntil
+              failure?.status === 429 && Date.now() < rateLimitedUntil
                 ? `; pausing upstream for ${Math.ceil((rateLimitedUntil - Date.now()) / 1000)} s`
                 : ''
             })` + ' — serving stale points when available',

@@ -266,6 +266,15 @@ export function selectPhotonFeature(
   return null;
 }
 
+/** Short country names people type that Photon's fields don't carry. */
+const COUNTRY_ALIASES = Object.freeze({ US: 'usa', GB: 'uk' });
+
+/** The region part of a "place, region" query, normalized ('' if none). */
+function queryRegion(query) {
+  const [, ...rest] = String(query ?? '').split(',');
+  return normalizeToponym(rest.join(' '));
+}
+
 /**
  * For a "place, region" query, pick the candidate named for the place that
  * actually lies in the region. "Paris, Texas" is also the name of a pub in
@@ -276,8 +285,8 @@ export function selectPhotonFeature(
  * @returns {?object} null when the query names no region or nothing fits.
  */
 export function selectQualifiedFeature(features, query) {
-  const [headText, ...rest] = String(query ?? '').split(',');
-  const region = normalizeToponym(rest.join(' '));
+  const [headText] = String(query ?? '').split(',');
+  const region = queryRegion(query);
   const head = normalizeToponym(headText);
   if (!head || !region) return null;
   const words = region.split(' ');
@@ -285,7 +294,9 @@ export function selectQualifiedFeature(features, query) {
     (Array.isArray(features) ? features : []).find((feature) => {
       const properties = feature?.properties ?? {};
       const name = normalizeToponym(properties.name);
-      if (name !== head && !name.startsWith(`${head} `)) return false;
+      // Exactly the place: "Paris Gare de Lyon" is in France too, but it
+      // is not what "Paris, France" asks for.
+      if (name !== head) return false;
       const where = ` ${normalizeToponym(
         [
           properties.city,
@@ -293,6 +304,7 @@ export function selectQualifiedFeature(features, query) {
           properties.state,
           properties.country,
           properties.countrycode,
+          COUNTRY_ALIASES[String(properties.countrycode ?? '').toUpperCase()],
         ].join(' '),
       )} `;
       return words.every((word) => where.includes(` ${word} `));
@@ -419,7 +431,11 @@ export async function geocodeKeylessWithOutcome(
   // with the name asked for; otherwise the same query runs unbiased, which is
   // what a user searching for somewhere off-screen meant in the first place.
   // A query naming a region is only answered nearby by a match inside it.
+  // A nearby place whose own name has a comma ("Bed, Bath & Beyond") and
+  // equals the whole query is kept as the last choice, after the region
+  // checks of both passes.
   let feature = null;
+  let nearbyNameMatch = null;
   let everyAskAnswered = true;
   // "Dallas airport" names its city, so the camera adds nothing but a short,
   // nearby-weighted list: from Seattle it held only Dallas Executive, and DFW
@@ -427,10 +443,12 @@ export async function geocodeKeylessWithOutcome(
   if (bias && !AIRPORT_QUERY.test(trimmed)) {
     const biased = await ask(photonSearchUrl(trimmed, { bias, endpoint }));
     if (biased === null) everyAskAnswered = false;
-    else
-      feature = trimmed.includes(',')
-        ? selectQualifiedFeature(biased, trimmed)
-        : selectPhotonFeature(biased, normalizeToponym(trimmed));
+    else if (queryRegion(trimmed)) {
+      feature = selectQualifiedFeature(biased, trimmed);
+      nearbyNameMatch = selectPhotonFeature(biased, normalizeToponym(trimmed));
+    } else {
+      feature = selectPhotonFeature(biased, normalizeToponym(trimmed));
+    }
   }
 
   signal?.throwIfAborted();
@@ -447,9 +465,11 @@ export async function geocodeKeylessWithOutcome(
       feature =
         selectAirportFeature(anywhere, trimmed) ||
         selectQualifiedFeature(anywhere, trimmed) ||
+        nearbyNameMatch ||
         selectPhotonFeature(anywhere, head, { allowContains: true }) ||
         anywhere[0];
     }
+    if (!feature) feature = nearbyNameMatch;
   }
 
   signal?.throwIfAborted();
