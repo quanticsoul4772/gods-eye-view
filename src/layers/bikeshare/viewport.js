@@ -31,7 +31,30 @@ export function createViewport({ state: layerState, services, parts, source }) {
    */
 
   function getCameraCenterLatLon(viewer) {
-    // Try view rectangle center first (more accurate for tilted views)
+    // The ground point under the screen centre, where the camera looks. The
+    // visible rectangle's midpoint reaches toward the horizon in an angled
+    // view (300 km out over Denver it fell ~350 km north), so it is only the
+    // fallback when the centre ray misses the globe.
+    const canvas = viewer?.scene?.canvas;
+    const ellipsoid = viewer?.scene?.globe?.ellipsoid;
+    const hit =
+      canvas?.clientWidth > 0 &&
+      canvas.clientHeight > 0 &&
+      viewer.camera?.pickEllipsoid?.(
+        new Cesium.Cartesian2(canvas.clientWidth / 2, canvas.clientHeight / 2),
+        ellipsoid,
+      );
+    if (hit) {
+      const carto = (
+        ellipsoid || Cesium.Ellipsoid.WGS84
+      ).cartesianToCartographic(hit);
+      if (carto)
+        return {
+          lat: Cesium.Math.toDegrees(carto.latitude),
+          lon: Cesium.Math.toDegrees(carto.longitude),
+        };
+    }
+    // Fallback: the view rectangle's center
     const rect = viewer?.camera?.computeViewRectangle?.(
       viewer.scene.globe?.ellipsoid,
     );
