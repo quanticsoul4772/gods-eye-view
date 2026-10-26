@@ -34,9 +34,14 @@ export function createCatalog({ state, source }) {
               next.set(row.id, Object.freeze({ ...row }));
           const changed = next.size !== state._catalog.size;
           state._catalog = next;
+          state._catalogFailed = false;
           return changed;
         })
-        .catch(() => false)
+        .catch(() => {
+          // The static list stands; coverage can't call a view uncovered.
+          state._catalogFailed = true;
+          return false;
+        })
         .finally(() => {
           loading = null;
         });

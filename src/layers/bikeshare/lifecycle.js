@@ -124,9 +124,13 @@ export function createLifecycle({
                 layerState._cities.set(system.id, Object.freeze({ ...system }));
                 added += 1;
               }
+            layerState._systemsLoadFailed = false;
             return added;
           })
-          .catch(() => 0)
+          .catch(() => {
+            layerState._systemsLoadFailed = true;
+            return 0;
+          })
           .then(() => {
             layerState._systemsReady = true;
             if (layerState._enabled) void parts.viewport.runProximityCheck();
