@@ -145,6 +145,7 @@ export async function fetchTerrainChunkWithRetry(
       const res = await fetchImpl(url, signal ? { signal } : {});
       if (!res.ok) {
         const error = new Error(`HTTP ${res.status}`);
+        error.status = res.status;
         error.retryable = res.status === 429 || res.status >= 500;
         error.retryAfter = res.headers?.get?.('retry-after') ?? null;
         throw error;
