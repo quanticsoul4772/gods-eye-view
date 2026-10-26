@@ -93,6 +93,13 @@ export function createControls({ state: layerState, services, parts, source }) {
       }
       const covered = stations || vehicles;
       if (covered) return { covered, listed: null, altitudeGateOpen, center };
+      // A list that didn't load leaves "no system here" unknown: the caller
+      // reports coverage as unchecked.
+      if (
+        (modeHasStations(mode) && layerState._systemsLoadFailed) ||
+        (modeHasVehicles(mode) && !layerState._vehicleSystemsReady)
+      )
+        throw new Error('The bike-share system list could not be loaded');
       return {
         covered,
         listed:

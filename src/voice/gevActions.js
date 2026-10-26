@@ -1173,7 +1173,10 @@ export function createGevActionRunner({
       try {
         arrived = await flying;
       } catch (error) {
-        // A failed or cancelled place search never starts a flight.
+        // A failed or cancelled place search never starts a flight, so its
+        // arrival never settles: drop it, or it would be kept as a flight in
+        // progress and restored as the "earlier flight" later.
+        flyingArrivals.delete(flightArrival);
         if (pendingArrival === flightArrival)
           pendingArrival = flyingArrivals.has(earlierArrival)
             ? earlierArrival
@@ -1181,6 +1184,7 @@ export function createGevActionRunner({
         throw error;
       }
       if (arrived?.ok !== true) {
+        flyingArrivals.delete(flightArrival);
         if (pendingArrival === flightArrival)
           pendingArrival = flyingArrivals.has(earlierArrival)
             ? earlierArrival

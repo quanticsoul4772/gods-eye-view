@@ -4,6 +4,8 @@ import { createControls } from './controls.js';
 
 /** Controls over a stub viewport: one docking system and one vehicle system. */
 function coverageAt({
+  systemsLoadFailed = false,
+  vehicleSystemsReady = true,
   mode,
   center,
   altitude,
@@ -17,7 +19,8 @@ function coverageAt({
     _viewer: {},
     _systemsLoaded: Promise.resolve(),
     _vehicleSystems: scooters,
-    _vehicleSystemsReady: true,
+    _vehicleSystemsReady: vehicleSystemsReady,
+    _systemsLoadFailed: systemsLoadFailed,
     _vehicleSystemsRetryAt: 0,
     _vehicleGate: vehicleGate,
   };
@@ -100,6 +103,39 @@ test('bike-share coverage counts the shared vehicles its mode draws', async () =
   assert.equal(
     (await coverageAt({ mode: 'both', center: 'docks', altitude: 50_000 }))
       .altitudeGateOpen,
+    true,
+  );
+});
+
+test('bike-share coverage is unchecked, not "no system", when a system list failed to load', async () => {
+  await assert.rejects(
+    coverageAt({
+      mode: 'stations',
+      center: 'nowhere',
+      altitude: 5_000,
+      systemsLoadFailed: true,
+    }),
+    /could not be loaded/,
+  );
+  await assert.rejects(
+    coverageAt({
+      mode: 'vehicles',
+      center: 'nowhere',
+      altitude: 5_000,
+      vehicleSystemsReady: false,
+    }),
+    /could not be loaded/,
+  );
+  // A covered view is still known as covered.
+  assert.equal(
+    (
+      await coverageAt({
+        mode: 'stations',
+        center: 'docks',
+        altitude: 5_000,
+        systemsLoadFailed: true,
+      })
+    ).covered,
     true,
   );
 });

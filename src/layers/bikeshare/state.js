@@ -53,6 +53,8 @@ export function createState({ services }) {
   layerState._systemsReady = false;
   /** The systems-list load started on enable (null before, or without a list). */
   layerState._systemsLoaded = null;
+  /** Whether the last directory-systems load failed (systems unknown). */
+  layerState._systemsLoadFailed = false;
 
   /** Monotonic generation counter; incremented on each proximity check to cancel stale work. */
 

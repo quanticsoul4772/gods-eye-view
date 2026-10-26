@@ -207,6 +207,10 @@ export function createQueries({ state, parts, source }) {
         transitFeedsInRange(center.lat, center.lon, 0, parts.catalog.feeds())
           .length > 0;
       if (covered) return { covered, listed: null, altitudeGateOpen, center };
+      // Without the served catalog, "no feed here" isn't known: a directory
+      // feed may cover this view. The caller reports coverage as unchecked.
+      if (state._catalogFailed)
+        throw new Error('The transit feed list could not be loaded');
       return {
         covered,
         listed:
