@@ -214,6 +214,8 @@ export class IntelHUD {
     this._timestampInterval = null;
     this._summaryInterval = null;
     this._summaryTypingInterval = null;
+    /** Set by destroy(): nothing paints after teardown. */
+    this._destroyed = false;
     this._latestMetrics = null;
     this._dataManager = null;
     this._dataManagerUnsubscribe = null;
@@ -875,6 +877,7 @@ export class IntelHUD {
   }
 
   _setSummaryText(text, animate) {
+    if (this._destroyed) return;
     if (animate) {
       this._typeSummary(text);
       return;
@@ -905,9 +908,24 @@ export class IntelHUD {
     };
   }
 
+  /**
+   * The view changed (a camera move, the geoid flip, show): a request in
+   * flight is for the old view (the revision moves), and the signature is
+   * forgotten, since a plain line may now cover the AI one and the next
+   * tick must ask again even over the same place.
+   */
   _markSummaryDirty() {
     this._summaryDirty = true;
     this._summaryRevision++;
+    this._lastSummarySignature = null;
+  }
+
+  /**
+   * Layer data changed but the view did not: ask on the next tick, and let a
+   * reply already on its way land, since it describes this same view.
+   */
+  _markSummaryContentChanged() {
+    this._summaryDirty = true;
   }
 
   // ── Public API ──────────────────────────
@@ -1116,7 +1134,7 @@ export class IntelHUD {
             'refresh-failed',
           ].includes(change?.type)
         )
-          this._markSummaryDirty();
+          this._markSummaryContentChanged();
       });
     }
     this._markSummaryDirty();
@@ -1132,6 +1150,9 @@ export class IntelHUD {
     this.viewer.camera.moveStart.removeEventListener(this._onCameraMoveStart);
     this.viewer.camera.moveEnd.removeEventListener(this._onCameraMoveEnd);
     this._dataManagerUnsubscribe?.();
+    // Before the abort: its catch must not paint (or start typing) after
+    // teardown.
+    this._destroyed = true;
     this._summaryRequest?.abort();
   }
 }
