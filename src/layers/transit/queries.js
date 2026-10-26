@@ -197,7 +197,9 @@ export function createQueries({ state, parts, source }) {
      * @returns {Promise<{covered: boolean, listed: number|null, altitudeGateOpen: boolean, center?: {lat: number, lon: number}}>}
      */
     async coverageHere() {
-      if (!state._catalogReady) await parts.catalog.load();
+      // A failed catalog is asked for again rather than read as "no feed".
+      if (!state._catalogReady || state._catalogFailed)
+        await parts.catalog.load();
       const altitudeGateOpen = parts.viewport.altitudeGateOpen(
         parts.viewport.getCameraAltitude(),
       );

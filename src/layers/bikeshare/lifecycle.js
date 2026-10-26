@@ -16,6 +16,42 @@ export function createLifecycle({
   const { registerSpriteCollection, restoreSpriteOrder } = services.sprites;
   const { registerPickOwner, unregisterPickOwner } = services.picking;
 
+  /**
+   * Fetch the server's directory systems and merge them into the cities.
+   * Kept on the state so coverageHere can wait for it, or start it again
+   * after a failure. Only the newest load sets the failure flag and the
+   * ready state, so a slow failure from before a re-enable can't overwrite
+   * a newer success.
+   * @returns {Promise<void>}
+   */
+  function loadDirectorySystems() {
+    const load = ++layerState._systemsLoadSeq;
+    const latest = () => load === layerState._systemsLoadSeq;
+    layerState._systemsLoaded = source
+      .getSystems()
+      .then((systems) => {
+        const loadedUrls = new Set(
+          [...layerState._cities.values()].map((c) => c.stationStatusUrl),
+        );
+        for (const system of systems)
+          if (
+            !layerState._cities.has(system.id) &&
+            !loadedUrls.has(system.stationStatusUrl)
+          )
+            layerState._cities.set(system.id, Object.freeze({ ...system }));
+        if (latest()) layerState._systemsLoadFailed = false;
+      })
+      .catch(() => {
+        if (latest()) layerState._systemsLoadFailed = true;
+      })
+      .then(() => {
+        if (!latest()) return;
+        layerState._systemsReady = true;
+        if (layerState._enabled) void parts.viewport.runProximityCheck();
+      });
+    return layerState._systemsLoaded;
+  }
+
   const methods = {
     /**
      * Initialize the bikeshare layer. Creates the point primitive collection,
@@ -107,34 +143,7 @@ export function createLifecycle({
       void parts.viewport.runProximityCheck();
       // Directory systems join once the server's list arrives; only then is
       // "no system here" known, so that status and its count wait for it.
-      if (typeof source?.getSystems === 'function')
-        // Kept so coverageHere can wait for the full list.
-        layerState._systemsLoaded = source
-          .getSystems()
-          .then((systems) => {
-            let added = 0;
-            const loadedUrls = new Set(
-              [...layerState._cities.values()].map((c) => c.stationStatusUrl),
-            );
-            for (const system of systems)
-              if (
-                !layerState._cities.has(system.id) &&
-                !loadedUrls.has(system.stationStatusUrl)
-              ) {
-                layerState._cities.set(system.id, Object.freeze({ ...system }));
-                added += 1;
-              }
-            layerState._systemsLoadFailed = false;
-            return added;
-          })
-          .catch(() => {
-            layerState._systemsLoadFailed = true;
-            return 0;
-          })
-          .then(() => {
-            layerState._systemsReady = true;
-            if (layerState._enabled) void parts.viewport.runProximityCheck();
-          });
+      if (typeof source?.getSystems === 'function') void loadDirectorySystems();
       restoreSpriteOrder(viewer);
     },
 
@@ -213,5 +222,5 @@ export function createLifecycle({
     },
   };
 
-  return { methods };
+  return { methods, loadDirectorySystems };
 }
