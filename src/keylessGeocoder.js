@@ -445,7 +445,13 @@ export async function geocodeKeylessWithOutcome(
     if (biased === null) everyAskAnswered = false;
     else if (queryRegion(trimmed)) {
       feature = selectQualifiedFeature(biased, trimmed);
-      nearbyNameMatch = selectPhotonFeature(biased, normalizeToponym(trimmed));
+      // Exactly the whole query: "Springfield IL Auto" only starts with it.
+      const whole = normalizeToponym(trimmed);
+      nearbyNameMatch =
+        biased.find(
+          (candidate) =>
+            normalizeToponym(candidate?.properties?.name) === whole,
+        ) ?? null;
     } else {
       feature = selectPhotonFeature(biased, normalizeToponym(trimmed));
     }
