@@ -816,7 +816,8 @@ export class IntelHUD {
         this._setSummaryText(fallbackText, animate);
       return;
     }
-    if (revision !== this._summaryRevision) return;
+    // Destroyed while the context was built: no request (it costs a call).
+    if (this._destroyed || revision !== this._summaryRevision) return;
     const signature = JSON.stringify(context);
     if (!force && signature === this._lastSummarySignature) {
       this._summaryDirty = false;

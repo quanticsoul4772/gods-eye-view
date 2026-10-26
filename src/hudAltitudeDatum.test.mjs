@@ -598,3 +598,35 @@ test('after a small move over the same place the AI line comes back; layer refre
     env.restore();
   }
 });
+
+test('a HUD destroyed while its summary context is built sends no request', async () => {
+  const env = installHudEnvironment();
+  const previousWindow = globalThis.window;
+  globalThis.window = globalThis;
+  let requests = 0;
+  const summaryService = {
+    summarize: async () => {
+      requests += 1;
+      return { ok: true, status: 200, data: { summary: 'x', error: null } };
+    },
+  };
+  try {
+    const hud = new IntelHUD(env.viewer, { summaryService });
+    let release;
+    hud._summaryContext = () =>
+      new Promise((resolve) => {
+        release = () => resolve({ place: 'Lisboa' });
+      });
+    hud._updateCameraData();
+    const update = hud._updateSummary(false);
+    await new Promise((resolve) => setImmediate(resolve));
+    hud.destroy();
+    release();
+    await update;
+    assert.equal(requests, 0);
+  } finally {
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+    env.restore();
+  }
+});
