@@ -1884,8 +1884,8 @@ test('a cable part shows while its own line is in view, wherever its cable is re
 
 test('a long cable segment shows while its middle is in view, though both ends are over the horizon', async () => {
   // The camera sits over (-40, 35) at 4,500 km, so the horizon is about 54°
-  // away. The segment runs along the -40/140 meridian through the camera's
-  // point, from 60° south of it to 60° away over the pole.
+  // away. The segment is drawn as a rhumb line along 35°N, through the
+  // camera's point, between ends about 56° from it on either side.
   const cables = {
     type: 'FeatureCollection',
     features: [
@@ -1896,13 +1896,13 @@ test('a long cable segment shows while its middle is in view, though both ends a
           id: 'meridian',
           name: 'Meridian Cable',
           color: '#00ff00',
-          coordinates: [-40, -25],
+          coordinates: [-110, 35],
         },
         geometry: {
           type: 'LineString',
           coordinates: [
-            [-40, -25],
-            [140, 85],
+            [-110, 35],
+            [30, 35],
           ],
         },
       },
