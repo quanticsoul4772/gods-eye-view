@@ -100,44 +100,50 @@ export function splitLineParts(features) {
 /** Spacing of the points a drawn line is horizon-tested at. */
 export const LINE_SAMPLE_SPACING_DEG = 10;
 
-function unitVector(lon, lat) {
-  const lonR = (lon * Math.PI) / 180;
-  const latR = (lat * Math.PI) / 180;
-  return [
-    Math.cos(latR) * Math.cos(lonR),
-    Math.cos(latR) * Math.sin(lonR),
-    Math.sin(latR),
-  ];
+const RAD = Math.PI / 180;
+
+/** Longitude difference wrapped to [-180, 180), the way Cesium's rhumb lines go. */
+function lonDelta(from, to) {
+  return ((((to - from + 540) % 360) + 360) % 360) - 180;
 }
 
-function angleDeg(a, b) {
-  const dot = a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-  return (Math.acos(Math.min(1, Math.max(-1, dot))) * 180) / Math.PI;
+function wrapLon(lon) {
+  return lonDelta(0, lon);
 }
 
-function lonLatOf([x, y, z]) {
-  return [
-    (Math.atan2(y, x) * 180) / Math.PI,
-    (Math.asin(Math.max(-1, Math.min(1, z))) * 180) / Math.PI,
-  ];
+/** Mercator northing; a rhumb line is straight in (longitude, northing). */
+function mercatorY(lat) {
+  const clamped = Math.max(-89.9, Math.min(89.9, lat));
+  return Math.log(Math.tan(Math.PI / 4 + (clamped * RAD) / 2));
 }
 
-/** The point a fraction `t` of the way along the great circle from a to b. */
-function slerp(a, b, t) {
-  const theta = (angleDeg(a, b) * Math.PI) / 180;
-  const sin = Math.sin(theta);
-  const wa = Math.sin((1 - t) * theta) / sin;
-  const wb = Math.sin(t * theta) / sin;
-  return [0, 1, 2].map((i) => wa * a[i] + wb * b[i]);
+/** Length in degrees of arc of the rhumb line from a to b ([lon, lat]). */
+function rhumbDeg([lon1, lat1], [lon2, lat2]) {
+  const dLat = (lat2 - lat1) * RAD;
+  const dLon = lonDelta(lon1, lon2) * RAD;
+  const dY = mercatorY(lat2) - mercatorY(lat1);
+  const q = Math.abs(dY) > 1e-12 ? dLat / dY : Math.cos(lat1 * RAD);
+  return Math.hypot(dLat, q * dLon) / RAD;
+}
+
+/** The point a fraction `t` of the way along the rhumb line from a to b. */
+function rhumbPoint([lon1, lat1], [lon2, lat2], t) {
+  const lat = lat1 + t * (lat2 - lat1);
+  const dY = mercatorY(lat2) - mercatorY(lat1);
+  const along =
+    Math.abs(dY) > 1e-12 ? (mercatorY(lat) - mercatorY(lat1)) / dY : t;
+  return [wrapLon(lon1 + along * lonDelta(lon1, lon2)), lat];
 }
 
 /**
  * The points a drawn line is horizon-tested at, no more than `spacingDeg`
- * (great-circle) apart measured along it: its ends, the vertex before the
- * distance since the last sample would pass the spacing, and points added
- * along any segment longer than that. One reference point per cable hid a part whose far end was in view
- * while that point was over the horizon, and testing vertices alone hid a
- * long segment whose middle was in view while both its ends were not (the
+ * apart measured along it: its ends, the vertex before the distance since
+ * the last sample would pass the spacing, and points added along any
+ * segment longer than that. Distances and added points follow rhumb lines,
+ * which is how Cesium's GeoJsonDataSource draws the cable (`ArcType.RHUMB`).
+ * One reference point per cable hid a part whose far end was in view while
+ * that point was over the horizon, and testing vertices alone hid a long
+ * segment whose middle was in view while both its ends were not (the
  * bundled data has segments over 50°).
  * @param {Array<[number, number]>} coordinates [lon, lat] vertices.
  * @param {number} [spacingDeg]
@@ -153,23 +159,22 @@ export function lineSamplePoints(
   const samples = [vertices[0]];
   // Distance along the line since the last sample.
   let run = 0;
-  let previous = unitVector(...vertices[0]);
   for (let i = 1; i < vertices.length; i += 1) {
-    const here = unitVector(...vertices[i]);
-    const segment = angleDeg(previous, here);
+    const previous = vertices[i - 1];
+    const here = vertices[i];
+    const segment = rhumbDeg(previous, here);
     if (run > 0 && run + segment > spacingDeg) {
-      samples.push(vertices[i - 1]);
+      samples.push(previous);
       run = 0;
     }
     if (segment > spacingDeg) {
       const steps = Math.ceil(segment / spacingDeg);
       for (let step = 1; step < steps; step += 1)
-        samples.push(lonLatOf(slerp(previous, here, step / steps)));
+        samples.push(rhumbPoint(previous, here, step / steps));
       run = segment / steps;
     } else {
       run += segment;
     }
-    previous = here;
   }
   samples.push(vertices.at(-1));
   return samples;

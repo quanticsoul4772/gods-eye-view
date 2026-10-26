@@ -51,3 +51,37 @@ test('short lines keep their vertices, and bad input samples nothing', () => {
   );
   assert.deepEqual(lineSamplePoints(undefined), []);
 });
+
+test('points added along a segment follow the rhumb line Cesium draws, across the antimeridian too', () => {
+  // GeoJsonDataSource draws lines as ArcType.RHUMB: an east-west segment
+  // stays on its parallel, where a great circle would bow toward the pole.
+  assert.deepEqual(
+    rounded(
+      lineSamplePoints([
+        [0, 45],
+        [60, 45],
+      ]),
+    ),
+    [
+      [0, 45],
+      [12, 45],
+      [24, 45],
+      [36, 45],
+      [48, 45],
+      [60, 45],
+    ],
+  );
+  assert.deepEqual(
+    rounded(
+      lineSamplePoints([
+        [170, 0],
+        [-170, 0],
+      ]),
+    ),
+    [
+      [170, 0],
+      [-180, 0],
+      [-170, 0],
+    ],
+  );
+});
