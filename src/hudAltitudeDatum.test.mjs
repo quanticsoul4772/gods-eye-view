@@ -643,3 +643,40 @@ test('a HUD destroyed while its summary context is built sends no request', asyn
     env.restore();
   }
 });
+
+test('while the camera moves the summary is the plain line, kept current, and the AI line comes back after', async () => {
+  const env = installHudEnvironment();
+  const previousWindow = globalThis.window;
+  globalThis.window = globalThis;
+  let hud;
+  try {
+    hud = new IntelHUD(env.viewer, {
+      summaryService: { summarize: () => new Promise(() => {}) },
+    });
+    hud._visible = true;
+    hud._updateCameraData();
+    const element = env.elements.get('hud-summary');
+    element.textContent = 'Lake Wyoming no layers enabled';
+
+    // The flight starts: the place it leaves is no longer shown.
+    env.cameraListeners.moveStart();
+    const plain = hud._composeSummary();
+    assert.equal(element.textContent, plain);
+
+    // Each telemetry tick during the move repaints the plain line.
+    element.textContent = 'stale';
+    hud._updateCameraData();
+    assert.equal(element.textContent, plain);
+
+    // Settled: ticks no longer repaint, so the AI line can take over again.
+    env.cameraListeners.moveEnd();
+    element.textContent = 'Rua Augusta Lisboa';
+    hud._updateCameraData();
+    assert.equal(element.textContent, 'Rua Augusta Lisboa');
+  } finally {
+    hud?.destroy();
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+    env.restore();
+  }
+});
