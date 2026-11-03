@@ -72,7 +72,6 @@ export class VisualSettings {
       scopeEnabled,
       scopeFeatherPct,
       scopeTerminusPct,
-      tileDetail,
       mapStack,
       panelState,
       styleParams,
@@ -142,10 +141,6 @@ export class VisualSettings {
     this._setScope({ enabled: scopeEnabled, featherPct: scopeFeatherPct });
     // null restores the altitude-adaptive ramp; a number pins the terminus
     // (clamped to the supported 94..100 band, same as the `sce` hash key).
-    // A link only ever carries Fast centre; it applies for this visit without
-    // replacing the recipient's own setting.
-    if (tileDetail === 'fast-centre')
-      this._setTileDetailMode(tileDetail, { syncShare: false, persist: false });
     if (scopeTerminusPct === null) setScopeTerminusOverride(null);
     else if (typeof scopeTerminusPct === 'number') {
       const pinned = clampScopeTerminusPct(scopeTerminusPct);
@@ -248,21 +243,16 @@ export class VisualSettings {
     this._detectionAllocationPreference = normalizeAllocationStrategy(
       storedDetectionAllocation,
     );
-    this._tileDetailBtns = [
-      document.getElementById('tile-detail-standard'),
-      document.getElementById('tile-detail-fast-centre'),
-    ].filter(Boolean);
+    // Fast centre is this browser's preference; share links do not carry it.
     this._tileDetailMode = 'standard';
+    this._tileDetailAvailable = false;
     let storedTileDetail = 'standard';
     try {
       storedTileDetail = localStorage.getItem(TILE_DETAIL_STORAGE_KEY);
     } catch {
       /* unavailable storage */
     }
-    this._setTileDetailMode(storedTileDetail, {
-      syncShare: false,
-      persist: false,
-    });
+    this._setTileDetailMode(storedTileDetail, { persist: false });
   }
   get hud() {
     return this.readHud();
@@ -506,6 +496,10 @@ export class VisualSettings {
         featherPct: this._scopeFeatherShown,
       },
       celestial: this._celestialShown,
+      tileDetail: {
+        mode: this._tileDetailMode,
+        available: this._tileDetailAvailable,
+      },
     };
   }
 
@@ -671,22 +665,20 @@ export class VisualSettings {
     return true;
   }
 
-  /** Standard or Fast centre loading for the Google 3D tileset. */
-  _setTileDetailMode(mode, { syncShare = true, persist = true } = {}) {
+  /**
+   * Standard or Fast centre loading for the Google 3D tileset, saved in this
+   * browser. Without the tileset the control is shown unavailable.
+   */
+  _setTileDetailMode(mode, { persist = true } = {}) {
     const tileset = this.mapStackController?.googleTileset || null;
     const normalized = normalizeTileDetailMode(mode);
     this._tileDetailMode = tileset ? normalized : 'standard';
+    this._tileDetailAvailable = Boolean(tileset);
     applyTileDetailMode(
       tileset,
       this._tileDetailMode,
       this.services.governorRequestRender,
     );
-    for (const button of this._tileDetailBtns) {
-      const active = button.dataset.tileDetail === this._tileDetailMode;
-      button.classList.toggle('active', active);
-      button.setAttribute('aria-checked', String(active));
-      button.disabled = !tileset;
-    }
     if (persist && tileset) {
       try {
         localStorage.setItem(TILE_DETAIL_STORAGE_KEY, normalized);
@@ -694,7 +686,7 @@ export class VisualSettings {
         /* best effort */
       }
     }
-    if (syncShare) this._syncShareState();
+    this._publishDisplay();
     return Boolean(tileset);
   }
 
@@ -960,7 +952,6 @@ export class VisualSettings {
           getScopeTerminusOverride() == null
             ? null
             : Math.round(getScopeTerminusOverride() * 100),
-        tileDetail: this._tileDetailMode,
         mapStack: this.mapStackController?.getActiveId?.() || 'photoreal',
       },
     };

@@ -562,6 +562,8 @@ export class StyleManager extends ShellFacade {
         _setModels3dEnabled: (...args) => this._setModels3dEnabled(...args),
         _syncModels3dModeRow: (...args) => this._syncModels3dModeRow(...args),
         _setModels3dMode: (...args) => this._setModels3dMode(...args),
+        _setTileDetailMode: (...args) =>
+          this._visualSettings._setTileDetailMode(...args),
       },
       readState: () => ({
         shareLinkManager: this.shareLinkManager,
