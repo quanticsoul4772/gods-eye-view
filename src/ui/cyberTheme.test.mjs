@@ -1,4 +1,9 @@
-import { getScopeMaskFeather, isScopeMaskEnabled, setScopeMaskEnabled, setScopeMaskFeather } from '../scopeMask.js';
+import {
+  getScopeMaskFeather,
+  isScopeMaskEnabled,
+  setScopeMaskEnabled,
+  setScopeMaskFeather,
+} from '../scopeMask.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
@@ -6,6 +11,7 @@ import {
   applyHudUiTheme,
   CYBER_VISUAL_DEFAULTS,
   cyberVisualDefaultsForHudTransition,
+  DEFAULT_HUD_LAYOUT,
   HUD_LAYOUTS,
   normalizeHudLayout,
 } from '../hudLayouts.js';
@@ -32,7 +38,7 @@ test('CCTV and Context keep their headers outside Cyber-only scroll bodies', () 
       // The header is RailPanel's; the body is its first content.
       markup.indexOf('<RailPanel ') > -1 &&
         markup.indexOf('<RailPanel ') <
-        markup.indexOf('class="cyber-panel-body ui-scroll"'),
+          markup.indexOf('class="cyber-panel-body ui-scroll"'),
     );
   }
   const shared = readFileSync(
@@ -145,7 +151,8 @@ test('non-Cyber style presets and explicit HUD choices remain authoritative', (t
     assert.equal(root.dataset.uiTheme, undefined);
     owner.setStyle('normal');
     owner.setStyle('surveillance');
-    assert.equal(hud.getVariant(), 'tactical');
+    // A military style preset brings the first-load layout (Professional).
+    assert.equal(hud.getVariant(), DEFAULT_HUD_LAYOUT);
   }
 });
 
@@ -276,8 +283,14 @@ test('Display and voice HUD routes preserve explicit Cyber entry and exit author
 
 test('scope choice and expanded feather survive every HUD layout and both restore paths', async (t) => {
   const { owner } = styleOwner(t, 'tactical');
-  const previous = { enabled: isScopeMaskEnabled(), feather: getScopeMaskFeather() };
-  t.after(() => { setScopeMaskEnabled(previous.enabled); setScopeMaskFeather(previous.feather); });
+  const previous = {
+    enabled: isScopeMaskEnabled(),
+    feather: getScopeMaskFeather(),
+  };
+  t.after(() => {
+    setScopeMaskEnabled(previous.enabled);
+    setScopeMaskFeather(previous.feather);
+  });
   Object.assign(owner.services, { setScopeMaskEnabled, setScopeMaskFeather });
   let shown = null;
   owner.store = { publish: (view) => (shown = view.scope) };
@@ -568,11 +581,16 @@ test('Cyber side panels share one width and one framed surface material', () => 
   );
 });
 
-test('Cyber is a canonical HUD layout with a safe Tactical fallback', () => {
-  assert.deepEqual(HUD_LAYOUTS, ['tactical', 'minimal', 'cyber']);
+test('Cyber is a canonical HUD layout with a safe default fallback', () => {
+  assert.deepEqual(HUD_LAYOUTS, [
+    'tactical',
+    'minimal',
+    'cyber',
+    'professional',
+  ]);
   assert.equal(normalizeHudLayout('CYBER'), 'cyber');
   assert.equal(normalizeHudLayout('operator'), 'tactical');
-  assert.equal(normalizeHudLayout('unknown'), 'tactical');
+  assert.equal(normalizeHudLayout('unknown'), 'professional');
 });
 
 test('the Cyber HUD owns the global shell skin and leaving it restores defaults', () => {
@@ -654,7 +672,10 @@ test('the Display selector, voice schema and final stylesheet expose Cyber', () 
   const militaryRendering = read('../layers/military/rendering.js');
   const setHud = GEV_ACTION_SCHEMAS.find((schema) => schema.name === 'set_hud');
 
-  assert.match(display, /<option value="cyber">\{\{ t\('Cyber'\) \}\}<\/option>/);
+  assert.match(
+    display,
+    /<option value="cyber">\{\{ t\('Cyber'\) \}\}<\/option>/,
+  );
   assert.match(display, /id="cyber-sonar-toggle"/);
   assert.match(
     display,
@@ -662,7 +683,11 @@ test('the Display selector, voice schema and final stylesheet expose Cyber', () 
   );
   assert.match(display, /id="cyber-sonar-sector"/);
   assert.deepEqual(setHud.parameters.properties.layout.enum, HUD_LAYOUTS);
-  assert.match(stylesheet, /@import '\.\/src\/ui\/styles\/cyber\.css';\s*$/);
+  // Cyber and Professional load last; each is scoped to its own layout.
+  assert.match(
+    stylesheet,
+    /@import '\.\/src\/ui\/styles\/cyber\.css';\s*@import '\.\/src\/ui\/styles\/professional\.css';\s*$/,
+  );
   assert.match(cyberStyles, /:root\[data-ui-theme='cyber'\]/);
   assert.match(cyberStyles, /\.material-symbols-outlined/);
   assert.match(cyberStyles, /\.pp-label/);
@@ -783,7 +808,10 @@ test('the Display selector, voice schema and final stylesheet expose Cyber', () 
     cyberStyles,
     /inset-inline-start: calc\(54px \+ var\(--panel-rail-clearance\)\);/,
   );
-  assert.match(cyberStyles, /right: calc\(51px \+ var\(--panel-rail-clearance\)\);/);
+  assert.match(
+    cyberStyles,
+    /right: calc\(51px \+ var\(--panel-rail-clearance\)\);/,
+  );
   // Each side's edge line shows only beside an open panel.
   assert.match(
     cyberStyles,

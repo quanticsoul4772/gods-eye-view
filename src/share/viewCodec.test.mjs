@@ -9,7 +9,11 @@ import {
   optionSpecs,
 } from '../data/layerState.js';
 import { VIEW_FOLLOW_KINDS, VIEW_MAPS, VIEW_STYLES } from '../view/index.js';
-import { HUD_LAYOUTS } from '../hudLayoutPolicy.js';
+import {
+  DEFAULT_HUD_LAYOUT,
+  HUD_LAYOUTS,
+  SHARE_ABSENT_HUD_LAYOUT,
+} from '../hudLayoutPolicy.js';
 import { ALLOCATION_STRATEGIES } from '../data/detectionPolicy.js';
 import { BLOOM_INTENSITY_DEFAULT, BLOOM_SCALE_VERSION } from '../bloom.js';
 import {
@@ -437,7 +441,11 @@ test('defaults travel as frozen meanings that match today’s app defaults', () 
   // drift; the codec's defaults table must NOT change (see SHARE-LINK-FORMAT).
   assert.equal(defaults.bloomIntensity, BLOOM_INTENSITY_DEFAULT);
   assert.equal(defaults.bloomVersion, BLOOM_SCALE_VERSION);
-  assert.equal(defaults.hudVariant, HUD_LAYOUTS[0]);
+  // Drift: the first-load layout moved to Professional; an absent field still
+  // means Tactical, the layout every earlier link was authored in.
+  assert.equal(DEFAULT_HUD_LAYOUT, 'professional');
+  assert.equal(SHARE_ABSENT_HUD_LAYOUT, 'tactical');
+  assert.equal(defaults.hudVariant, SHARE_ABSENT_HUD_LAYOUT);
   // Codes are append-only: the retired Operator layout keeps code 1 so old
   // links still parse, and the app restores them as Tactical.
   assert.deepEqual(SHARE_VIEW_ENUMS.hudVariant, [
@@ -445,6 +453,7 @@ test('defaults travel as frozen meanings that match today’s app defaults', () 
     'operator',
     'minimal',
     'cyber',
+    'professional',
   ]);
   assert.deepEqual(
     SHARE_VIEW_ENUMS.hudVariant.filter((variant) => variant !== 'operator'),

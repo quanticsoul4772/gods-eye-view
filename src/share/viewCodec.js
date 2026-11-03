@@ -111,7 +111,13 @@ export const SHARE_VIEW_ENUMS = Object.freeze({
     'esri-imagery',
     'osm',
   ]),
-  hudVariant: Object.freeze(['tactical', 'operator', 'minimal', 'cyber']),
+  hudVariant: Object.freeze([
+    'tactical',
+    'operator',
+    'minimal',
+    'cyber',
+    'professional',
+  ]),
   detectionMode: Object.freeze(['OFF', 'SPARSE', 'BALANCED', 'DENSE']),
   detectionAllocation: Object.freeze(['ELASTIC', 'WEIGHTED']),
 });
@@ -539,7 +545,9 @@ export const SHARE_VIEW_STYLE_DEFAULTS = Object.freeze(
           bloomIntensity: preset.bloom?.intensity ?? g.bloom.intensity,
           sharpen: preset.sharpen?.enabled ?? g.sharpen.enabled,
           sharpenIntensity: preset.sharpen?.intensity ?? g.sharpen.intensity,
-          hudVariant: preset.hudVariant ?? g.hudVariant,
+          // Frozen: links from before Professional became the first-load
+          // layout were authored in Tactical.
+          hudVariant: 'tactical',
           hudVisible: preset.hudVisible ?? g.hudVisible,
           detectionMode: detection.enabled ? detection.profile : 'OFF',
           detectionDensity: detection.densityPct,

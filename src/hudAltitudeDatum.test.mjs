@@ -788,9 +788,9 @@ test('a summary interrupted while typing can retry unchanged context', async (t)
 // ── Retired layouts ─────────────────────────────────────────────────────────
 //
 // Share links keep the retired Operator code, so old links still name it. The
-// real HUD, not a caller, is what turns it into the default layout.
+// real HUD, not a caller, is what turns it into Tactical.
 
-test('a retired Operator layout falls back to the default layout in the live HUD', () => {
+test('a retired Operator layout restores as Tactical in the live HUD', () => {
   const env = installHudEnvironment();
   let hud;
   try {

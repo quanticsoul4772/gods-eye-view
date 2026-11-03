@@ -27,6 +27,10 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
   // So is fly_to_location's facing direction.
   delete tools.find((tool) => tool.name === 'fly_to_location').parameters
     .properties.headingDeg;
+  // And the Professional HUD layout in set_hud's enum.
+  const layout = tools.find((tool) => tool.name === 'set_hud').parameters
+    .properties.layout;
+  layout.enum = layout.enum.filter((name) => name !== 'professional');
   const digest = createHash('sha256')
     .update(JSON.stringify(stable(tools)))
     .digest('hex');
@@ -183,9 +187,9 @@ test('all legacy action arguments are byte-identical after removing the delibera
     delete center.properties[axis].minimum;
     delete center.properties[axis].maximum;
   }
-  // Cyber adds one HUD layout and Operator was retired.
+  // Cyber and Professional add HUD layouts and Operator was retired.
   const hud = property('set_hud').layout;
-  assert.deepEqual(hud.enum, ['tactical', 'minimal', 'cyber']);
+  assert.deepEqual(hud.enum, ['tactical', 'minimal', 'cyber', 'professional']);
   hud.enum = ['tactical', 'operator', 'minimal'];
   // Snow is retired from set_visual_style; restore it to keep the legacy pin.
   const visualStyle = legacy.find((tool) => tool.name === 'set_visual_style')

@@ -273,7 +273,8 @@ export function layoutRightPanelRail({
             naturalHeights.get(panel),
           ),
           allocatedHeights: expandedHeights,
-          collapseLaterPanels: shouldFocus && hud.variant === 'tactical',
+          collapseLaterPanels:
+            shouldFocus && railsYieldToHudCorners(hud.variant),
         })
       : [];
   if (!isCollapseRetry && autoCollapseIndices.length) {

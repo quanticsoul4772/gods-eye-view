@@ -25,6 +25,9 @@ export function isHudLayout(value) {
 /** @param {unknown} value */
 export function normalizeHudLayout(value) {
   const normalized = String(value ?? '').toLowerCase();
+  // The retired Operator layout was Tactical's sibling; its old share links
+  // restore as Tactical, not as the first-load layout.
+  if (normalized === 'operator') return 'tactical';
   return isHudLayout(normalized) ? normalized : DEFAULT_HUD_LAYOUT;
 }
 

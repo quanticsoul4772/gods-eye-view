@@ -2,6 +2,7 @@
 import { storeToRefs } from 'pinia';
 import { computed } from 'vue';
 import { t } from '../../../i18n/index.js';
+import { DEFAULT_HUD_LAYOUT } from '../../../hudLayoutPolicy.js';
 import { vPanelState } from '../../rail/panelState.js';
 import { vClassToggle } from '../../rail/classToggle.js';
 import PanelCollapseButton from '../../rail/PanelCollapseButton.vue';
@@ -27,7 +28,7 @@ const sonarOn = computed(() => sonar.value?.enabled ?? true);
 const detection = computed(() => view.value?.detection ?? null);
 const detectButton = computed(() => detection.value?.button ?? null);
 const allocation = computed(() => detection.value?.allocation ?? 'ELASTIC');
-const scopeOn = computed(() => view.value?.scope.enabled ?? true);
+const scopeOn = computed(() => view.value?.scope.enabled ?? false);
 const scopeFeather = computed(() => view.value?.scope.featherPct ?? 100);
 const celestial = computed(() => view.value?.celestial ?? null);
 const celestialTitle = computed(() =>
@@ -65,7 +66,8 @@ const allocationOptions = computed(() => [
     </button>
     <div class="pp-slider-row" :class="{ visible: hud?.visible }" id="hud-layout-row">
       <span class="pp-slider-mini-label">{{ t('Layout') }}</span>
-      <UiSelect id="hud-layout-select" class="pp-select gev-field gev-field--compact" :model-value="hud?.variant ?? 'tactical'" @update:model-value="act('setHudLayout', $event)" :aria-label="t('HUD layout')">
+      <UiSelect id="hud-layout-select" class="pp-select gev-field gev-field--compact" :model-value="hud?.variant ?? DEFAULT_HUD_LAYOUT" @update:model-value="act('setHudLayout', $event)" :aria-label="t('HUD layout')">
+        <option value="professional">{{ t('Professional') }}</option>
         <option value="tactical">{{ t('Tactical') }}</option>
         <option value="minimal">{{ t('Minimal') }}</option>
         <option value="cyber">{{ t('Cyber') }}</option>

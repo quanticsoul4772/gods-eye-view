@@ -363,6 +363,7 @@ export class IntelHUD {
       summary: t('Awaiting telemetry...'),
       rec: t('REC'),
       recShown: null,
+      recording: false,
       timestamp: '2026-01-01 00:00:00Z',
       orbital: `ORB: ${this._orbitNum}  PASS: DESC-${this._passNum}`,
       mgrs: 'MGRS: ---',
@@ -1126,15 +1127,24 @@ export class IntelHUD {
   }
 
   /**
-   * Switch the HUD layout variant. Falls back to `'tactical'` if the
+   * Switch the HUD layout variant. Falls back to DEFAULT_HUD_LAYOUT if the
    * name is unrecognized. Cyber also applies a coordinated skin to the full
    * application shell; leaving Cyber restores the standard shell tokens.
-   * @param {string} variantName - One of `'tactical'`, `'minimal'`, `'cyber'`.
+   * @param {string} variantName - One of HUD_LAYOUTS (src/hudLayoutPolicy.js).
    */
   setVariant(variantName) {
     this._variant = normalizeHudLayout(variantName);
     this._present({ variant: this._variant });
     applyHudUiTheme(document.documentElement, this._variant);
+  }
+
+  /**
+   * Mark whether the app is recording. Professional shows REC only while it
+   * is; the other layouts keep REC blinking throughout.
+   * @param {boolean} active
+   */
+  setRecording(active) {
+    this._present({ recording: !!active });
   }
 
   /**
