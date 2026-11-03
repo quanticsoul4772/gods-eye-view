@@ -2,6 +2,12 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 
 import { traceFixes } from './readsb-trace-to-kml.mjs';
+import {
+  cloudTopOver,
+  navigate,
+  offsetKm,
+  scanAngles,
+} from './goes-cloud-top-to-kml.mjs';
 
 /**
  * Draw GLM lightning events (JSON from scripts/glm-lcfa-to-json.py) as a KML
@@ -24,7 +30,9 @@ import { traceFixes } from './readsb-trace-to-kml.mjs';
  *   14 km above the WGS84 equator, 6 km above the poles. The granules do not
  *   state theirs; the same ellipsoid is assumed for later satellites. The
  *   squares sit at that height. Where the real cloud top is higher or lower,
- *   the position is off by parallax.
+ *   the position is off by parallax; --cloud-top re-places each event along
+ *   its line of sight at a measured GOES cloud top instead (itself a
+ *   retrieval, see scripts/goes-cloud-top-to-kml.mjs).
  */
 
 const KM_PER_DEG_LAT = 110.574;
@@ -98,6 +106,57 @@ export function aircraftAt(fixes, t, maxStepSec = 30) {
   return null;
 }
 
+/** A square's height: its measured cloud top when corrected, else the lightning ellipsoid. */
+export const squareHeightM = (square) =>
+  square.heightM ?? lightningEllipsoidHeight(square.lat);
+
+/**
+ * Re-place squares along their lines of sight at the measured cloud top
+ * (cloud-top JSON from scripts/goes-acha-to-json.py) instead of the lightning
+ * ellipsoid. The line of sight is taken from the cloud-top file's fixed grid
+ * (the nominal satellite position). The height is found by following the
+ * line to the drawn top over each trial point, until it changes by under
+ * 10 m. Squares with no top over them keep the ellipsoid.
+ * @returns {{squares: object[], moved: number, kept: number}}
+ */
+export function toCloudTop(squares, cloudTop) {
+  const proj = cloudTop.projection;
+  let moved = 0;
+  const out = squares.map((square) => {
+    const [x, y] = scanAngles(
+      proj,
+      square.lat,
+      square.lon,
+      lightningEllipsoidHeight(square.lat),
+    );
+    let h = lightningEllipsoidHeight(square.lat);
+    let at = null;
+    for (let i = 0; i < 6; i++) {
+      const point = navigate(proj, x, y, h);
+      const top = point && cloudTopOver(cloudTop, point[0], point[1]);
+      if (!top) break;
+      at = navigate(proj, x, y, top.heightM);
+      if (Math.abs(top.heightM - h) < 10) {
+        h = top.heightM;
+        break;
+      }
+      h = top.heightM;
+    }
+    if (!at) return square;
+    moved += 1;
+    const shift = offsetKm(square.lat, square.lon, at[0], at[1]);
+    return {
+      ...square,
+      lat: at[0],
+      lon: at[1],
+      heightM: h,
+      shiftKm: shift.km,
+      shiftBearing: shift.bearing,
+    };
+  });
+  return { squares: out, moved, kept: squares.length - moved };
+}
+
 /** Events with their pixel squares; events whose group gives no area are dropped. */
 export function eventSquares(glm) {
   if (glm?.format !== 1 || !Array.isArray(glm.events) || !glm.groups)
@@ -149,7 +208,7 @@ export function groupDistances(squares, fixes) {
       t,
       km,
       jet,
-      ellipsoidM: lightningEllipsoidHeight(list[0].lat),
+      pixelHeightM: squareHeightM(list[0]),
       sideKm: list[0].sideKm,
     });
   }
@@ -207,6 +266,7 @@ export function litPixels(squares, from = -Infinity, to = Infinity) {
         lat: square.lat,
         lon: square.lon,
         sideKm: square.sideKm,
+        heightM: square.heightM,
         first: square.t,
         last: square.t,
         events: 1,
@@ -227,9 +287,16 @@ export function litPixels(squares, from = -Infinity, to = Infinity) {
  * @returns {{kml: string, pixels: number, events: number, dropped: number,
  *   start: number, end: number}}
  */
-export function glmToKml(glm, { from = -Infinity, to = Infinity } = {}) {
-  const { squares, dropped } = eventSquares(glm);
-  const pixels = litPixels(squares, from, to);
+export function glmToKml(
+  glm,
+  { from = -Infinity, to = Infinity, cloudTop = null } = {},
+) {
+  const decoded = eventSquares(glm);
+  const { dropped } = decoded;
+  const corrected = cloudTop
+    ? toCloudTop(decoded.squares, cloudTop)
+    : { squares: decoded.squares, moved: 0, kept: decoded.squares.length };
+  const pixels = litPixels(corrected.squares, from, to);
   if (!pixels.length) throw new Error('No GLM events to draw.');
   const start = pixels[0].first;
   const end = Math.max(...pixels.map((pixel) => pixel.last));
@@ -242,7 +309,7 @@ export function glmToKml(glm, { from = -Infinity, to = Infinity } = {}) {
       `<Style id="t${i}"><LineStyle><color>ffffffff</color><width>1</width></LineStyle><PolyStyle><color>${bucketColor(i)}</color></PolyStyle></Style>`,
   );
   const placemarks = pixels.map((pixel) => {
-    const height = Math.round(lightningEllipsoidHeight(pixel.lat));
+    const height = Math.round(squareHeightM(pixel));
     const ring = squareCorners(pixel.lat, pixel.lon, pixel.sideKm)
       .map(([lon, lat]) => `${lon.toFixed(5)},${lat.toFixed(5)},${height}`)
       .join(' ');
@@ -272,6 +339,8 @@ ${placemarks.join('\n')}
     dropped,
     start,
     end,
+    moved: corrected.moved,
+    kept: corrected.kept,
   };
 }
 
@@ -298,37 +367,64 @@ if (import.meta.url === invoked) {
     [args, tracePath] = option(args, '--trace');
     [args, fromText] = option(args, '--from');
     [args, toText] = option(args, '--to');
+    let cloudTopPath;
+    [args, cloudTopPath] = option(args, '--cloud-top');
     const [input, output, ...rest] = args;
     if (!input || !output || rest.length)
       throw new Error(
-        'Usage: node scripts/glm-to-kml.mjs <glm.json> <out.kml> [--from ISO] [--to ISO] [--trace <trace_full.json>]',
+        'Usage: node scripts/glm-to-kml.mjs <glm.json> <out.kml> [--from ISO] [--to ISO] [--trace <trace_full.json>] [--cloud-top <cloud-top.json>]',
       );
     const from = fromText ? isoSeconds(fromText, '--from') : -Infinity;
     const to = toText ? isoSeconds(toText, '--to') : Infinity;
     const glm = JSON.parse(await readFile(input, 'utf8'));
+    const cloudTop = cloudTopPath
+      ? JSON.parse(await readFile(cloudTopPath, 'utf8'))
+      : null;
     const { kml, pixels, events, dropped, start, end } = glmToKml(glm, {
       from,
       to,
+      cloudTop,
     });
     await writeFile(output, kml);
     console.log(
       `${pixels} lit GLM pixels from ${events} events (${dropped} events without a group area left out), ${clock(start)}–${clock(end)}, coloured by first time, cyan early to magenta late.`,
     );
+    let squares = eventSquares(glm).squares.filter(
+      (square) => square.t >= from && square.t <= to,
+    );
+    if (cloudTop) {
+      const corrected = toCloudTop(squares, cloudTop);
+      squares = corrected.squares;
+      const shifts = squares.filter((square) => square.shiftKm !== undefined);
+      const mean = (key) =>
+        shifts.reduce((sum, square) => sum + square[key], 0) / shifts.length;
+      const sum = (f) =>
+        shifts.reduce(
+          (total, square) => total + f((square.shiftBearing * Math.PI) / 180),
+          0,
+        );
+      const bearing =
+        ((Math.atan2(sum(Math.sin), sum(Math.cos)) * 180) / Math.PI + 360) %
+        360;
+      console.log(
+        `${corrected.moved} events in the window re-placed at the measured cloud top along their lines of sight, ${corrected.kept} left on the lightning ellipsoid (no top over them)${shifts.length ? `; mean shift ${mean('shiftKm').toFixed(1)} km towards ${Math.round(bearing)}°, mean height ${Math.round(mean('heightM'))} m` : ''}.`,
+      );
+    }
     if (tracePath) {
       const fixes = traceFixes(JSON.parse(await readFile(tracePath, 'utf8')));
-      const squares = eventSquares(glm).squares.filter(
-        (square) => square.t >= from && square.t <= to,
-      );
       const rows = nearestPerFlash(groupDistances(squares, fixes));
+      const height = cloudTop
+        ? 'at the measured cloud top where there is one'
+        : 'at the assumed ellipsoid height';
       if (!rows.length)
         console.log("No GLM flash lit while the aircraft's position is known.");
       else {
         console.log(
-          `${rows.length} GLM flashes lit while the aircraft's position is known. Per flash, horizontal distance from the aircraft to the nearest north-up square of one pixel's area (about ${rows[0].sideKm.toFixed(1)} km) at the assumed ellipsoid height; 0 km means inside a square. Sub-kilometre distances are within GLM's frame-to-frame position jitter (about 0.2 km) and the parallax of the height difference:`,
+          `${rows.length} GLM flashes lit while the aircraft's position is known. Per flash, horizontal distance from the aircraft to the nearest north-up square of one pixel's area (about ${rows[0].sideKm.toFixed(1)} km) ${height}; 0 km means inside a square. Sub-kilometre distances are within GLM's frame-to-frame position jitter (about 0.2 km) and the parallax of any height error:`,
         );
         for (const row of rows.slice(0, 10))
           console.log(
-            `  ${clock(row.t)} flash ${row.flashId}: ${row.km.toFixed(1)} km; aircraft ${Math.round(row.jet.geomFt * FEET)} m geometric, assumed ellipsoid ${Math.round(row.ellipsoidM)} m; aircraft position interpolated across a ${row.jet.stepSec.toFixed(1)} s step`,
+            `  ${clock(row.t)} flash ${row.flashId}: ${row.km.toFixed(1)} km; aircraft ${Math.round(row.jet.geomFt * FEET)} m geometric, pixel at ${Math.round(row.pixelHeightM)} m; aircraft position interpolated across a ${row.jet.stepSec.toFixed(1)} s step`,
           );
       }
     }
