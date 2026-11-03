@@ -845,11 +845,8 @@ export class VisualSettings {
       this._setSharpenEnabled(sharpenInput.enabled);
     }
 
-    // Cyber is an explicit shell choice, independent of the imagery filter.
-    // Scene/share restoration still applies its own HUD through _setHudVariant.
-    if (preset.hudVariant && this.hud.getVariant() !== 'cyber') {
-      this._setHudVariant(preset.hudVariant);
-    }
+    // A style shows the HUD but keeps the layout the person chose; scene and
+    // share restoration apply their own layout through _setHudVariant.
     if (typeof preset.hudVisible === 'boolean') {
       this.hud.setMode(preset.hudVisible ? 'on' : 'off');
       this._updateHudButtonState();
