@@ -15,6 +15,25 @@ export const PACK_LIMITS = Object.freeze({
   positions: 50000,
 });
 
+/** What a pack shows: measured values, values computed from them, or an artist's rendering. */
+export const PACK_PROVENANCE = Object.freeze([
+  'observed',
+  'derived',
+  'artistic',
+]);
+
+/** Named geometry colours; a document picks a name, never a style. */
+export const PACK_COLORS = Object.freeze({
+  cyan: '#00ffff',
+  white: '#ffffff',
+  yellow: '#ffd700',
+  orange: '#ff8c00',
+  red: '#ff3030',
+  magenta: '#ff00ff',
+  green: '#30d050',
+  sky: '#87cefa',
+});
+
 /** Asset names are relative directory paths, never requests or executable modules. */
 export function validateAssetPath(value, path = 'source.path') {
   string(value, path, 1024);
@@ -40,6 +59,8 @@ export function validateDataPack(pack, path, anchorIds) {
     'placement',
     'byteLength',
     'sha256',
+    'provenance',
+    'color',
   ]);
   string(pack.id, `${path}.id`);
   if (pack.version !== 1) fail(`${path}.version`, 'unsupported pack version');
@@ -70,6 +91,16 @@ export function validateDataPack(pack, path, anchorIds) {
         at,
         'expected an HTTPS source link without credentials, query or fragment',
       );
+  });
+  optional(pack, 'provenance', path, (v, at) => {
+    if (!PACK_PROVENANCE.includes(v))
+      fail(at, `expected one of ${PACK_PROVENANCE.join(', ')}`);
+  });
+  optional(pack, 'color', path, (v, at) => {
+    if (pack.format !== 'geojson') fail(at, 'colour applies to geojson packs');
+    string(v, at, 32);
+    if (!Object.hasOwn(PACK_COLORS, v))
+      fail(at, `expected one of ${Object.keys(PACK_COLORS).join(', ')}`);
   });
   optional(pack, 'byteLength', path, (v, at) => {
     number(v, at, 1, PACK_LIMITS.bytes, false);

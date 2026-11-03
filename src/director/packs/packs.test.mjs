@@ -5,6 +5,7 @@ import { normalizeProject } from '../../scenes/project.js';
 import { createDataPackSession } from './session.js';
 import { createAssetDirectorySource } from './source.js';
 import { decodePackGeoJSON } from './geojson.js';
+import { PACK_COLORS, PACK_PROVENANCE } from './manifest.js';
 
 const pack = () => ({
   id: 'outline',
@@ -392,4 +393,49 @@ test('a photo pack is pinned to a declared anchor, like media', () => {
     altitudeReference: 'ellipsoid',
   };
   assert.throws(() => parseSceneDocument(JSON.stringify(p)));
+});
+
+test('packs may declare their provenance and a named colour, and nothing else', () => {
+  const declared = project();
+  Object.assign(declared.scenes[0].dataPacks[0], {
+    provenance: 'derived',
+    color: 'orange',
+  });
+  const normalized = normalizeProject(
+    parseSceneDocument(JSON.stringify(declared)),
+  );
+  const [roundTripped] = JSON.parse(stringifySceneDocument(normalized))
+    .scenes[0].dataPacks;
+  assert.equal(roundTripped.provenance, 'derived');
+  assert.equal(roundTripped.color, 'orange');
+  for (const kind of PACK_PROVENANCE) {
+    const p = project();
+    p.scenes[0].dataPacks[0].provenance = kind;
+    assert.doesNotThrow(() => parseSceneDocument(JSON.stringify(p)));
+  }
+  const mutations = [
+    (pk) => (pk.provenance = 'measured'),
+    (pk) => (pk.provenance = ''),
+    (pk) => (pk.color = '#ff0000'),
+    (pk) => (pk.color = 'url(x)'),
+    (pk) => (pk.color = 'toString'),
+    (pk) => (pk.color = ['red']),
+    (pk) => (pk.color = '__proto__'),
+    (pk) => {
+      pk.format = 'image';
+      pk.placement = {
+        bounds: [0, 0, 1, 1],
+        height: 0,
+        altitudeReference: 'ellipsoid',
+      };
+      pk.color = 'red';
+    },
+  ];
+  for (const mutate of mutations) {
+    const p = project();
+    mutate(p.scenes[0].dataPacks[0]);
+    assert.throws(() => parseSceneDocument(JSON.stringify(p)));
+  }
+  for (const value of Object.values(PACK_COLORS))
+    assert.match(value, /^#[0-9a-f]{6}$/);
 });
