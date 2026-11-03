@@ -13,6 +13,8 @@ import {
   nearestPerFlash,
   pixelSideKm,
   squareCorners,
+  squareHeightM,
+  toCloudTop,
 } from '../../scripts/glm-to-kml.mjs';
 
 const T0 = 1793555220; // 2026-11-01T17:47:00Z
@@ -269,4 +271,89 @@ test('one pixel reported a packing step apart is still one pixel', () => {
     [pixels[0].events, pixels[0].flashes.size, pixels[1].events],
     [2, 2, 1],
   );
+});
+
+// A 3x3 block of 10 km cloud-top pixels around (26.7, -80.2), all at one height.
+const cloudTops = async (heightM) => {
+  const { scanAngles } =
+    await import('../../scripts/goes-cloud-top-to-kml.mjs');
+  const projection = {
+    heightM: 35786023,
+    a: 6378137,
+    b: 6356752.31414,
+    lon0: -75,
+  };
+  const [x0, y0] = scanAngles(projection, 26.7, -80.2, heightM ?? 0);
+  const d = 0.00028;
+  const pixels = [];
+  for (let i = -1; i <= 1; i++)
+    for (let j = -1; j <= 1; j++)
+      pixels.push([x0 + j * d, y0 - i * d, heightM, heightM === null ? 3 : 0]);
+  return {
+    format: 1,
+    platform: 'G19',
+    scene: 'CONUS',
+    start: T0,
+    end: T0 + 150,
+    projection,
+    dx: d,
+    dy: d,
+    pixels,
+  };
+};
+
+test('squares are re-placed at the measured cloud top along their lines of sight', async () => {
+  const square = {
+    t: T0,
+    lat: 26.7,
+    lon: -80.2,
+    sideKm: 8,
+    flashId: '0:1',
+    groupId: '0:1',
+    energyJ: null,
+  };
+  const { squares, moved, kept } = toCloudTop([square], await cloudTops(14500));
+  assert.deepEqual([moved, kept], [1, 0]);
+  const [placed] = squares;
+  assert.equal(placed.heightM, 14500);
+  // 2.1 km above the ellipsoid, seen about 32° off vertical: about 1.3 km
+  // towards the satellite, south-south-east.
+  assert.ok(placed.shiftKm > 1 && placed.shiftKm < 1.7, `${placed.shiftKm}`);
+  assert.ok(
+    placed.shiftBearing > 150 && placed.shiftBearing < 190,
+    `${placed.shiftBearing}`,
+  );
+  assert.ok(placed.lat < 26.7 && placed.lon > -80.2);
+  assert.equal(squareHeightM(placed), 14500);
+});
+
+test('squares with no measured top over them stay on the lightning ellipsoid', async () => {
+  const square = {
+    t: T0,
+    lat: 26.7,
+    lon: -80.2,
+    sideKm: 8,
+    flashId: '0:1',
+    groupId: '0:1',
+    energyJ: null,
+  };
+  const { squares, moved, kept } = toCloudTop([square], await cloudTops(null));
+  assert.deepEqual([moved, kept], [0, 1]);
+  assert.equal(squares[0], square);
+  assert.equal(
+    Math.round(squareHeightM(square)),
+    Math.round(lightningEllipsoidHeight(26.7)),
+  );
+});
+
+test('the KML draws corrected pixels at their cloud-top height', async () => {
+  const { kml, moved } = glmToKml(
+    glm([[T0, 26.7, -80.2, null, '0:1']], {
+      '0:1': { areaM2: 64e6, events: 1, flash: '0:9' },
+    }),
+    { cloudTop: await cloudTops(14500) },
+  );
+  assert.equal(moved, 1);
+  assert.match(kml, /,14500 /);
+  assert.doesNotMatch(kml, /,12385 /);
 });
