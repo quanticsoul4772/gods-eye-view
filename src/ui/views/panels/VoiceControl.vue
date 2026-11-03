@@ -3,6 +3,7 @@ import { storeToRefs } from 'pinia';
 import { formatNumber, t } from '../../../i18n/index.js';
 import { vClassToggle } from '../../rail/classToggle.js';
 import { useVoiceStore } from '../../stores/voice.js';
+import { useAskClaudeStore } from '../../stores/askClaude.js';
 import VoiceCard from './VoiceCard.vue';
 import VoiceVisualizer from './VoiceVisualizer.vue';
 import UiButton from '../../kit/UiButton.vue';
@@ -14,6 +15,17 @@ import UiSelect from '../../kit/UiSelect.js';
 defineProps({ view: { type: Object, required: true } });
 const { controls } = storeToRefs(useVoiceStore());
 const emit = (name, ...args) => controls.value?.emit(name, ...args);
+// Typing to Claude (src/ui/askClaude.js): the type button and composer, shown
+// once it is installed.
+const askStore = useAskClaudeStore();
+const { view: ask } = storeToRefs(askStore);
+const askAct = (name, ...args) => askStore.act(name, ...args);
+// The composer's text is the person's draft; its owner only clears it.
+const vClearOn = {
+  updated(el, { value, oldValue }) {
+    if (value !== oldValue) el.value = '';
+  },
+};
 
 // A value the owner may restore after a refused change; written on every
 // render, as the owner's own writes were.
@@ -49,11 +61,12 @@ const rootData = (root) => ({
   'data-push-to-talk': optional(root.pushToTalk),
   'data-microphone': optional(root.microphone),
   'data-row-grace': root.rowGrace ? 'true' : undefined,
+  'data-typed': ask.value?.typed ? '' : undefined,
 });
 </script>
 
 <template>
-  <div id="gev-voice-control" v-bind="rootData(view.root)" v-class-toggle="{ 'error-dismissed': view.root.errorDismissed }" @pointerleave="emit('pointerleave', $event)" @pointerenter="emit('pointerenter', $event)">
+  <div id="gev-voice-control" v-bind="rootData(view.root)" v-class-toggle="{ 'error-dismissed': view.root.errorDismissed, 'composer-open': Boolean(ask?.open) }" @pointerleave="emit('pointerleave', $event)" @pointerenter="emit('pointerenter', $event)">
       <label id="gev-voice-provider-field" class="gev-voice-provider-field" :hidden="view.provider.hidden">
         <span>{{ t('Voice provider') }}</span>
         <UiSelect id="gev-voice-provider" class="gev-field" :aria-label="t('Voice provider')" :title="view.provider.title" :model-value="view.provider.value" @update:model-value="emit('provider-change', $event)"><option v-for="option in view.provider.options" :key="option.value" :value="option.value">{{ option.label }}</option></UiSelect>
@@ -72,6 +85,7 @@ const rootData = (root) => ({
         <span class="gev-mic-orbit"><img src="/mic.svg" alt="" /></span>
         <span class="gev-mic-label">{{ view.mic.text }}</span>
       </UiButton>
+      <button v-if="ask" id="gev-ask-button" type="button" :title="t('Type to Claude (/)')" :aria-label="t('Type to Claude')" :aria-expanded="String(ask.open)" aria-controls="gev-ask-composer" @click="askAct('toggle')">⌨</button>
       <VoiceVisualizer />
       <div class="gev-voice-readout">
         <div id="gev-voice-detail" :title="optional(view.detail.title)">{{ view.detail.text }}</div>
@@ -92,7 +106,7 @@ const rootData = (root) => ({
         <div class="gev-voice-panel-body ui-scroll">
           <section id="gev-voice-preview-panel" role="tabpanel" aria-labelledby="gev-voice-preview-tab" :hidden="view.voicePanel.previewHidden">
             <p id="gev-voice-preview-empty" :hidden="view.previewEmpty.hidden">{{ view.previewEmpty.text }}</p>
-      <VoiceCard :card="view.card" @dismiss="emit('card-dismiss')" />
+      <VoiceCard :card="view.card" :speaker="ask?.typed ? 'CLAUDE' : null" @dismiss="emit('card-dismiss')" />
           </section>
           <section id="gev-voice-settings-panel" role="tabpanel" aria-labelledby="gev-voice-settings-tab" :hidden="view.voicePanel.settingsHidden">
             <label class="gev-voice-preference gev-voice-preference-toggle"><input id="gev-voice-preview-enabled" type="checkbox" aria-describedby="gev-voice-preview-note" v-checked="view.preferences.previewChecked" @change="emit('preview-change', $event.target.checked)" /><span>{{ t('Show Voice Preview') }}</span></label>
@@ -123,7 +137,7 @@ const rootData = (root) => ({
           </section>
         </div>
       </section>
-      <VoiceCard v-else :card="view.card" @dismiss="emit('card-dismiss')" />
+      <VoiceCard v-else :card="view.card" :speaker="ask?.typed ? 'CLAUDE' : null" @dismiss="emit('card-dismiss')" />
       <div class="gev-voice-error-tray" role="alert" aria-live="assertive">
         <div class="gev-voice-error-header">
           <span>{{ t('VOICE SYSTEM ERROR') }}</span>
@@ -132,5 +146,16 @@ const rootData = (root) => ({
         <div id="gev-voice-error-detail">{{ view.error.text }}</div>
         <div class="gev-voice-error-hint">{{ t('Check microphone permission and network access, then try again.') }}</div>
       </div>
+      <form v-if="ask" id="gev-ask-composer" :hidden="!ask.open" :aria-label="t('Type to Claude')" @submit.prevent="askAct('submit', $event.target.elements.message.value)">
+        <div class="gev-ask-row">
+          <input id="gev-ask-input" name="message" type="text" maxlength="500" :placeholder="t('Ask Claude, or tell it what to do')" :aria-label="t('Message for Claude')" :disabled="ask.busy" v-clear-on="ask.clear" @keydown="askAct('inputKey', $event)" />
+          <button type="submit" :disabled="ask.voiceOn || ask.busy">{{ t('Send') }}</button>
+          <button type="button" class="gev-ask-new" :data-turns="ask.turns || undefined" :title="t('New chat — forget this conversation')" :aria-label="t('New chat')" @click="askAct('newChat')">↺</button>
+        </div>
+        <div class="gev-ask-status" aria-live="polite" :data-tone="ask.status.tone || undefined">
+          <span>{{ ask.status.text }}</span>
+          <button type="button" class="gev-ask-cancel" :hidden="!ask.busy" @click="askAct('cancel')">{{ t('Cancel') }}</button>
+        </div>
+      </form>
   </div>
 </template>
