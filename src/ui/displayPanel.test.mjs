@@ -108,7 +108,11 @@ test('bloom and sharpen render their state, slider and readout', async (t) => {
   await nextTick();
   assert.equal($('bloom-toggle').classList.contains('active'), false);
   assert.equal($('bloom-slider-row').classList.contains('visible'), false);
-  assert.equal($('bloom-intensity-value').textContent, '140%', 'the amount stays');
+  assert.equal(
+    $('bloom-intensity-value').textContent,
+    '140%',
+    'the amount stays',
+  );
 });
 
 test('a publish never rewrites a slider the user is dragging', async (t) => {
@@ -333,7 +337,10 @@ test('the 3D aircraft group renders what AircraftDisplay shows', async (t) => {
   assert.equal(coreClasses(button), 'pp-toggle-btn active');
   assert.equal(button.getAttribute('aria-pressed'), 'true');
   assert.equal(row.classList.contains('visible'), true);
-  assert.equal($('models3d-mode-proximity').getAttribute('aria-checked'), 'true');
+  assert.equal(
+    $('models3d-mode-proximity').getAttribute('aria-checked'),
+    'true',
+  );
 
   // The button leaves the row to its own sync.
   owner._setModels3dEnabled(false);
@@ -349,7 +356,10 @@ test('the 3D aircraft group renders what AircraftDisplay shows', async (t) => {
   await nextTick();
   assert.equal(all.classList.contains('active'), true);
   assert.equal(all.getAttribute('aria-checked'), 'true');
-  assert.equal($('models3d-mode-proximity').classList.contains('active'), false);
+  assert.equal(
+    $('models3d-mode-proximity').classList.contains('active'),
+    false,
+  );
   assert.deepEqual(params.at(-1), ['military', { models3dMode: 'all' }]);
 
   owner._syncModels3dFromLayerState({
@@ -378,12 +388,18 @@ test('the Draw controls render what the draw tool publishes', async (t) => {
   assert.equal(segment('area').getAttribute('aria-label'), 'Area');
   assert.equal(segment('area').title, 'Area');
   assert.equal(segment('area').textContent, 'pentagon');
-  const swatch = (color) => document.querySelector(`#draw-colors [data-color="${color}"]`);
+  const swatch = (color) =>
+    document.querySelector(`#draw-colors [data-color="${color}"]`);
   assert.equal(swatch('primary').getAttribute('aria-checked'), 'true');
   assert.equal(swatch('amber').getAttribute('aria-label'), 'Amber');
   assert.equal($('draw-hint').textContent, '');
 
-  store.publishDraw({ active: true, shape: 'line', color: 'amber', hint: 'Click to add points.' });
+  store.publishDraw({
+    active: true,
+    shape: 'line',
+    color: 'amber',
+    hint: 'Click to add points.',
+  });
   await nextTick();
   assert.equal(swatch('amber').getAttribute('aria-checked'), 'true');
   assert.equal(swatch('primary').classList.contains('active'), false);
@@ -479,7 +495,10 @@ test('the imported files render what the file import publishes and keep focus', 
   assert.equal(document.activeElement === button(first, 'toggle'), true);
   assert.equal(button(first, 'toggle').getAttribute('aria-pressed'), 'true');
   assert.equal(button(first, 'fly').title, 'Fly to <b>a</b>.geojson');
-  assert.equal(button(first, 'remove').getAttribute('aria-label'), 'Remove <b>a</b>.geojson');
+  assert.equal(
+    button(first, 'remove').getAttribute('aria-label'),
+    'Remove <b>a</b>.geojson',
+  );
 
   await press(button(first, 'remove'));
   assert.equal(rowsNow().length, 1);
@@ -595,7 +614,11 @@ test('VisualSettings publishes a styleâ€™s parameters and writes a moved sliderâ
   assert.equal(store.parameters, null, 'the sliders go with their owner');
   assert.equal($('param-slider-panel').classList.contains('active'), false);
   assert.equal(store.act('setStyleParameter', 'grainAmt', 0.2), undefined);
-  assert.equal(owner.stages.noir.uniforms.grainAmt, 0.3, 'a stopped owner no longer answers');
+  assert.equal(
+    owner.stages.noir.uniforms.grainAmt,
+    0.3,
+    'a stopped owner no longer answers',
+  );
   // An older owner's stop leaves a newer owner's rows.
   const newer = { style: 'noir', rows: [] };
   owner._parameters = { style: 'noir', rows: [] };
@@ -607,10 +630,16 @@ test('VisualSettings publishes a styleâ€™s parameters and writes a moved sliderâ
 test('the four Cockpit groups teleport to the published slots and back to their places', async (t) => {
   const { store, $ } = fixture(t);
   const groupOf = (id) => $(id).closest('.pp-toggle-group') ?? $(id);
-  const ids = ['hud-toggle', 'detection-toggle', 'param-slider-panel', 'models3d-toggle'];
+  const ids = [
+    'hud-toggle',
+    'detection-toggle',
+    'param-slider-panel',
+    'models3d-toggle',
+  ];
   const body = $('pp-toggles').querySelector('.pp-panel-body');
   const order = () =>
-    [...body.children].filter((el) => el.matches('.pp-toggle-group, #param-slider-panel'))
+    [...body.children]
+      .filter((el) => el.matches('.pp-toggle-group, #param-slider-panel'))
       .map((el) => el.id || el.querySelector('[id]')?.id);
   const home = order();
   const popover = document.body.appendChild(document.createElement('div'));
@@ -708,4 +737,33 @@ test('the real portal lays out once the groups have moved and puts back the focu
   portal.setActive(false);
   await nextTick();
   assert.deepEqual(layouts, [true]);
+});
+
+test('Detail shows the tile mode VisualSettings applies, and only with Google 3D', async (t) => {
+  const { store, $ } = fixture(t);
+  const { owner } = settings(store);
+  const picks = [];
+  store.connect({ setTileDetail: (mode) => picks.push(mode) });
+  const pressed = () =>
+    ['tile-detail-standard', 'tile-detail-fast-centre'].map((id) =>
+      $(id).getAttribute('aria-checked'),
+    );
+
+  // The keyless globe has no 3D tileset: the control stays at Standard, off.
+  owner.mapStackController = { googleTileset: null };
+  owner._setTileDetailMode('fast-centre', { persist: false });
+  await nextTick();
+  assert.deepEqual(pressed(), ['true', 'false']);
+  assert.equal($('tile-detail-fast-centre').disabled, true);
+
+  const tileset = { skipLevelOfDetail: false };
+  owner.mapStackController = { googleTileset: tileset };
+  owner._setTileDetailMode('fast-centre', { persist: false });
+  await nextTick();
+  assert.deepEqual(pressed(), ['false', 'true']);
+  assert.equal($('tile-detail-fast-centre').disabled, false);
+  assert.equal(tileset.skipLevelOfDetail, true);
+
+  $('tile-detail-standard').click();
+  assert.deepEqual(picks, ['standard']);
 });

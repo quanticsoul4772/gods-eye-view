@@ -36,6 +36,11 @@ const celestialTitle = computed(() =>
     ? t('Celestial ring — available in Normal style')
     : t('Celestial ring — reveal the full globe'),
 );
+const tileDetail = computed(() => view.value?.tileDetail ?? null);
+const tileDetailOptions = computed(() => [
+  { value: 'standard', label: t('Standard'), attrs: { id: 'tile-detail-standard', 'data-tile-detail': 'standard' } },
+  { value: 'fast-centre', label: t('Fast centre'), attrs: { id: 'tile-detail-fast-centre', 'data-tile-detail': 'fast-centre' } },
+]);
 const models3dOn = computed(() => models3d.value?.pressed ?? true);
 const modelsMode = computed(() => models3d.value?.mode ?? 'proximity');
 const modelsOptions = computed(() => [
@@ -159,6 +164,12 @@ const allocationOptions = computed(() => [
     </div>
   </div>
   </Teleport>
+  <div class="pp-toggle-group">
+    <div class="pp-slider-row pp-slider-row--standalone visible" id="tile-detail-row" :title="t('How Google 3D tiles load. Fast centre sharpens the middle of the view first; it may briefly show coarse patches while moving.')">
+      <span class="pp-slider-mini-label">{{ t('Detail') }}</span>
+      <UiSegmented class="pp-mode-seg" item-class="pp-mode-btn" keyboard="none" :label="t('3D tile detail')" :options="tileDetailOptions" :model-value="tileDetail?.mode ?? 'standard'" :disabled="!tileDetail?.available" @update:model-value="act('setTileDetail', $event)" />
+    </div>
+  </div>
   <div class="pp-toggle-group">
     <label class="pp-toggle-btn pp-scope-toggle" :title="t('Scope — the circular viewport mask')">
       <span class="pp-icon material-symbols-outlined" aria-hidden="true">adjust</span>

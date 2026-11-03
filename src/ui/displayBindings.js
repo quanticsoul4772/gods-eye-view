@@ -168,6 +168,7 @@ export class DisplayBindings {
         this._syncModels3dModeRow();
       },
       setModelsMode: (mode) => this._setModels3dMode(mode),
+      setTileDetail: (mode) => this._setTileDetailMode(mode),
     });
     this._detachDisplayControls = () => store.detach(token);
   }
