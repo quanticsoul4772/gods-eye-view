@@ -244,7 +244,7 @@ const LIVE_PACKS = [
     name: 'a22',
     enabled: () => envEnabled('CCTV_A22_ENABLED'),
     label: 'Autostrada del Brennero (A22)',
-    area: { south: 44.6, west: 10.85, north: 47.0, east: 11.55 },
+    area: { south: 44.6, west: 10.75, north: 47.0, east: 11.55 },
     offHint: 'CCTV_A22_ENABLED is set to 0; remove it to turn the pack on',
     load: loadA22SourcesFromOpenDataHub,
   },
