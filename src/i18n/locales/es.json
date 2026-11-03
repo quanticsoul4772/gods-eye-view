@@ -3094,5 +3094,8 @@
   "KNMI Dutch radar composite: rain rate every 5 minutes": "Compuesto de radar neerlandés del KNMI: intensidad de lluvia cada 5 minutos",
   "View Finland": "Ver Finlandia",
   "View Netherlands": "Ver Países Bajos",
-  "{value} mm/h rain rate": "{value} mm/h de intensidad de lluvia"
+  "{value} mm/h rain rate": "{value} mm/h de intensidad de lluvia",
+  "Observed data": "Datos observados",
+  "Derived from data": "Derivado de datos",
+  "Artistic rendering": "Representación artística"
 }

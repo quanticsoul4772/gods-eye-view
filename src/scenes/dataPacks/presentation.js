@@ -2,6 +2,13 @@ import * as Cesium from 'cesium';
 import { renderPackGeometry } from './geometry.js';
 import { t } from '../../i18n/index.js';
 
+/** The card label for a pack's declared provenance. */
+export function provenanceLabel(provenance) {
+  if (provenance === 'observed') return t('Observed data');
+  if (provenance === 'derived') return t('Derived from data');
+  return t('Artistic rendering');
+}
+
 function caption(viewer, pack) {
   const card = document.createElement('section');
   card.dataset.directorPack = pack.id;
@@ -14,6 +21,13 @@ function caption(viewer, pack) {
     maxWidth: '260px',
     font: '12px sans-serif',
   });
+  if (pack.provenance) {
+    const kind = document.createElement('div');
+    kind.dataset.provenance = pack.provenance;
+    kind.textContent = provenanceLabel(pack.provenance);
+    kind.style.fontWeight = 'bold';
+    card.append(kind);
+  }
   const title = document.createElement('div');
   title.textContent = `${pack.id} · ${pack.attribution.text} · ${pack.attribution.license}`;
   card.append(title);

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createPackPresentations } from './presentation.js';
+import { createPackPresentations, provenanceLabel } from './presentation.js';
+import { renderPackGeometry } from './geometry.js';
 
 test('abort releases an in-flight image URL before the decoder settles or the viewer is destroyed', async () => {
   let settle;
@@ -147,4 +148,50 @@ test('a photo card releases its URL when cancelled mid-decode', async () => {
     globalThis.Image = priorImage;
     URL.revokeObjectURL = priorRevoke;
   }
+});
+
+test('a pack card names its declared provenance', () => {
+  assert.equal(provenanceLabel('observed'), 'Observed data');
+  assert.equal(provenanceLabel('derived'), 'Derived from data');
+  assert.equal(provenanceLabel('artistic'), 'Artistic rendering');
+});
+
+test('pack polygons are drawn in the pack colour, cyan when none is named', () => {
+  // Line materials need a canvas, which node lacks; polygons carry their
+  // colour as a per-instance attribute.
+  const asset = {
+    bytes: new TextEncoder().encode(
+      JSON.stringify({
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            id: 'area',
+            geometry: {
+              type: 'Polygon',
+              coordinates: [
+                [
+                  [-80.2, 26.7, 14000],
+                  [-80.1, 26.7, 14000],
+                  [-80.1, 26.8, 14000],
+                  [-80.2, 26.7, 14000],
+                ],
+              ],
+            },
+          },
+        ],
+      }),
+    ),
+    mimeType: 'application/geo+json',
+  };
+  const colour = (pack) => {
+    const primitives = [];
+    renderPackGeometry(
+      { asset, pack },
+      { add() {}, primitive: (p) => primitives.push(p), feature() {} },
+    );
+    return [...primitives[0].geometryInstances[0].attributes.color.value];
+  };
+  assert.deepEqual(colour({ id: 'p', color: 'orange' }), [255, 140, 0, 89]);
+  assert.deepEqual(colour({ id: 'p' }), [0, 255, 255, 89]);
 });

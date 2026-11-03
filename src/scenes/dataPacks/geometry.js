@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { decodePackGeoJSON } from '../../director/packs/geojson.js';
+import { PACK_COLORS } from '../../director/packs/manifest.js';
 const xyz = (p) => Cesium.Cartesian3.fromDegrees(...p);
 
 /** Render a bounded geometry pack in owned batches; no asynchronous entity geometry or update loop. */
@@ -7,6 +8,9 @@ export function renderPackGeometry({ asset, pack }, handle) {
   if (!['application/json', 'application/geo+json'].includes(asset.mimeType))
     throw new Error('Expected GeoJSON');
   const features = decodePackGeoJSON(asset.bytes);
+  const color = Cesium.Color.fromCssColorString(
+    PACK_COLORS[pack.color ?? 'cyan'],
+  );
   const polygons = [];
   let lines;
   for (const feature of features) {
@@ -17,7 +21,7 @@ export function renderPackGeometry({ asset, pack }, handle) {
         position: xyz(feature.coordinates),
         point: {
           pixelSize: 12,
-          color: Cesium.Color.CYAN,
+          color,
           outlineColor: Cesium.Color.BLACK,
           outlineWidth: 2,
         },
@@ -34,7 +38,7 @@ export function renderPackGeometry({ asset, pack }, handle) {
         positions: feature.coordinates.map(xyz),
         width: 4,
         material: Cesium.Material.fromType('Color', {
-          color: Cesium.Color.CYAN,
+          color,
         }),
       });
     } else {
@@ -55,7 +59,7 @@ export function renderPackGeometry({ asset, pack }, handle) {
           }),
           attributes: {
             color: Cesium.ColorGeometryInstanceAttribute.fromColor(
-              Cesium.Color.CYAN.withAlpha(0.35),
+              color.withAlpha(0.35),
             ),
           },
         }),

@@ -3169,5 +3169,8 @@
   "KNMI Dutch radar composite: rain rate every 5 minutes": "Нидерландский радарный композит KNMI: интенсивность осадков каждые 5 минут",
   "View Finland": "Показать Финляндию",
   "View Netherlands": "Показать Нидерланды",
-  "{value} mm/h rain rate": "{value} мм/ч — интенсивность осадков"
+  "{value} mm/h rain rate": "{value} мм/ч — интенсивность осадков",
+  "Observed data": "Наблюдаемые данные",
+  "Derived from data": "Получено из данных",
+  "Artistic rendering": "Художественное изображение"
 }

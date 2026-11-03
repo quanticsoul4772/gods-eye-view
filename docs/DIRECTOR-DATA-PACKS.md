@@ -79,6 +79,14 @@ an asset never changes its license. Built-in scenes that ship third-party
 assets list them with their licenses in their asset folder's README, e.g.
 [`public/scene-assets/melissa-2025/`](../public/scene-assets/melissa-2025/README.md).
 
+Optional `provenance` says what a pack shows: `observed` (measured values),
+`derived` (values computed from measurements) or `artistic` (a rendering made
+for the picture). The pack's card shows it as its first line, so a viewer can
+tell data from art. A GeoJSON pack may also name a `color` from a fixed set:
+`cyan` (the default), `white`, `yellow`, `orange`, `red`, `magenta`, `green` or
+`sky`. The whole pack is drawn in that colour; per-feature styles still do not
+exist, so split differently coloured features into separate packs.
+
 Optional `byteLength` specifies the exact expected byte count; optional `sha256`
 is a lowercase hexadecimal SHA-256 digest checked before rendering. There are at
 most 8 packs per scene, 8 MiB per asset, and 32 MiB of selected assets per shot.
