@@ -46,6 +46,7 @@ function mount(t) {
   const hud = new IntelHUD(
     {
       camera: {
+        heading: 0,
         pitch: -Math.PI / 2,
         positionCartographic: { latitude: 0.7, longitude: -1.2, height: 500 },
         computeViewRectangle: () => undefined,
@@ -123,7 +124,7 @@ test('the first view renders the corners, edges and bottom bar', async (t) => {
     [...root.querySelectorAll('.hud-right-edge .hud-readout')].map(
       (line) => line.textContent,
     ),
-    ['BAND: PAN', 'BITS: 11', 'LVL: 1A'],
+    ['BAND: PAN'],
   );
 });
 

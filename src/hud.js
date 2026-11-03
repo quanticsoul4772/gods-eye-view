@@ -7,11 +7,11 @@ import { applicationServices } from './services/application.js';
  * MGRS/lat-lon coordinates (the point at the centre of the view), altitude
  * and off-nadir angle come from the live camera, GSD is the ground one
  * rendered pixel covers at the view centre (NIIRS a GIQE estimate from it),
- * sun elevation comes from Cesium's solar model at that point, and the clocks
- * show the current UTC time. The classification banner, mission and orbit
- * identifiers, the BITS/LVL strip and the REC blink are styling; BAND names
- * the band the render style simulates. None of them comes from imagery
- * metadata, and COLL is the current time, not a capture time. Readouts update
+ * sun elevation comes from Cesium's solar model at that point, HDG and RNG
+ * are the camera heading and the slant range to that point, and the clock
+ * shows the current UTC time. The classification banner, mission and sensor
+ * identifiers and the REC blink are styling; BAND names the band the render
+ * style simulates. None of them comes from imagery metadata. Readouts update
  * on independent fixed cadences.
  *
  * The HUD auto-activates when a military-style shader (NVG, FLIR, CRT) is
@@ -49,6 +49,7 @@ import { isEmbeddedInline } from './app/embed.js';
 import {
   aisIdleText,
   bandForStyle,
+  formatRange,
   gsdFromRangeM,
   headingDeg,
   niirsFromGsd,
@@ -186,12 +187,12 @@ function hudSpan(meters) {
 /**
  * Full-screen intelligence HUD overlay rendered on top of the Cesium canvas.
  *
- * Displays MGRS/lat-lon, GSD/NIIRS, altitude, sun elevation and off-nadir
- * readouts measured at the centre of the view, UTC clocks, the selected vessel
- * and a semantic summary line built from the view and its data feeds,
- * alongside styling that is not sensor metadata: the classification banner,
- * generated mission, sensor and orbit identifiers, the BITS/LVL strip and the
- * REC blink. Readouts update on independent fixed cadences.
+ * Displays MGRS/lat-lon, GSD/NIIRS, altitude, sun elevation, off-nadir,
+ * heading and range readouts measured at the centre of the view, a UTC clock,
+ * the selected vessel and a semantic summary line built from the view and its
+ * data feeds, alongside styling that is not sensor metadata: the
+ * classification banner, generated mission and sensor identifiers and the REC
+ * blink. Readouts update on independent fixed cadences.
  */
 
 export class IntelHUD {
@@ -305,8 +306,6 @@ export class IntelHUD {
     // Session-consistent pseudorandom identifiers (generated once at construction)
     this._missionId = `KH11-${4000 + Math.floor(Math.random() * 200)}`;
     this._sensorId = `OPS-${4100 + Math.floor(Math.random() * 100)}`;
-    this._orbitNum = 47000 + Math.floor(Math.random() * 1000);
-    this._passNum = 100 + Math.floor(Math.random() * 200);
     this._scratchCenter = new Cesium.Cartesian2();
     this._scratchRay = new Cesium.Ray();
     this._scratchTarget = new Cesium.Cartesian3();
@@ -365,15 +364,14 @@ export class IntelHUD {
       recShown: null,
       recording: false,
       timestamp: '2026-01-01 00:00:00Z',
-      orbital: `ORB: ${this._orbitNum}  PASS: DESC-${this._passNum}`,
+      orient: 'HDG ---°  RNG --',
       mgrs: 'MGRS: ---',
       latlon: `--°--'--"N ---°--'--"W`,
       gsd: 'GSD: --m  NIIRS: --',
       alt: 'ALT: --m   SUN: --° EL',
       vessel: { active: false, text: t('AIS: --') },
-      coll: 'COLL: --:--:--Z',
       ona: 'ONA: --°',
-      sensor: ['BAND: PAN', 'BITS: 11', 'LVL: 1A'],
+      sensor: ['BAND: PAN'],
       bottom: 'LAT: --  LON: --  MGRS: ---',
     };
     this._present({});
@@ -547,13 +545,10 @@ export class IntelHUD {
     // i18n-ignore: sensor codes
     readouts.alt = `ALT: ${Math.round(altMslM)}m   SUN: ${sunEl.toFixed(1)}° EL`;
 
-    // Collection timestamp
-    const now = new Date();
-    const h = String(now.getUTCHours()).padStart(2, '0');
-    const m = String(now.getUTCMinutes()).padStart(2, '0');
-    const s = String(now.getUTCSeconds()).padStart(2, '0');
+    // Heading and slant range to the view centre.
+    const hdg = String(headingDeg(camera.heading)).padStart(3, '0');
     // i18n-ignore: sensor codes
-    readouts.coll = `COLL: ${h}:${m}:${s}Z`;
+    readouts.orient = `HDG ${hdg}°  RNG ${formatRange(rangeM)}`;
 
     // AIS: a selected vessel owns this line (presentSelectedVessel); with none
     // selected, say what is there instead of "--".
@@ -1065,7 +1060,7 @@ export class IntelHUD {
         ? t(MODE_LABELS[styleName])
         : styleName.toUpperCase(),
       // i18n-ignore: sensor codes
-      sensor: [`BAND: ${bandForStyle(styleName)}`, 'BITS: 11', 'LVL: 1A'],
+      sensor: [`BAND: ${bandForStyle(styleName)}`],
       colors: {
         '--hud-color': colors.main,
         '--hud-glow': colors.glow,

@@ -3,7 +3,7 @@
  * Scope and HUD browser acceptance. Requires the development server.
  * Run: node scripts/qa-scope-hud.mjs
  * Optional: QA_BASE_URL, QA_SCREENSHOT_DIR (screenshots stay outside the repo).
- * Proves a fresh boot defaults to Scope ON at 100%, native checkbox click/Space,
+ * Proves a fresh boot defaults to Scope OFF at 100%, native checkbox click/Space,
  * feather 0/11/100/200, layout independence,
  * share/scene restore, and visible text backing including rotated metadata.
  */
@@ -74,7 +74,7 @@ const readHudGlyphs = () =>
       '.hud-summary',
       '.hud-orbital',
       '#hud-mgrs',
-      '#hud-coll',
+      '#hud-ona',
     ].map((selector) => {
       const el = hud.querySelector(selector);
       const style = getComputedStyle(el);
@@ -236,14 +236,14 @@ try {
   await openApplication(url);
   const fresh = await readScope();
   check(
-    'bare-URL fresh boot opens Scope ON with 100% feather',
-    fresh.enabled &&
-      fresh.checked &&
-      !fresh.disabled &&
+    'bare-URL fresh boot opens Scope OFF with 100% feather',
+    !fresh.enabled &&
+      !fresh.checked &&
+      fresh.disabled &&
       fresh.feather === 1 &&
       fresh.value === 100 &&
       fresh.readout === '100%' &&
-      fresh.cornerAlpha > 0,
+      fresh.cornerAlpha === 0,
     fresh,
   );
 
@@ -450,7 +450,7 @@ try {
         ).opacity === 0.55 &&
         originalGlyphs.glyphs.find((glyph) => glyph.selector === '.hud-orbital')
           .opacity === 0.7 &&
-        originalGlyphs.glyphs.find((glyph) => glyph.selector === '#hud-coll')
+        originalGlyphs.glyphs.find((glyph) => glyph.selector === '#hud-ona')
           .opacity === 0.5,
       originalGlyphs,
     );

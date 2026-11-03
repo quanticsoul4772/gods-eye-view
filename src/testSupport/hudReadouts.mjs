@@ -8,7 +8,7 @@ const FIELDS = Object.freeze({
   'hud-latlon': 'latlon',
   'hud-bottom-line': 'bottom',
   'hud-gsd': 'gsd',
-  'hud-coll': 'coll',
+  'hud-orient': 'orient',
   'hud-ona': 'ona',
   'hud-mode': 'mode',
   'hud-timestamp': 'timestamp',

@@ -56,7 +56,7 @@ test('ordinary values keep their existing format', () => {
   assert.equal(toDMS(90, 'lat'), `90°00'00.00"N`);
 });
 
-test('the telemetry tick paints the carried value into both readouts', () => {
+test('the telemetry tick paints the carried value into both readouts, with heading and range', () => {
   const { elements, publish } = hudReadouts();
   const previousDocument = globalThis.document;
   globalThis.document = {
@@ -67,6 +67,7 @@ test('the telemetry tick paints the carried value into both readouts', () => {
   };
   const viewer = {
     camera: {
+      heading: 0,
       pitch: -Math.PI / 2,
       positionCartographic: {
         latitude: (37.75 * Math.PI) / 180,
@@ -87,6 +88,11 @@ test('the telemetry tick paints the carried value into both readouts', () => {
     assert.equal(latlon, `37°45'00.00"N 122°21'00.00"W`);
     assert.match(bottom, /LON: 122°21'00\.00"W/);
     assert.doesNotMatch(`${latlon} ${bottom}`, /60\.00"/);
+    // Heading and range: straight down from 1,500 m, the range is the height.
+    assert.equal(elements.get('hud-orient').textContent, 'HDG 000°  RNG 1.5km');
+    viewer.camera.heading = -Math.PI / 2;
+    hud._updateCameraData();
+    assert.equal(elements.get('hud-orient').textContent, 'HDG 270°  RNG 1.5km');
   } finally {
     hud?.destroy();
     if (previousDocument === undefined) delete globalThis.document;
