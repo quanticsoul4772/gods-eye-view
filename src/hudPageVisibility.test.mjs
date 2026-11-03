@@ -20,7 +20,8 @@ registerHooks({
       return {
         format: 'module',
         shortCircuit: true,
-        source: 'export function forward() { return "10SEG55776339"; }\nexport default { forward };\n',
+        source:
+          'export function forward() { return "10SEG55776339"; }\nexport default { forward };\n',
       };
     }
     return next(url, context);
@@ -42,6 +43,7 @@ function installHiddenPage() {
   };
   const viewer = {
     camera: {
+      heading: 0,
       pitch: -Math.PI / 2,
       positionCartographic: { latitude: 0.7, longitude: -1.2, height: 500 },
       computeViewRectangle: () => undefined,

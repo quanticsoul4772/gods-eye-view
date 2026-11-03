@@ -30,7 +30,7 @@ const view = computed(() => hud.value ?? EMPTY);
     <div class="hud-corner hud-top-right">
       <div class="hud-content" style="text-align: right">
         <div class="hud-readout"><div class="hud-rec"><span id="hud-rec-dot" :style="view.recShown === null ? undefined : { visibility: view.recShown ? 'visible' : 'hidden' }">●</span><span v-if="view.rec" class="hud-rec-label">{{ ` ${view.rec}  ` }}</span><span id="hud-timestamp">{{ view.timestamp }}</span></div></div>
-        <div class="hud-readout"><div class="hud-orbital">{{ view.orbital }}</div></div>
+        <div class="hud-readout"><div class="hud-orbital" id="hud-orient">{{ view.orient }}</div></div>
       </div>
       <div class="hud-bracket">┐</div>
     </div>
@@ -52,7 +52,6 @@ const view = computed(() => hud.value ?? EMPTY);
       <div class="hud-bracket">┘</div>
     </div>
     <div class="hud-edge hud-left-edge">
-      <div class="hud-readout"><div id="hud-coll">{{ view.coll }}</div></div>
       <div class="hud-readout"><div id="hud-ona">{{ view.ona }}</div></div>
     </div>
     <div class="hud-edge hud-right-edge">

@@ -1659,7 +1659,7 @@
     --cyber-left-rail-top: max(220px, calc(var(--cyber-hud-card-top) + 120px));
   }
 
-  /* Keep the rotated COLL / ONA telemetry in the upper clearance lane. Its
+  /* Keep the rotated ONA telemetry in the upper clearance lane. Its
      lower edge follows the panel rail instead of crossing expanded controls. */
   #intel-hud[data-variant='cyber'] .hud-left-edge {
     top: calc(var(--cyber-left-rail-top) - 18px);
@@ -1693,7 +1693,9 @@
   :root[data-ui-theme='cyber']
     body:not(.cockpit-mode)
     #left-panel-stack:has(> [data-panel-id]:not(.collapsed))
-    > :is(#data-panel, #cctv-panel, #utilities-panel, #scene-panel):not(.collapsed) {
+    > :is(#data-panel, #cctv-panel, #utilities-panel, #scene-panel):not(
+      .collapsed
+    ) {
     flex: 1 1 auto;
     height: auto;
     max-height: none;

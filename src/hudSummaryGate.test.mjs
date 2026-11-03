@@ -49,6 +49,7 @@ function installPage() {
   };
   const viewer = {
     camera: {
+      heading: 0,
       pitch: -Math.PI / 2,
       positionCartographic: { latitude: 0.53, longitude: -1.7, height: 600 },
       computeViewRectangle: () => undefined,
