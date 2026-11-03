@@ -31,15 +31,17 @@ const NUMERIC_TYPE_FAMILIES = {
 
 /**
  * Resolve an AIS type to display text: bare numeric ship-type codes map to
- * family names ("71" → "CARGO"); text types pass through unchanged.
+ * family names ("71" → "CARGO"); text types pass through unchanged. Code 0
+ * ("not available") and the reserved codes 100 to 255 name no type and
+ * resolve to "".
  * @param {string} type Raw AIS type.
  * @returns {string}
  */
 export function normalizeVesselType(type) {
   const text = String(type || '').trim();
-  if (!text || !/^\d{1,2}$/.test(text)) return text;
+  if (!text || !/^\d+$/.test(text)) return text;
   const code = Number(text);
-  if (code <= 0) return '';
+  if (code <= 0 || code >= 100) return '';
   if (NUMERIC_TYPE_SPECIALS[code]) return NUMERIC_TYPE_SPECIALS[code];
   return NUMERIC_TYPE_FAMILIES[Math.floor(code / 10)] || 'OTHER';
 }

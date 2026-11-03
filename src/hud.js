@@ -3,33 +3,29 @@ import { applicationServices } from './services/application.js';
  * @module hud
  * @description Intelligence HUD Overlay — NRO/NGA Satellite Aesthetic.
  *
- * Renders authentic reconnaissance metadata over the Cesium canvas:
- * classification banners, live MGRS/lat-lon coordinates, sensor metrics
- * (GSD, NIIRS, ONA), timestamps, and orbital data — all updating in
- * real-time at configurable cadences.
+ * Renders reconnaissance-styled telemetry over the Cesium canvas. The
+ * MGRS/lat-lon coordinates (the point at the centre of the view), altitude
+ * and off-nadir angle come from the live camera, GSD is the ground one
+ * rendered pixel covers at the view centre (NIIRS a GIQE estimate from it),
+ * sun elevation comes from Cesium's solar model at that point, and the clocks
+ * show the current UTC time. The classification banner, mission and orbit
+ * identifiers, the BITS/LVL strip and the REC blink are styling; BAND names
+ * the band the render style simulates. None of them comes from imagery
+ * metadata, and COLL is the current time, not a capture time. Readouts update
+ * on independent fixed cadences.
  *
  * The HUD auto-activates when a military-style shader (NVG, FLIR, CRT) is
- * selected and supports three layout variants: tactical, operator, minimal.
+ * selected and supports the layout variants: tactical, minimal, cyber.
  *
  * Color theming is driven by the active shader mode via CSS custom properties.
  */
 
 import * as Cesium from 'cesium';
+import { greatCircleKm } from './geoDistance.js';
 import { forward as toMGRS } from 'mgrs';
 import { CITY_POIS } from './cityPois.js';
 import { composeLocalityTag } from './hudLocality.js';
 import { hudQuantity, LOCALIZED_LOCALITY } from './hudLocalityFormat.js';
-import {
-  aisIdleText,
-  bandForStyle,
-  formatRange,
-  gsdFromRangeM,
-  headingDeg,
-  niirsFromGsd,
-  offNadirDeg,
-  slantRangeFromAltitudeM,
-  sunElevationDeg,
-} from './hudReadouts.js';
 import {
   ellipsoidalToMslDisplayM,
   ensureGeoidReady,
@@ -47,8 +43,20 @@ import {
   DEFAULT_HUD_LAYOUT,
   normalizeHudLayout,
 } from './hudLayouts.js';
-import { formatNumber, msg, t } from './i18n/index.js';
+import { formatNumber, msg, onLocaleChange, t } from './i18n/index.js';
 import { localizeLayerName } from './ui/layerPanel.js';
+import { isEmbeddedInline } from './app/embed.js';
+import {
+  aisIdleText,
+  bandForStyle,
+  gsdFromRangeM,
+  headingDeg,
+  niirsFromGsd,
+  offNadirDeg,
+  slantRangeFromAltitudeM,
+  subscribeSelectedVessel,
+  sunElevationDeg,
+} from './hudReadouts.js';
 
 /** Color palettes keyed by shader mode; applied as CSS custom properties. */
 const HUD_COLORS = {
@@ -85,7 +93,6 @@ const MODE_LABELS = Object.freeze({
   thermal: msg('FLIR'),
   anime: msg('ANIME'),
   noir: msg('NOIR'),
-  snow: msg('SNOW'),
 });
 
 /** Region ids from _regionLabel() and the name shown for each. */
@@ -169,20 +176,23 @@ const NEARBY_POINTS = Object.values(CITY_POIS).flatMap((city) =>
   })),
 );
 
-/**
- * Full-screen intelligence HUD overlay rendered on top of the Cesium canvas.
- *
- * Displays classification banners, MGRS/lat-lon readouts, sensor metrics
- * (GSD, NIIRS, off-nadir angle), sun elevation, orbital metadata, and a
- * rolling semantic summary line. All values derive from the live camera
- * position and update on independent timer cadences.
- */
 /** A view-window side for the summary line, in the active language's units. */
 function hudSpan(meters) {
   return meters < 1000
     ? hudQuantity(Math.round(meters), 'm')
     : hudQuantity(meters / 1000, 'km', meters < 100_000 ? 1 : 0);
 }
+
+/**
+ * Full-screen intelligence HUD overlay rendered on top of the Cesium canvas.
+ *
+ * Displays MGRS/lat-lon, GSD/NIIRS, altitude, sun elevation and off-nadir
+ * readouts measured at the centre of the view, UTC clocks, the selected vessel
+ * and a semantic summary line built from the view and its data feeds,
+ * alongside styling that is not sensor metadata: the classification banner,
+ * generated mission, sensor and orbit identifiers, the BITS/LVL strip and the
+ * REC blink. Readouts update on independent fixed cadences.
+ */
 
 export class IntelHUD {
   /**
@@ -196,8 +206,10 @@ export class IntelHUD {
       summaryPolicy = {},
       basemapContext = {},
       summaryService = applicationServices.summary,
+      publish = () => {},
     } = {},
   ) {
+    this._publish = publish;
     this.summaryService = summaryService;
     this.summaryPolicy = summaryPolicy;
     this.basemapContext = basemapContext;
@@ -206,7 +218,9 @@ export class IntelHUD {
     this._visible = false;
     this._autoMode = true; // auto show/hide based on style
     this._currentStyle = 'normal';
-    this._el = null;
+    /** The presented HUD; see {@link IntelHUD#_initView}. */
+    this._view = null;
+    this._viewSignature = '';
     this._variant = DEFAULT_HUD_LAYOUT;
     this._recBlinkState = true;
     this._updateInterval = null;
@@ -221,9 +235,13 @@ export class IntelHUD {
     this._dataManagerUnsubscribe = null;
     this._summaryDirty = true;
     this._summaryRequest = null;
+    this._summaryUnconfigured = false;
+    // The last place lookup and the view it answered for (see
+    // getBasemapLabelContext), reused until the view changes enough.
+    this._placeLabels = null;
     this._lastSummarySignature = '';
-    /** @type {{signature: string, text: string}|null} The last AI reply painted. */
-    this._lastSummaryReply = null;
+    /** The reply painted for `_lastSummarySignature`, when it was accepted. */
+    this._lastSummaryText = null;
     this._summaryRevision = 0;
     // One-shot guards so the very first summary lands immediately instead of
     // waiting for the 15s interval tick: B) swap the "Awaiting telemetry..."
@@ -257,6 +275,10 @@ export class IntelHUD {
     this._onCameraMoveStart = () => {
       this._cameraMoving = true;
       this._markSummaryDirty();
+      if (this._summaryRequest || this._summaryTypingInterval) {
+        // Cancelled requests and partially typed replies are not reusable answers.
+        this._lastSummarySignature = null;
+      }
       this._summaryRequest?.abort();
       this._stopSummaryTyping();
       if (this._visible) this._setSummaryText(this._composeSummary(), false);
@@ -280,69 +302,92 @@ export class IntelHUD {
       }
     };
 
-    /** REC blinks only while the app's recording mode is on. */
-    this._recording = false;
+    // Session-consistent pseudorandom identifiers (generated once at construction)
+    this._missionId = `KH11-${4000 + Math.floor(Math.random() * 200)}`;
+    this._sensorId = `OPS-${4100 + Math.floor(Math.random() * 100)}`;
+    this._orbitNum = 47000 + Math.floor(Math.random() * 1000);
+    this._passNum = 100 + Math.floor(Math.random() * 200);
     this._scratchCenter = new Cesium.Cartesian2();
     this._scratchRay = new Cesium.Ray();
     this._scratchTarget = new Cesium.Cartesian3();
 
-    this._buildDOM();
+    this._initView();
+    this._vesselUnsubscribe = subscribeSelectedVessel((readout) =>
+      this._present({
+        vessel: readout
+          ? { active: true, text: readout.text }
+          : { active: false, text: t('AIS: --') },
+      }),
+    );
     this.viewer.camera.moveStart.addEventListener(this._onCameraMoveStart);
     this.viewer.camera.moveEnd.addEventListener(this._onCameraMoveEnd);
+    this._offLocale = onLocaleChange(() => this._relocalize());
     this._startTimers();
   }
 
   /**
-   * Construct the HUD DOM structure inside the existing `#intel-hud` element.
-   * Populates corner brackets, classification banners, sensor readouts,
-   * edge metadata strips, and the bottom summary bar.
+   * Show the HUD's own words in the new locale. The deterministic summary
+   * is composed again; the AI reply does not depend on the locale, so the
+   * next tick shows the one already received rather than asking again.
    */
-  _buildDOM() {
-    this._el = document.getElementById('intel-hud');
-    if (!this._el) return;
+  _relocalize() {
+    this._present({
+      mode: MODE_LABELS[this._currentStyle]
+        ? t(MODE_LABELS[this._currentStyle])
+        : this._currentStyle.toUpperCase(),
+      summaryLabel: t('SUMMARY'),
+      rec: t('REC'),
+      ...(this._view.vessel.active
+        ? {}
+        : { vessel: { active: false, text: t('AIS: --') } }),
+    });
+    if (this._visible && this._latestMetrics) this._updateCameraData();
+    this._setSummaryText(this._composeSummary(), false);
+  }
 
+  /**
+   * Present the HUD's first view: corner brackets, classification banners,
+   * sensor readouts, edge metadata strips and the bottom summary bar, which
+   * the Intel HUD view renders in `#intel-hud`.
+   */
+  _initView() {
     // i18n-ignore: sensor codes and a classification banner; the rest uses t()
-    this._el.innerHTML = `
-      <div class="hud-sonar" aria-hidden="true"></div>
+    this._view = {
+      active: false,
+      variant: this._variant,
+      colors: null,
+      classification: 'TOP SECRET // SI-TK // NOFORN',
+      system: `${this._missionId}  ${this._sensorId}`,
+      mode: t(MODE_LABELS.normal),
+      summaryLabel: t('SUMMARY'),
+      summary: t('Awaiting telemetry...'),
+      rec: t('REC'),
+      recShown: null,
+      timestamp: '2026-01-01 00:00:00Z',
+      orbital: `ORB: ${this._orbitNum}  PASS: DESC-${this._passNum}`,
+      mgrs: 'MGRS: ---',
+      latlon: `--°--'--"N ---°--'--"W`,
+      gsd: 'GSD: --m  NIIRS: --',
+      alt: 'ALT: --m   SUN: --° EL',
+      vessel: { active: false, text: t('AIS: --') },
+      coll: 'COLL: --:--:--Z',
+      ona: 'ONA: --°',
+      sensor: ['BAND: PAN', 'BITS: 11', 'LVL: 1A'],
+      bottom: 'LAT: --  LON: --  MGRS: ---',
+    };
+    this._present({});
+  }
 
-      <div class="hud-corner hud-top-left">
-        <div class="hud-content">
-          <div class="hud-mode" id="hud-mode">${t(MODE_LABELS.normal)}</div>
-          <div class="hud-summary-wrap">
-            <div class="hud-summary-label">${t('SUMMARY')}</div>
-            <div class="hud-summary" id="hud-summary">${t('Awaiting telemetry...')}</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="hud-corner hud-top-right">
-        <div class="hud-content" style="text-align:right">
-          <div class="hud-rec"><span id="hud-rec-dot" style="visibility: hidden">●</span> <span id="hud-rec-label" style="visibility: hidden">${t('REC')}</span>  <span id="hud-timestamp">2026-01-01 00:00:00Z</span></div>
-          <div class="hud-orbital" id="hud-orient">HDG ---°  RNG --</div>
-        </div>
-      </div>
-
-      <div class="hud-corner hud-bottom-left">
-        <div class="hud-content">
-          <div id="hud-mgrs">MGRS: ---</div>
-          <div id="hud-latlon">--°--'--"N ---°--'--"W</div>
-        </div>
-      </div>
-
-      <div class="hud-corner hud-bottom-right">
-        <div class="hud-content" style="text-align:right">
-          <div id="hud-gsd">GSD: --m  NIIRS: --</div>
-          <div id="hud-alt">ALT: --m   SUN: --° EL</div>
-          <div><span id="hud-ona">ONA: --°</span>   <span id="hud-band">BAND: PAN</span></div>
-          <div id="hud-ais-vessel" class="hud-ais-vessel">${t('AIS: --')}</div>
-        </div>
-      </div>
-
-      <div class="hud-bottom-bar">
-        <span id="hud-bottom-line">LAT: --  LON: --  MGRS: ---</span>
-      </div>
-    `;
-    this._el.dataset.variant = this._variant;
+  /**
+   * Merge `patch` into the view and publish it when anything changed.
+   * @param {object} patch
+   */
+  _present(patch) {
+    Object.assign(this._view, patch);
+    const signature = JSON.stringify(this._view);
+    if (signature === this._viewSignature) return;
+    this._viewSignature = signature;
+    this._publish(Object.freeze({ ...this._view }));
   }
 
   /**
@@ -353,21 +398,20 @@ export class IntelHUD {
   _startTimers() {
     // Timestamp — every second
     this._timestampInterval = setInterval(() => {
-      const el = document.getElementById('hud-timestamp');
-      if (el) el.textContent = this._formatUTC();
+      this._present({ timestamp: this._formatUTC() });
     }, 1000);
 
-    // REC blink — every 800ms, and only while recording mode is on
+    // REC blink — every 800ms
     this._recBlinkInterval = setInterval(() => {
-      this._recBlinkState = this._recording && !this._recBlinkState;
-      const dot = document.getElementById('hud-rec-dot');
-      if (dot)
-        dot.style.visibility = this._recBlinkState ? 'visible' : 'hidden';
+      this._recBlinkState = !this._recBlinkState;
+      this._present({ recShown: this._recBlinkState });
     }, 800);
 
-    // Camera-derived data — 4 updates/second (250ms)
+    // Camera-derived data — 4 updates/second (250ms). Skipped in a hidden
+    // page, except an inline panel, whose host may report it hidden while it
+    // is on screen (see keepPanelRendering in app/embed.js).
     this._updateInterval = setInterval(() => {
-      if (!this._visible) return;
+      if (!this._visible || (document.hidden && !isEmbeddedInline())) return;
       this._updateCameraData();
     }, 250);
 
@@ -460,23 +504,16 @@ export class IntelHUD {
       // Format: 18SUJ23370716 → 18S UJ 2337 0716
       const formatted = this._formatMGRS(mgrsStr);
       mgrsLabel = formatted;
-      const el = document.getElementById('hud-mgrs');
-      // i18n-ignore: sensor codes
-      if (el) el.textContent = `MGRS: ${formatted}`;
     } catch {
-      const el = document.getElementById('hud-mgrs');
-      // i18n-ignore: sensor codes
-      if (el) el.textContent = 'MGRS: ---';
+      /* the readout keeps its dashes */
     }
+    // i18n-ignore: sensor codes
+    const readouts = { mgrs: `MGRS: ${mgrsLabel}` };
 
     // Lat/Lon DMS
-    const llEl = document.getElementById('hud-latlon');
-    if (llEl) llEl.textContent = `${latDMS} ${lonDMS}`;
-    const bottomEl = document.getElementById('hud-bottom-line');
-    if (bottomEl) {
-      // i18n-ignore: sensor codes
-      bottomEl.textContent = `MGRS: ${mgrsLabel}  LAT: ${latDMS}  LON: ${lonDMS}`;
-    }
+    readouts.latlon = `${latDMS} ${lonDMS}`;
+    // i18n-ignore: sensor codes
+    readouts.bottom = `MGRS: ${mgrsLabel}  LAT: ${latDMS}  LON: ${lonDMS}`;
 
     // GSD (Ground Sample Distance): the ground one rendered pixel covers at
     // the view centre, from the slant range, the field of view and the
@@ -487,57 +524,53 @@ export class IntelHUD {
       : slantRangeFromAltitudeM(altM, ona);
     const gsd = gsdFromRangeM(
       rangeM,
-      camera.frustum.fovy,
-      this.viewer.scene.drawingBufferHeight,
+      camera.frustum?.fovy,
+      this.viewer.scene?.drawingBufferHeight,
     );
-    const gsdEl = document.getElementById('hud-gsd');
-    if (gsdEl)
-      gsdEl.textContent =
-        // i18n-ignore: sensor codes
-        gsd === null
-          ? 'GSD: --m  NIIRS: --'
-          : `GSD: ${gsd.toFixed(2)}m  NIIRS: ${niirsFromGsd(gsd).toFixed(1)}`;
+    readouts.gsd =
+      // i18n-ignore: sensor codes
+      gsd === null
+        ? 'GSD: --m  NIIRS: --'
+        : `GSD: ${gsd.toFixed(2)}m  NIIRS: ${niirsFromGsd(gsd).toFixed(1)}`;
 
     // Altitude — reported as height above MEAN SEA LEVEL. `altM` is the raw
     // ellipsoidal camera height, which reads far below zero wherever the geoid
     // sits under the ellipsoid: a cockpit parked on the SFO deck (N ≈ -32 m)
     // showed "ALT: -15m", and JFK "ALT: -18m". Subtracting N restores the
     // number a viewer expects without touching the camera or any render path.
-    const altEl = document.getElementById('hud-alt');
     const geoidN = this._geoidUndulationM(latDeg, lonDeg);
     const altMslM = ellipsoidalToMslDisplayM(altM, geoidN);
-    const sunEl = sunElevationDeg(target ?? camera.positionWC);
-    if (altEl)
-      // i18n-ignore: sensor codes
-      altEl.textContent = `ALT: ${Math.round(altMslM)}m   SUN: ${sunEl.toFixed(1)}° EL`;
+    const sunEl = sunElevationDeg(
+      target ?? Cesium.Cartographic.toCartesian(cartographic),
+    );
+    // i18n-ignore: sensor codes
+    readouts.alt = `ALT: ${Math.round(altMslM)}m   SUN: ${sunEl.toFixed(1)}° EL`;
 
-    // Heading and slant range to the view centre.
-    const orientEl = document.getElementById('hud-orient');
-    if (orientEl)
-      // i18n-ignore: sensor codes
-      orientEl.textContent = `HDG ${String(headingDeg(camera.heading)).padStart(3, '0')}°  RNG ${formatRange(rangeM)}`;
+    // Collection timestamp
+    const now = new Date();
+    const h = String(now.getUTCHours()).padStart(2, '0');
+    const m = String(now.getUTCMinutes()).padStart(2, '0');
+    const s = String(now.getUTCSeconds()).padStart(2, '0');
+    // i18n-ignore: sensor codes
+    readouts.coll = `COLL: ${h}:${m}:${s}Z`;
 
-    // AIS: a selected vessel's card owns this line (layers/vessels/cards.js);
-    // with none selected, say what is there instead of "--".
-    const aisEl = document.getElementById('hud-ais-vessel');
-    if (
-      aisEl &&
-      (aisEl.textContent === t('AIS: --') ||
-        aisEl.textContent === this._aisIdleShown)
-    ) {
+    // AIS: a selected vessel owns this line (presentSelectedVessel); with none
+    // selected, say what is there instead of "--".
+    if (!this._view.vessel.active) {
       const vessels = this._dataManager?.layers?.get?.('ais-live-vessels');
-      const text = aisIdleText({
-        enabled: Boolean(this._dataManager?.isEnabled?.('ais-live-vessels')),
-        count: Number(vessels?.module?.getStats?.()?.count) || 0,
-      });
-      aisEl.textContent = text;
-      this._aisIdleShown = text;
+      readouts.vessel = {
+        active: false,
+        text: aisIdleText({
+          enabled: Boolean(this._dataManager?.isEnabled?.('ais-live-vessels')),
+          count: Number(vessels?.module?.getStats?.()?.count) || 0,
+        }),
+      };
     }
 
     // Off-nadir angle (ONA): 0 at nadir, rising toward the horizon.
-    const onaEl = document.getElementById('hud-ona');
     // i18n-ignore: sensor codes
-    if (onaEl) onaEl.textContent = `ONA: ${ona.toFixed(1)}°`;
+    readouts.ona = `ONA: ${ona.toFixed(1)}°`;
+    this._present(readouts);
 
     // `altM` stays the raw ellipsoidal camera height the sensor model reads
     // (GSD/NIIRS, view band). `altMslM` is the ADDITIVE display datum — the
@@ -553,7 +586,6 @@ export class IntelHUD {
       ona,
       rangeM,
       gsd,
-      headingDeg: headingDeg(camera.heading),
       // The ground the view spans at the view centre's scale: GSD times the
       // drawing buffer. Exact looking straight down; tilted, it is the span
       // at the centre, not a lat/lon box that reaches the horizon.
@@ -561,8 +593,8 @@ export class IntelHUD {
         gsd === null
           ? null
           : {
-              width: gsd * this.viewer.scene.drawingBufferWidth,
-              height: gsd * this.viewer.scene.drawingBufferHeight,
+              width: gsd * this.viewer.scene?.drawingBufferWidth,
+              height: gsd * this.viewer.scene?.drawingBufferHeight,
             },
     };
 
@@ -619,11 +651,12 @@ export class IntelHUD {
    * @returns {string} Formatted DMS string, e.g. `"38°53'23.10"N"`.
    */
   _toDMS(decimal, type) {
-    const abs = Math.abs(decimal);
-    const deg = Math.floor(abs);
-    const minFloat = (abs - deg) * 60;
-    const min = Math.floor(minFloat);
-    const sec = ((minFloat - min) * 60).toFixed(2);
+    // Round once, in hundredths of a second, so a value that rounds up to
+    // 60.00" carries into the minutes and degrees instead of printing 60.
+    const hundredths = Math.round(Math.abs(decimal) * 360000);
+    const deg = Math.floor(hundredths / 360000);
+    const min = Math.floor(hundredths / 6000) % 60;
+    const sec = ((hundredths % 6000) / 100).toFixed(2);
 
     let dir;
     if (type === 'lat') dir = decimal >= 0 ? 'N' : 'S';
@@ -679,13 +712,7 @@ export class IntelHUD {
    * @returns {number} Distance in kilometers.
    */
   _haversineKm(lat1, lon1, lat2, lon2) {
-    const toRad = (deg) => Cesium.Math.toRadians(deg);
-    const dLat = toRad(lat2 - lat1);
-    const dLon = toRad(lon2 - lon1);
-    const a =
-      Math.sin(dLat / 2) ** 2 +
-      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-    return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return greatCircleKm({ lat: lat1, lon: lon1 }, { lat: lat2, lon: lon2 });
   }
 
   /**
@@ -716,8 +743,7 @@ export class IntelHUD {
     const m = this._latestMetrics;
     if (!m) return t('Awaiting telemetry...');
 
-    const modeEl = document.getElementById('hud-mode');
-    const modeLabel = modeEl?.textContent || t(MODE_LABELS.normal);
+    const modeLabel = this._view.mode || t(MODE_LABELS.normal);
     const region = this._regionLabel(m.latDeg, m.lonDeg);
     const nearest = this._nearestKnownPoint(m.latDeg, m.lonDeg);
     const band = this._viewBand(m.altM);
@@ -778,20 +804,18 @@ export class IntelHUD {
    * @param {string} text - Full summary string to type out.
    */
   _typeSummary(text) {
-    const el = document.getElementById('hud-summary');
-    if (!el) return;
     clearInterval(this._summaryTypingInterval);
     let index = 0;
-    el.textContent = '';
+    this._present({ summary: '' });
     this._summaryTypingInterval = setInterval(() => {
       index += 2;
       if (index >= text.length) {
-        el.textContent = text;
+        this._present({ summary: text });
         clearInterval(this._summaryTypingInterval);
         this._summaryTypingInterval = null;
         return;
       }
-      el.textContent = text.slice(0, index);
+      this._present({ summary: text.slice(0, index) });
     }, 24);
   }
 
@@ -810,6 +834,15 @@ export class IntelHUD {
     if (this.summaryPolicy.canRequest?.() === false) return;
 
     const revision = this._summaryRevision;
+    // The place lookups below are paid Google requests made only to feed the
+    // AI summary, so a server without one must not be asked to make them.
+    if (!(await this._summaryAvailable())) {
+      if (revision !== this._summaryRevision) return;
+      this._summaryDirty = false;
+      this._setSummaryText(fallbackText, animate);
+      return;
+    }
+    if (revision !== this._summaryRevision) return;
     // Every caller invokes this as `void this._updateSummary(...)`, so nothing
     // owns the returned promise — a rejection escaping from here lands as an
     // unhandled rejection in the console. Building the context walks the live
@@ -832,11 +865,10 @@ export class IntelHUD {
     if (this._destroyed || revision !== this._summaryRevision) return;
     const signature = JSON.stringify(context);
     if (!force && signature === this._lastSummarySignature) {
-      // Same context as the last reply: repaint it (moveEnd may have
-      // painted the plain line over it) instead of paying for a new call.
-      if (this._lastSummaryReply?.signature === signature)
-        this._setSummaryText(this._lastSummaryReply.text, false);
       this._summaryDirty = false;
+      // A settle painted the fallback line over the reply this context
+      // already has; reused place labels make that common, so restore it.
+      if (this._lastSummaryText) this._setSummaryText(this._lastSummaryText);
       return;
     }
     if (this._summaryRequest) return;
@@ -844,6 +876,7 @@ export class IntelHUD {
     if (force) this._setSummaryText(fallbackText, false);
     this._summaryDirty = false;
     this._lastSummarySignature = signature;
+    this._lastSummaryText = null;
     const controller = new AbortController();
     let timedOut = false;
     const timeout = window.setTimeout(() => {
@@ -859,22 +892,16 @@ export class IntelHUD {
       const data = response.data;
       if (revision !== this._summaryRevision) return;
       if (isHudSummaryUnconfigured(response.status, data)) {
+        this._summaryUnconfigured = true;
         this._setSummaryText(fallbackText, animate);
         return;
       }
       if (!response.ok || !data?.summary) {
         throw new Error(data?.error || `HTTP ${response.status}`);
       }
-      const matches = hudSummaryMatchesProvenance(
-        data.summary,
-        context.feedProvenance,
-      );
-      this._setSummaryText(matches ? data.summary : fallbackText, animate);
-      // The painted AI reply, kept so a later tick over the same context
-      // can repaint it without asking again.
-      this._lastSummaryReply = matches
-        ? { signature, text: data.summary }
-        : null;
+      if (hudSummaryMatchesProvenance(data.summary, context.feedProvenance))
+        this._lastSummaryText = data.summary;
+      this._setSummaryText(this._lastSummaryText || fallbackText, animate);
     } catch (error) {
       // The 5 s timeout is a failure like any other; a move's abort (or
       // destroy's) is not.
@@ -905,16 +932,34 @@ export class IntelHUD {
     }
     // A plain paint replaces any reply still typing.
     this._stopSummaryTyping();
-    const el = document.getElementById('hud-summary');
-    if (el) el.textContent = text;
+    this._present({ summary: text });
+  }
+
+  /**
+   * False once the summary service reports no AI summary: by its capability
+   * probe, when it has one, or by a deliberate unconfigured reply. Unknown
+   * stays available, as before.
+   */
+  async _summaryAvailable() {
+    if (this._summaryUnconfigured) return false;
+    try {
+      if ((await this.summaryService?.configured?.()) === false)
+        this._summaryUnconfigured = true;
+    } catch {
+      /* an unanswered probe leaves the summary as it was */
+    }
+    return !this._summaryUnconfigured;
   }
 
   async _summaryContext() {
-    const labels = await getBasemapLabelContext(
-      this.viewer,
-      this.placeSearch,
-      this.basemapContext,
-    );
+    const revision = this._summaryRevision;
+    const labels = await getBasemapLabelContext(this.viewer, this.placeSearch, {
+      ...this.basemapContext,
+      previous: this._placeLabels,
+    });
+    // A slower build for a view the camera has left must not replace the
+    // newer view's lookup.
+    if (revision === this._summaryRevision) this._placeLabels = labels;
     const enabledLayers =
       this._dataManager
         ?.getAll?.()
@@ -931,9 +976,7 @@ export class IntelHUD {
 
   /**
    * The view changed (a camera move, the geoid flip, show): a request in
-   * flight is for the old view (the revision moves). A plain line may now
-   * cover the AI one; the next tick repaints the saved reply when the
-   * context is unchanged, without a new call.
+   * flight is for the old view (the revision moves).
    */
   _markSummaryDirty() {
     this._summaryDirty = true;
@@ -948,15 +991,6 @@ export class IntelHUD {
     this._summaryDirty = true;
   }
 
-  // ── Public API ──────────────────────────
-
-  /**
-   * React to a shader-style change. Updates the mode label, HUD color
-   * scheme (via CSS custom properties), and auto-shows/hides the overlay
-   * when in auto mode.
-   * @param {string} styleName - Active style key (e.g. `'surveillance'`,
-   *   `'thermal'`, `'retro'`, `'normal'`).
-   */
   /**
    * The globe point at the centre of the view, or null when the centre is sky
    * (or the globe is not pickable). globe.pick intersects terrain tiles on the
@@ -978,6 +1012,8 @@ export class IntelHUD {
     return scene.globe.pick(ray, scene, this._scratchTarget) ?? null;
   }
 
+  // ── Public API ──────────────────────────
+
   /**
    * The HUD's measured readouts, for voice and Ask Claude answers ("what's
    * the GSD?"), or null before the first telemetry tick. Same numbers as the
@@ -996,7 +1032,7 @@ export class IntelHUD {
         longitude: round(m.lonDeg, 5),
       },
       rangeToCenterM: round(m.rangeM, 0),
-      headingDeg: m.headingDeg,
+      headingDeg: headingDeg(this.viewer.camera.heading),
       offNadirDeg: round(m.ona, 1),
       altitudeMslM: round(m.altMslM, 0),
       sunElevationDeg: round(m.sunEl, 1),
@@ -1012,40 +1048,29 @@ export class IntelHUD {
   }
 
   /**
-   * Recording mode on or off (recordingControls.js). REC blinks only while it
-   * is on; it used to blink forever.
-   * @param {boolean} recording
+   * React to a shader-style change. Updates the mode label, HUD color
+   * scheme (via CSS custom properties), and auto-shows/hides the overlay
+   * when in auto mode.
+   * @param {string} styleName - Active style key (e.g. `'surveillance'`,
+   *   `'thermal'`, `'retro'`, `'normal'`).
    */
-  setRecording(recording) {
-    this._recording = Boolean(recording);
-    const label = document.getElementById('hud-rec-label');
-    if (label) label.style.visibility = this._recording ? 'visible' : 'hidden';
-    if (!this._recording) {
-      const dot = document.getElementById('hud-rec-dot');
-      if (dot) dot.style.visibility = 'hidden';
-    }
-  }
-
   onStyleChange(styleName) {
     this._currentStyle = styleName;
 
-    // Update mode label
-    const modeEl = document.getElementById('hud-mode');
-    if (modeEl) {
-      modeEl.textContent = MODE_LABELS[styleName]
-        ? t(MODE_LABELS[styleName])
-        : styleName.toUpperCase();
-    }
-    const bandEl = document.getElementById('hud-band');
-    // i18n-ignore: sensor codes
-    if (bandEl) bandEl.textContent = `BAND: ${bandForStyle(styleName)}`;
-    // Update color scheme
+    // Mode label and color scheme
     const colors = HUD_COLORS[styleName] || HUD_COLORS._default;
-    if (this._el) {
-      this._el.style.setProperty('--hud-color', colors.main);
-      this._el.style.setProperty('--hud-glow', colors.glow);
-      this._el.style.setProperty('--hud-border', colors.border);
-    }
+    this._present({
+      mode: MODE_LABELS[styleName]
+        ? t(MODE_LABELS[styleName])
+        : styleName.toUpperCase(),
+      // i18n-ignore: sensor codes
+      sensor: [`BAND: ${bandForStyle(styleName)}`, 'BITS: 11', 'LVL: 1A'],
+      colors: {
+        '--hud-color': colors.main,
+        '--hud-glow': colors.glow,
+        '--hud-border': colors.border,
+      },
+    });
 
     // Auto show/hide
     if (this._autoMode) {
@@ -1060,7 +1085,7 @@ export class IntelHUD {
   /** Make the HUD visible and immediately refresh all readouts. */
   show() {
     this._visible = true;
-    if (this._el) this._el.classList.add('active');
+    this._present({ active: true });
     this._updateCameraData(); // immediate update
     this._markSummaryDirty();
     void this._updateSummary(false, true);
@@ -1069,7 +1094,7 @@ export class IntelHUD {
   /** Hide the HUD overlay. */
   hide() {
     this._visible = false;
-    if (this._el) this._el.classList.remove('active');
+    this._present({ active: false });
   }
 
   /** Toggle HUD visibility and disable auto-mode (user override). */
@@ -1101,16 +1126,14 @@ export class IntelHUD {
   }
 
   /**
-   * Switch the HUD layout variant. Falls back to DEFAULT_HUD_LAYOUT if the
+   * Switch the HUD layout variant. Falls back to `'tactical'` if the
    * name is unrecognized. Cyber also applies a coordinated skin to the full
    * application shell; leaving Cyber restores the standard shell tokens.
-   * @param {string} variantName - One of HUD_LAYOUTS (src/hudLayoutPolicy.js).
+   * @param {string} variantName - One of `'tactical'`, `'minimal'`, `'cyber'`.
    */
   setVariant(variantName) {
     this._variant = normalizeHudLayout(variantName);
-    if (this._el) {
-      this._el.dataset.variant = this._variant;
-    }
+    this._present({ variant: this._variant });
     applyHudUiTheme(document.documentElement, this._variant);
   }
 
@@ -1170,9 +1193,11 @@ export class IntelHUD {
     this.viewer.camera.moveStart.removeEventListener(this._onCameraMoveStart);
     this.viewer.camera.moveEnd.removeEventListener(this._onCameraMoveEnd);
     this._dataManagerUnsubscribe?.();
+    this._vesselUnsubscribe?.();
     // Before the abort: its catch must not paint (or start typing) after
     // teardown.
     this._destroyed = true;
     this._summaryRequest?.abort();
+    this._offLocale();
   }
 }

@@ -27,6 +27,7 @@ const COCKPIT_REFUSALS = Object.freeze({
   // Voice annotate_map with flyTo frames what it drew.
   annotation: msg('Exit cockpit to fly to a drawing'),
   file: msg('Exit cockpit to fly to a file'),
+  drawing: msg('Exit cockpit to fly to a drawing'),
   scene: msg('Exit cockpit to fly to a scene'),
   // Radar, satellite and lightning fly to the layer's coverage area (their
   // «View coverage» button); the cyclone layer flies to the selected storm.

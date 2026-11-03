@@ -98,6 +98,11 @@ export function createViewport({ state, services, parts, source }) {
   }
 
   function runProximityCheck() {
+    if (
+      globalThis.document?.hidden ||
+      globalThis.document?.visibilityState === 'hidden'
+    )
+      return;
     if (!state._enabled || !state._viewer) return;
     refreshViewBounds();
     const altitude = getCameraAltitude();

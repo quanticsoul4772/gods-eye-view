@@ -29,7 +29,8 @@ export const MAX_GROUPS = 10;
  * Count rows by one text field over every row, not just those returned.
  * Values group case-insensitively and keep their first spelling; rows
  * without a value are counted as unknown. `valueOf` derives the value when
- * it is not a row field as it stands.
+ * it is not a row field as it stands. `summarize`, when given, adds stats
+ * computed over each listed group's rows.
  */
 export function breakdown(
   rows,

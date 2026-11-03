@@ -54,7 +54,7 @@ export function cyberVisualDefaultsForHudTransition(
 export function applyHudUiTheme(root, layout) {
   if (!root?.dataset) return null;
   // Every layout is exposed on <html> so a layout can style the whole shell
-  // (src/ui/styles/professional.css), not only the HUD element.
+  // as well as the HUD element.
   root.dataset.hudLayout = normalizeHudLayout(layout);
   if (normalizeHudLayout(layout) === 'cyber') {
     root.dataset.uiTheme = 'cyber';

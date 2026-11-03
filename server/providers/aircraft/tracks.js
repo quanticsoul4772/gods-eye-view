@@ -9,10 +9,9 @@ import { readCappedResponseText } from '../common/http.js';
  *   known") is answered 200 with an empty track: to the client that is the
  *   same "nothing to backfill", without a 404 in the browser console on every
  *   track. 429 and other errors are forwarded so it falls back silently.
- * /api/military/track?hex=<hex> — adsb.lol tar1090 readsb trace
- *   (undocumented but live; no browser CORS, hence this proxy). Up to ~24h
- *   of real history per aircraft. Treat as best-effort; data is ODbL —
- *   credit "adsb.lol (ODbL)" in the UI.
+ * /api/military/track?hex=<hex> — compatibility refusal for the retired,
+ *   undocumented ADSB.lol trace route. The standalone military source uses
+ *   locally accumulated trails; provider-supplied history remains optional.
  */
 export function trackBackfillProxies() {
   const TRACK_CACHE_MS = 60000;
@@ -113,12 +112,16 @@ export function trackBackfillProxies() {
           );
           return;
         }
-        await proxyJson(
-          res,
-          `lol:${hex}`,
-          `https://adsb.lol/data/traces/${hex.slice(-2)}/trace_full_${hex}.json`,
-          {},
-          { icao: hex, trace: [] },
+        res.statusCode = 503;
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Cache-Control', 'no-store');
+        res.setHeader('Retry-After', '1800');
+        res.end(
+          JSON.stringify({
+            error:
+              'Military history unavailable; locally accumulated trails remain available',
+            code: 'history_unavailable',
+          }),
         );
       } catch (error) {
         res.statusCode = 502;

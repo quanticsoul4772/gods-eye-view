@@ -18,7 +18,7 @@ import {
   governorRequestRender,
 } from '../renderGovernor.js';
 import { describeError } from './errors.js';
-import { t } from '../i18n/index.js';
+import { onLocaleChange, t } from '../i18n/index.js';
 
 /** Construct the application globe using the caller's local configuration. */
 export async function createApplicationScene({
@@ -64,6 +64,7 @@ export async function createApplicationScene({
   defer(installTrackpadPinchZoom(viewer));
   registerDataCredits(viewer, credits);
   configureCreditKeyboardAccess(document);
+  defer(onLocaleChange(() => configureCreditKeyboardAccess(document)));
   loaderStatus.textContent =
     googleApiKey || googleTokens || cesiumToken
       ? t('Loading Google 3D Tiles...')

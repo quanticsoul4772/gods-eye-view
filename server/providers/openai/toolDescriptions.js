@@ -48,7 +48,7 @@ export const ACTION_DESCRIPTIONS = {
   },
   select_nearest_aircraft: {
     description:
-      'Atomically turn on Flights or Military Flights first, fly to the place and wait for arrival, refresh that layer for the destination viewport, exclude on-ground records, and select/follow the nearest airborne aircraft. A healthy fallback feed is valid data, never an enable failure; the result reports it. This does not open Contacts or Cockpit.',
+      'Atomically turn on Flights or Military Flights first, fly to the place and wait for arrival, refresh that layer for the destination viewport, exclude on-ground records, and select/follow the nearest airborne aircraft. A healthy fallback feed is valid data, never an enable failure; the result reports it.',
     $position: 1,
     parameters: {
       properties: {
@@ -115,12 +115,18 @@ export const ACTION_DESCRIPTIONS = {
     },
   },
   set_panel_open: {
-    description: 'Open or close a GEV UI panel/dropdown.',
+    description:
+      'Visual Presets/styles/filters=control-panel; Scenes/saved scenes=scene-panel; Voice Settings=voice-settings; voice control/Preview=voice-preview; Provider Settings/API keys=provider-settings. Voice panels exit Cockpit directly.',
+    $position: 1,
+  },
+  set_voice_inactivity_timeout: {
+    description:
+      'Set the requested exact inactivity duration directly: integer minutes 1–60, 0=None. Report applied/persisted truthfully; an unsaved live change is not saved.',
     $position: 1,
   },
   set_context_mode: {
     description:
-      'Enter or exit the Global Context sub-mode used by Contacts and Space Missions. Use Contacts only when the user explicitly requests Contacts, and Space Missions only when explicitly requested. Selecting an aircraft does not imply Context.',
+      'Enter/exit Contacts or Space Missions only when explicitly requested; opening Context alone uses set_panel_open.',
     $position: 1,
     parameters: {
       properties: {
@@ -133,23 +139,23 @@ export const ACTION_DESCRIPTIONS = {
   },
   control_cockpit: {
     description:
-      'Read or control Cockpit when the user explicitly requests Cockpit: establish Contacts and enter from a selected or tracked aircraft; exit; or navigate nearby Contacts with optional filters. Selecting or viewing an aircraft alone must not enter Cockpit.',
+      'Explicit Cockpit requests only: enter from a selected/tracked aircraft (establishes Contacts itself; no set_context_mode), exit, status, or next/previous. Explicit exit-and-show voice: voicePanel preview/settings (Voice Settings), no confirmation.',
     $position: 1,
     parameters: {
       properties: {
         action: {
           description:
-            'previous/next (or prev) navigates through nearby contacts in Cockpit context.',
+            'previous/next (or prev) cycles nearby Cockpit contacts.',
           $position: 2,
         },
         targetLayer: {
           description:
-            'Contact layer filter for next/previous (for example military for a military-only cycle).',
+            'Optional next/previous layer filter (e.g. military-only).',
           $position: 2,
         },
         aircraftClass: {
           description:
-            'Aircraft class filter (for example helicopter) when using next/previous navigation.',
+            'Optional next/previous aircraft class filter (e.g. helicopter).',
           $position: 1,
         },
       },
@@ -518,18 +524,18 @@ export const ACTION_DESCRIPTIONS = {
   },
   move_camera: {
     description:
-      'Direct the camera like a drone operator: orbit the current view target, pan, tilt, or rotate — one bounded nudge (mode=once) or continuous motion until stopped (mode=continuous). Continuous motion also stops on any manual camera input or when a navigation tool runs.',
+      'Direct the camera like a drone operator: orbit the current view target, pan, tilt, or rotate — one bounded nudge (mode=once) or continuous motion until stopped (mode=continuous). Continuous motion also stops on any manual camera input or when a navigation tool runs. Say the RESULTING state when confirming ("Orbiting slowly"). Globe rotation (rotate_globe) spins Earth right continuously by default; explicit direction, mode and speed take precedence. It checks fit and may refuse.',
     $position: 1,
     parameters: {
       properties: {
         direction: {
           description:
-            'Required except for orbit (defaults right/clockwise) and stop.',
+            'Required for pan/tilt/rotate; orbit/rotate_globe default right.',
           $position: 2,
         },
         mode: {
           description:
-            'once = bounded eased nudge (default); continuous = until stop/manual input.',
+            'once = bounded eased nudge; continuous = until stop/manual input. rotate_globe defaults continuous; other motions default once.',
           $position: 2,
         },
       },

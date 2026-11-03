@@ -1,3 +1,4 @@
+import { realtimeInstructions } from '../../server/providers/openai/instructions.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -23,10 +24,6 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
   const tools = structuredClone(GEV_REALTIME_TOOLS).filter(
     (tool) => tool.name !== 'set_cyber_sonar',
   );
-  // The Professional HUD layout is a deliberate addition to set_hud's enum.
-  const layout = tools.find((tool) => tool.name === 'set_hud').parameters
-    .properties.layout;
-  layout.enum = layout.enum.filter((name) => name !== 'professional');
   // So is fly_to_location's facing direction.
   delete tools.find((tool) => tool.name === 'fly_to_location').parameters
     .properties.headingDeg;
@@ -35,7 +32,8 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     .digest('hex');
   assert.equal(
     digest,
-    // Re-derived for the voice layer manifest (generated layer enums and
+    // Re-derived for Provider Settings and explicit Visual Presets/Scenes routing,
+    // plus the deliberate direct Panel tool/target additions and voice layer manifest (generated layer enums and
     // aliases), point-and-ask (pointer sentinels, referent args) and the
     // consolidated tool wording (each policy stated once); model-facing tools
     // omit top-level anyOf (OpenAI rejects it). Contacts list routing preserves
@@ -53,7 +51,17 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // Prompt room: a rule stated twice keeps one copy; ranges and "Optional" that the schema already says are dropped.
     // rangeM says a bare coordinate is a 250 m close-up, so a storm or fire gets a fitting range.
     // Routes can be flown (mode=flying) and an area can be a circle (radiusKm).
-    '8b47489fc1b3e05682380d592de68a136694e8f72397b29567b1604fdbf08d47',
+    // Globe rotation adds one motion; visual keyhole fit and explicit
+    // reset guidance/defaults update only move_camera and mode descriptions.
+    // S2 GhostMaps extends the generated layer enums.
+    // The Utilities panel (Directions, Draw, Import) adds one panel target.
+    // Panel adds named voice targets and timeout; shared Panel/Cockpit guidance
+    // is consolidated without changing either feature's arguments.
+    // Snow leaves the set_visual_style enum.
+    // The Operator HUD layout leaves set_hud's layout enum.
+    // The layer alias hint leaves out aliases the layer id already spells.
+    // Re-derived for the merge of the fork's layer and prompt changes with the above.
+    '664883a2344e04561b0337b59942891faed0d148146d0f02dbb757b872936875',
   );
 });
 
@@ -111,23 +119,45 @@ test('metadata cannot add tools, fields, types or enum values', () => {
 
 test('all legacy action arguments are byte-identical after removing the deliberate additions', () => {
   const legacy = structuredClone(GEV_ACTION_SCHEMAS).filter(
-    (tool) => !['next_satellite_pass', 'set_cyber_sonar'].includes(tool.name),
+    (tool) =>
+      ![
+        'next_satellite_pass',
+        'set_cyber_sonar',
+        'set_voice_inactivity_timeout',
+      ].includes(tool.name),
   );
   // Layer enums are generated from the voice layer manifest and pinned by
   // layerManifest.test.mjs; the two shipped right-rail panels are additive.
   const property = (name) =>
     legacy.find((tool) => tool.name === name).parameters.properties;
+  delete property('control_cockpit').voicePanel;
   delete property('set_layer_visibility').layerId.enum;
   delete property('show_data_layers_menu').layerId.enum;
   delete property('get_entity_context').layerId.enum;
   delete property('analyst_query').layers.items.enum;
+  // Earth-centered rotation is additive; local camera yaw keeps its contract.
+  const motion = property('move_camera').motion;
+  assert.deepEqual(motion.enum, [
+    'orbit',
+    'pan',
+    'tilt',
+    'rotate',
+    'rotate_globe',
+    'stop',
+  ]);
+  motion.enum = motion.enum.filter((value) => value !== 'rotate_globe');
   const panels = property('set_panel_open').panelId;
   panels.enum = panels.enum.filter(
-    (id) => !['weather-panel', 'recent-imagery-panel'].includes(id),
+    (id) =>
+      ![
+        'weather-panel',
+        'recent-imagery-panel',
+        'voice-settings',
+        'voice-preview',
+        'provider-settings',
+        'utilities-panel',
+      ].includes(id),
   );
-  // The Professional HUD layout is additive too.
-  const hudLayout = property('set_hud').layout;
-  hudLayout.enum = hudLayout.enum.filter((name) => name !== 'professional');
   for (const tool of legacy) {
     // Point-and-ask adds `referent` arguments and 'pointer' enum values.
     delete tool.parameters.properties.referent;
@@ -153,9 +183,22 @@ test('all legacy action arguments are byte-identical after removing the delibera
     delete center.properties[axis].minimum;
     delete center.properties[axis].maximum;
   }
-  // Cyber adds one HUD layout.
+  // Cyber adds one HUD layout and Operator was retired.
   const hud = property('set_hud').layout;
-  hud.enum = hud.enum.filter((layout) => layout !== 'cyber');
+  assert.deepEqual(hud.enum, ['tactical', 'minimal', 'cyber']);
+  hud.enum = ['tactical', 'operator', 'minimal'];
+  // Snow is retired from set_visual_style; restore it to keep the legacy pin.
+  const visualStyle = legacy.find((tool) => tool.name === 'set_visual_style')
+    .parameters.properties.style;
+  assert.deepEqual(visualStyle.enum, [
+    'normal',
+    'retro',
+    'surveillance',
+    'thermal',
+    'anime',
+    'noir',
+  ]);
+  visualStyle.enum = [...visualStyle.enum, 'snow'];
   // fly_to_location gains the direction the camera faces on arrival.
   delete property('fly_to_location').headingDeg;
   // Derived by applying the same removals to the 4b56d0e9 actionSchemas.
@@ -163,6 +206,24 @@ test('all legacy action arguments are byte-identical after removing the delibera
     createHash('sha256').update(JSON.stringify(legacy)).digest('hex'),
     'c9dbb213af29124a926ba9813098598a216e11bfe3635b157ef1edf88a9ffd04',
   );
+});
+
+test('globe rotation is an additive camera motion with the existing control arguments', () => {
+  const schema = GEV_ACTION_SCHEMAS.find(
+    (tool) => tool.name === 'move_camera',
+  ).parameters;
+  for (const motion of ['rotate_globe', 'rotate', 'orbit', 'pan', 'tilt']) {
+    assert.deepEqual(
+      validateArgs(schema, {
+        motion,
+        direction: 'right',
+        speed: 'slow',
+        mode: 'continuous',
+      }),
+      [],
+    );
+  }
+  assert.ok(validateArgs(schema, { motion: 'spin_camera' }).length > 0);
 });
 
 test('track_entity accepts a referent alone but rejects an empty target', () => {
@@ -202,4 +263,26 @@ test('the benchmark still rejects an empty track_entity although the model-facin
     }),
     [],
   );
+});
+
+test('globe reset guidance requires a separate explicit command after refusal', () => {
+  const paragraph = realtimeInstructions()
+    .split('\n')
+    .find((line) => line.includes('globe-view-required'));
+  assert.ok(paragraph);
+  assert.match(paragraph, /calls only move_camera motion rotate_globe/);
+  assert.match(paragraph, /explicit user Reset\/Show Globe View/);
+  assert.match(paragraph, /never from your own plan/);
+  assert.match(paragraph, /bare yes\/ok/);
+  assert.match(paragraph, /Do not ask a question/);
+});
+
+test('direct voice timeout schema accepts None and exact integers, rejects malformed duration', () => {
+  const tool = GEV_REALTIME_TOOLS.find(
+    (tool) => tool.name === 'set_voice_inactivity_timeout',
+  );
+  for (const minutes of [0, 1, 5, 60])
+    assert.equal(validateArgs(tool.parameters, { minutes }).length, 0);
+  for (const minutes of [-1, 61, 1.5, '5'])
+    assert.ok(validateArgs(tool.parameters, { minutes }).length > 0);
 });

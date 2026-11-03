@@ -1,3 +1,5 @@
+import { CITY_BY_ID } from './registry.js';
+
 export function createIngestion({
   state: layerState,
   services,
@@ -85,7 +87,7 @@ export function createIngestion({
     const inFlight = layerState._inFlightInfo.get(cityId);
     if (inFlight) return inFlight.promise;
 
-    const city = layerState._cities.get(cityId);
+    const city = (layerState._cities ?? CITY_BY_ID).get(cityId);
     if (!city) throw new Error(`Unknown GBFS city "${cityId}"`);
     const controller = new AbortController();
 
@@ -138,7 +140,7 @@ export function createIngestion({
     const inFlight = layerState._inFlightStatus.get(cityId);
     if (inFlight) return inFlight.promise;
 
-    const city = layerState._cities.get(cityId);
+    const city = (layerState._cities ?? CITY_BY_ID).get(cityId);
     if (!city) throw new Error(`Unknown GBFS city "${cityId}"`);
     const controller = new AbortController();
 

@@ -4,9 +4,64 @@ import {
   featureReference,
   lineSamplePoints,
   normalizeFeatures,
-  splitLineParts,
 } from './geometry.js';
 import * as Cesium from 'cesium';
+
+const SOURCE_FEATURE_INDEX = '__gevSourceFeatureIndex';
+const SOURCE_PART_INDEX = '__gevSourcePartIndex';
+
+function indexedCollection(features) {
+  return {
+    type: 'FeatureCollection',
+    features: features.map((feature, index) => ({
+      ...feature,
+      properties: {
+        ...feature.properties,
+        [SOURCE_FEATURE_INDEX]: index,
+      },
+    })),
+  };
+}
+
+/**
+ * One LineString feature per drawn part of each cable, keeping the cable's id
+ * (Cesium suffixes repeats exactly as it does for MultiLineString parts) and
+ * tagged with its source feature and part, so each entity can be swept at
+ * points along its own line.
+ */
+function indexedLineParts(features) {
+  const parts = [];
+  features.forEach((feature, index) => {
+    const geometry = feature.geometry;
+    const pieces =
+      geometry?.type === 'MultiLineString'
+        ? geometry.coordinates.map((coordinates) => ({
+            type: 'LineString',
+            coordinates,
+          }))
+        : [geometry];
+    pieces.forEach((piece, part) => {
+      parts.push({
+        ...feature,
+        geometry: piece,
+        properties: {
+          ...feature.properties,
+          [SOURCE_FEATURE_INDEX]: index,
+          [SOURCE_PART_INDEX]: part,
+        },
+      });
+    });
+  });
+  return { type: 'FeatureCollection', features: parts };
+}
+
+/** The [lon, lat] line of one drawn part of a cable feature. */
+function partCoordinates(feature, part) {
+  const geometry = feature?.geometry;
+  return geometry?.type === 'MultiLineString'
+    ? geometry.coordinates[part]
+    : geometry?.coordinates;
+}
 
 export function createIngestion({ state, parts, source }) {
   async function load(viewer) {
@@ -49,10 +104,9 @@ export function createIngestion({ state, parts, source }) {
 
       const cableFeatures = normalizeFeatures(cableJson, 'cable');
       const landingFeatures = normalizeFeatures(landingJson, 'landing');
-      const cableParts = splitLineParts(cableFeatures);
 
       const cableDataSource = await Cesium.GeoJsonDataSource.load(
-        { type: 'FeatureCollection', features: cableParts.parts },
+        indexedLineParts(cableFeatures),
         {
           clampToGround: true,
           stroke: state.cableColor.withAlpha(0.95),
@@ -64,7 +118,7 @@ export function createIngestion({ state, parts, source }) {
       );
       if (!owns()) return;
       const landingDataSource = await Cesium.GeoJsonDataSource.load(
-        { type: 'FeatureCollection', features: landingFeatures },
+        indexedCollection(landingFeatures),
         {
           clampToGround: true,
           stroke: state.landingColor.withAlpha(0.9),
@@ -134,13 +188,15 @@ export function createIngestion({ state, parts, source }) {
       state._referenceRecords = [];
       state._surfaceRecords = [];
 
-      // Every part is styled and pickable as its own cable, and swept at
-      // points along its own line; the cable gets one reference stem,
+      // Each part of a cable is its own entity, and Cesium suffixes colliding
+      // IDs. Its copied properties retain the source index even when a
+      // provider has no ID, so every part keeps the right owner. Every part is
+      // swept at points along its own line; the cable gets one reference stem,
       // however many parts it is drawn in.
-      const partById = new Map(cableParts.parts.map((part) => [part.id, part]));
-      const stemmed = new Set();
+      const cableReferences = new Set();
       cableEntities.forEach((entity) => {
-        const feature = cableParts.featureOf.get(entity.id);
+        const index = entity.properties?.[SOURCE_FEATURE_INDEX]?.getValue();
+        const feature = cableFeatures[index];
         const reference = featureReference(feature);
         if (!reference) return;
 
@@ -150,14 +206,15 @@ export function createIngestion({ state, parts, source }) {
           reference,
           label: featureLabel(feature),
         });
+        const part = entity.properties?.[SOURCE_PART_INDEX]?.getValue();
         state._surfaceRecords.push({
           entity,
-          bases: lineSamplePoints(
-            partById.get(entity.id).geometry?.coordinates,
-          ).map(([lon, lat]) => Cesium.Cartesian3.fromDegrees(lon, lat, 0)),
+          bases: lineSamplePoints(partCoordinates(feature, part)).map(
+            ([lon, lat]) => Cesium.Cartesian3.fromDegrees(lon, lat, 0),
+          ),
         });
-        if (stemmed.has(feature)) return;
-        stemmed.add(feature);
+        if (cableReferences.has(index)) return;
+        cableReferences.add(index);
         parts.rendering.addReferenceStem({
           reference,
           label: featureLabel(feature),
@@ -167,7 +224,9 @@ export function createIngestion({ state, parts, source }) {
         });
       });
 
-      landingEntities.forEach((entity, index) => {
+      const landingReferences = new Set();
+      landingEntities.forEach((entity) => {
+        const index = entity.properties?.[SOURCE_FEATURE_INDEX]?.getValue();
         const feature = landingFeatures[index];
         const reference = featureReference(feature);
         if (!reference) return;
@@ -184,6 +243,8 @@ export function createIngestion({ state, parts, source }) {
             Cesium.Cartesian3.fromDegrees(reference.lon, reference.lat, 0),
           ],
         });
+        if (landingReferences.has(index)) return;
+        landingReferences.add(index);
         parts.rendering.addReferenceStem({
           reference,
           label: featureLabel(feature),
