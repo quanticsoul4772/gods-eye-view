@@ -11,7 +11,6 @@ import {
   applyHudUiTheme,
   CYBER_VISUAL_DEFAULTS,
   cyberVisualDefaultsForHudTransition,
-  DEFAULT_HUD_LAYOUT,
   HUD_LAYOUTS,
   normalizeHudLayout,
 } from '../hudLayouts.js';
@@ -143,16 +142,16 @@ test('visual styles retain Cyber through real preset application without droppin
   );
 });
 
-test('non-Cyber style presets and explicit HUD choices remain authoritative', (t) => {
+test('style presets keep the HUD layout the person chose', (t) => {
   const { owner, hud, root } = styleOwner(t);
-  for (const variant of ['tactical', 'minimal']) {
+  for (const variant of ['tactical', 'minimal', 'professional']) {
     owner._setHudVariant(variant);
     assert.equal(hud.getVariant(), variant);
     assert.equal(root.dataset.uiTheme, undefined);
-    owner.setStyle('normal');
-    owner.setStyle('surveillance');
-    // A military style preset brings the first-load layout (Professional).
-    assert.equal(hud.getVariant(), DEFAULT_HUD_LAYOUT);
+    for (const style of ['normal', 'retro', 'surveillance', 'thermal']) {
+      owner.setStyle(style);
+      assert.equal(hud.getVariant(), variant, `${variant} after ${style}`);
+    }
   }
 });
 

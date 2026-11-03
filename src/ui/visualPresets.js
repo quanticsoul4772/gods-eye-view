@@ -66,6 +66,7 @@ export const GLOBAL_POST_DEFAULTS = {
 };
 
 // Tactical style defaults applied when users select military style presets.
+// They show the HUD but leave its layout as the person chose it.
 export const STYLE_PRESET_DEFAULTS = {
   retro: {
     bloom: { enabled: false, intensity: BLOOM_INTENSITY_DEFAULT },
@@ -77,7 +78,6 @@ export const STYLE_PRESET_DEFAULTS = {
         instability: 0.42,
       },
     },
-    hudVariant: DEFAULT_HUD_LAYOUT,
     hudVisible: true,
     detection: MILITARY_DETECTION_PRESET,
   },
@@ -92,7 +92,6 @@ export const STYLE_PRESET_DEFAULTS = {
         pixelation: 1.0,
       },
     },
-    hudVariant: DEFAULT_HUD_LAYOUT,
     hudVisible: true,
     detection: MILITARY_DETECTION_PRESET,
   },
@@ -107,7 +106,6 @@ export const STYLE_PRESET_DEFAULTS = {
         pixelation: 1.0,
       },
     },
-    hudVariant: DEFAULT_HUD_LAYOUT,
     hudVisible: true,
     detection: MILITARY_DETECTION_PRESET,
   },
