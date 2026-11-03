@@ -121,6 +121,10 @@ export function getWorldPacket(options = {}) {
     typeof styleManager?.getContextModeState === 'function'
       ? withContextModeVocabulary(styleManager.getContextModeState())
       : null;
+  const cockpit =
+    typeof styleManager?.getCockpitState === 'function'
+      ? styleManager.getCockpitState()
+      : null;
 
   return {
     ok: true,
@@ -131,16 +135,20 @@ export function getWorldPacket(options = {}) {
       heightM: cartographic.height,
     },
     style: styleManager?.activeStyle || 'normal',
+    // The HUD's measured readouts (view centre, range, heading, GSD, sun …),
+    // or null before its first telemetry tick.
+    readouts: styleManager?.hud?.getReadouts?.() ?? null,
     context: contextState
       ? {
           ...contextState,
           ...(contactsWindow ? { contactsWindow } : {}),
         }
       : null,
-    cockpit:
-      typeof styleManager?.getCockpitState === 'function'
-        ? styleManager.getCockpitState()
-        : null,
+    cockpit,
+    // Whether the camera follows something, in map tracking or in Cockpit;
+    // cockpit.activeTracked covers only the latter.
+    cameraFollowing:
+      Boolean(viewer.trackedEntity) || cockpit?.activeTracked === true,
     controls:
       typeof styleManager?.getControlState === 'function'
         ? styleManager.getControlState()
