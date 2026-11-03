@@ -239,7 +239,7 @@ export function traceToKml(trace, { gapSec = DEFAULT_GAP_SEC } = {}) {
     const what = flags.length
       ? SEGMENT_STYLES.filter((s) => flags.includes(s.flag))
           .map((s) => s.label)
-          .join(', ')
+          .join('; ')
       : UNFLAGGED.label;
     return `<Placemark><name>${escapeXml(`${clock(run[0].t)}–${clock(run.at(-1).t)} ${what}`)}</name><styleUrl>#line-${flag}</styleUrl><LineString><altitudeMode>absolute</altitudeMode><coordinates>${run.map(coordinate).join(' ')}</coordinates></LineString></Placemark>`;
   });
@@ -297,8 +297,8 @@ if (import.meta.url === invoked) {
     );
     console.log(
       'Lines: ' +
-        [UNFLAGGED, ...SEGMENT_STYLES].map(({ label }) => label).join(', ') +
-        ` (white, yellow, gray, red, magenta, orange; gap > ${gapSec} s). Red dots: NIC 0.`,
+        [UNFLAGGED, ...SEGMENT_STYLES].map(({ label }) => label).join('; ') +
+        ` (white, yellow, gray, red, magenta, orange, in that order; gap > ${gapSec} s). Red dots: NIC 0.`,
     );
   } catch (error) {
     console.error(error.message);

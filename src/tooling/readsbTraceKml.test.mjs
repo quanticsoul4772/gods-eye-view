@@ -206,7 +206,7 @@ test('the KML places fixes at geometric ellipsoid height and styles each run', (
   );
   assert.match(
     kml,
-    /NIC 0, baro unchanged, geometric moved, vertical rate at limit<\/name><styleUrl>#line-nic0/,
+    /NIC 0; baro unchanged, geometric moved; vertical rate at limit<\/name><styleUrl>#line-nic0/,
   );
   assert.match(
     kml,
