@@ -244,8 +244,7 @@ export function createApplicationTools({
               ? AbortSignal.any([signal, options.signal])
               : signal,
           }),
-        voiceCard: voiceCommands.voiceCard,
-        session: voiceCommands.session,
+        voice: voiceCommands,
       }),
     );
   return { sceneDirector, annotations, voiceCommands };

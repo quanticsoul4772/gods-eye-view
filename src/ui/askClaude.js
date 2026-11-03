@@ -1,5 +1,10 @@
 import { t } from '../i18n/index.js';
 import * as Cesium from 'cesium';
+import { nextTick, watch } from 'vue';
+import { useAskClaudeStore } from './stores/askClaude.js';
+import { usePanelChromeStore } from './stores/panelChrome.js';
+import { useVoiceStore } from './stores/voice.js';
+import { applicationPinia } from './vueRuntime.js';
 
 const ASK_URL = '/api/claude/ask';
 /** Server round trips per request; each one can run several app actions. */
@@ -17,7 +22,17 @@ const SETUP_STATUSES = new Set([0, 403, 503]);
 const VOICE_ON_NOTE = 'Voice is on — turn it off to type.';
 
 const STYLE = `
-#gev-voice-control { --gev-composer-h: 2.75rem; }
+/* --gev-ask-bottom: the composer's distance above the control. It clears the
+   voice settings row (provider chooser and gear, lifted by
+   --gev-provider-lift) and, with pinned trays, the pinned stack. The card and
+   the Voice panel open above the composer. */
+#gev-voice-control { --gev-composer-h: 3rem; --gev-ask-lift: 0px;
+  --gev-ask-bottom: calc(0.7rem + var(--gev-ask-lift)); }
+#gev-voice-control:has(> .gev-voice-settings-button) {
+  --gev-ask-lift: calc(3.3rem + var(--gev-provider-lift, 0px)); }
+#command-dock.dock-has-pinned-tray #gev-voice-control {
+  --gev-ask-bottom: max(calc(1.7rem + var(--dock-pinned-stack-height)),
+    calc(0.7rem + var(--gev-ask-lift))); }
 /* Bottom-right corner, below the voice readout's text row. */
 #gev-ask-button { position: absolute; bottom: 0.12rem; right: 0.3rem; z-index: 4;
   width: 1.25rem; height: 0.9rem; padding: 0; display: grid; place-items: center;
@@ -26,7 +41,7 @@ const STYLE = `
   border-radius: 0.22rem; cursor: pointer; }
 #gev-ask-button:hover, #gev-ask-button[aria-expanded='true'] {
   background: rgba(54, 220, 255, 0.2); color: #dff5fa; }
-#gev-ask-composer { position: absolute; bottom: calc(100% + 0.7rem); left: 50%;
+#gev-ask-composer { position: absolute; bottom: calc(100% + var(--gev-ask-bottom)); left: 50%;
   z-index: 8; box-sizing: border-box; width: min(22rem, calc(100vw - 1.5rem));
   transform: translateX(-50%); padding: 0.4rem; display: flex; flex-direction: column;
   gap: 0.3rem; background: rgba(7, 22, 31, 0.96);
@@ -38,7 +53,7 @@ const STYLE = `
   color: #e8f4f8; background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 0.25rem; padding: 0.3rem 0.45rem; }
 #gev-ask-composer button { font: 600 0.62rem/1 var(--font-mono, monospace);
-  letter-spacing: 0.05rem; color: rgba(223, 245, 250, 0.92); cursor: pointer;
+  letter-spacing: 0.05rem; text-transform: uppercase; color: rgba(223, 245, 250, 0.92); cursor: pointer;
   background: rgba(54, 220, 255, 0.14); border: 1px solid rgba(54, 220, 255, 0.4);
   border-radius: 0.25rem; padding: 0.38rem 0.55rem; }
 #gev-ask-composer button[disabled] { opacity: 0.45; cursor: default; }
@@ -53,13 +68,13 @@ const STYLE = `
 #gev-ask-composer .gev-ask-status[data-tone='warn'] { color: #ffc46b; }
 #gev-ask-composer .gev-ask-cancel { margin-left: auto; padding: 0.25rem 0.45rem; }
 #gev-ask-composer .gev-ask-cancel[hidden] { display: none; }
-/* The composer stays put while you type; the card lifts above it. */
-#gev-voice-control.composer-open .gev-voice-card {
-  bottom: calc(100% + 1.1rem + var(--gev-composer-h)); }
-#command-dock.dock-has-pinned-tray #gev-ask-composer {
-  bottom: calc(100% + 1.7rem + var(--dock-pinned-stack-height)); }
-#command-dock.dock-has-pinned-tray #gev-voice-control.composer-open .gev-voice-card {
-  bottom: calc(100% + 2.1rem + var(--dock-pinned-stack-height) + var(--gev-composer-h)); }
+/* The composer stays put while you type; the card and the Voice panel lift
+   above it. */
+#command-dock #gev-voice-control.composer-open .gev-voice-panel:not([hidden]) {
+  bottom: min(calc(100% + var(--gev-ask-bottom) + var(--gev-composer-h) + 0.4rem),
+    calc(100dvh - 7.75rem)); }
+#command-dock #gev-voice-control.composer-open .gev-voice-card:not([hidden]) {
+  bottom: calc(100% + var(--gev-ask-bottom) + var(--gev-composer-h) + 0.4rem); }
 #command-dock > #gev-voice-control:has(#gev-ask-composer:not([hidden])),
 #command-dock > #gev-voice-control[data-typed]:has(.gev-voice-card:not([hidden])) {
   z-index: 101; }
@@ -350,68 +365,29 @@ export async function showView(view, { viewer, dataManager, run, signal }) {
 /**
  * Typing to Claude as the keyboard twin of the voice mic: a button in the
  * voice control and `/` open a composer above the dock; answers render in the
- * voice card. In Cockpit, which hides the dock, `/` opens a small field with a
- * short pop-up instead. Returns a function that removes everything.
+ * voice card. The voice control view renders the button and composer from
+ * the Ask Claude store, so they follow the dock whenever it renders. In
+ * Cockpit, which hides the dock, `/` opens a small field with a short pop-up
+ * instead. `voice` is the voice commands facade; its card, session and Voice
+ * panel are read each time, since changing the voice provider replaces them.
+ * Returns a function that removes everything.
  */
 export function installAskClaude({
   viewer,
   dataManager,
   run,
-  voiceCard = null,
-  session = null,
+  voice = null,
   documentRef = globalThis.document,
   fetchImpl = (...args) => globalThis.fetch(...args),
+  store = useAskClaudeStore(applicationPinia()),
+  panelStore = usePanelChromeStore(applicationPinia()),
+  voiceStore = useVoiceStore(applicationPinia()),
 }) {
-  const control = documentRef.getElementById('gev-voice-control');
-  if (!control) return () => {};
   const make = (tag, props = {}) =>
     Object.assign(documentRef.createElement(tag), props);
 
   const style = make('style', { textContent: STYLE });
   documentRef.head.append(style);
-
-  // Dock: the type button and the composer live inside the voice control,
-  // so Clean-UI and recording mode hide them with it.
-  const typeButton = make('button', {
-    id: 'gev-ask-button',
-    type: 'button',
-    textContent: '⌨',
-    title: t('Type to Claude (/)'),
-  });
-  typeButton.setAttribute('aria-label', t('Type to Claude'));
-  typeButton.setAttribute('aria-expanded', 'false');
-  typeButton.setAttribute('aria-controls', 'gev-ask-composer');
-  const composer = make('form', { id: 'gev-ask-composer', hidden: true });
-  composer.setAttribute('aria-label', t('Type to Claude'));
-  const input = make('input', {
-    type: 'text',
-    maxLength: 500,
-    placeholder: t('Ask Claude, or tell it what to do'),
-  });
-  input.setAttribute('aria-label', t('Message for Claude'));
-  const send = make('button', { type: 'submit', textContent: 'SEND' });
-  const newChat = make('button', {
-    type: 'button',
-    className: 'gev-ask-new',
-    textContent: '↺',
-    title: t('New chat — forget this conversation'),
-  });
-  newChat.setAttribute('aria-label', t('New chat'));
-  const status = make('div', { className: 'gev-ask-status' });
-  status.setAttribute('aria-live', 'polite');
-  const statusText = make('span');
-  const cancel = make('button', {
-    type: 'button',
-    className: 'gev-ask-cancel',
-    textContent: 'CANCEL',
-    hidden: true,
-  });
-  status.append(statusText, cancel);
-  const row = make('div', { className: 'gev-ask-row' });
-  row.append(input, send, newChat);
-  composer.append(row, status);
-  control.querySelector('#gev-voice-button')?.after(typeButton);
-  control.append(composer);
 
   // Cockpit: a small field near the top, below the compass.
   const cockpitBox = make('div', { id: 'gev-ask-cockpit', hidden: true });
@@ -442,82 +418,102 @@ export function installAskClaude({
     },
   });
 
-  let turn = null; // { controller, timer }
-  const voiceActive = () => Boolean(session?.isActive?.());
-  const inCockpit = () => documentRef.body.classList.contains('cockpit-mode');
-  const setStatus = (text, tone = '') => {
-    statusText.textContent = text;
-    if (tone) status.dataset.tone = tone;
-    else delete status.dataset.tone;
+  // The composer as the voice control view renders it.
+  const state = {
+    open: false,
+    typed: false,
+    status: Object.freeze({ text: '', tone: '' }),
+    busy: false,
+    voiceOn: false,
+    turns: 0,
+    clear: 0,
   };
+  // A turn still finishing after removal must not bring the composer back.
+  let disposed = false;
+  const present = (patch) => {
+    if (disposed) return;
+    Object.assign(state, patch);
+    store.publish(Object.freeze({ ...state }));
+  };
+  // The composer's elements render after the store change.
+  const focusById = (id) =>
+    nextTick(() => {
+      if (!disposed) documentRef.getElementById(id)?.focus();
+    });
+
+  let turn = null; // { controller, timer }
+  const voiceActive = () => Boolean(voice?.isActive?.());
+  const inCockpit = () => documentRef.body.classList.contains('cockpit-mode');
+  const setStatus = (text, tone = '') =>
+    present({ status: Object.freeze({ text, tone }) });
   const syncGate = () => {
+    followSession();
     const blocked = voiceActive();
-    send.disabled = blocked || Boolean(turn);
-    input.disabled = Boolean(turn);
+    present({ voiceOn: blocked, busy: Boolean(turn) });
     // Only the gate's own note is cleared here; a setup error has to stay.
     if (blocked && !turn) setStatus(VOICE_ON_NOTE, 'warn');
-    else if (!turn && statusText.textContent === VOICE_ON_NOTE) setStatus('');
+    else if (!turn && state.status.text === VOICE_ON_NOTE) setStatus('');
   };
-  const syncTurns = () => {
-    const count = conversation.turns;
-    if (count) newChat.dataset.turns = String(count);
-    else delete newChat.dataset.turns;
-  };
+  const syncTurns = () => present({ turns: conversation.turns });
 
   // Labels: typed turns say CLAUDE; the next voice event puts VOICE/GEV back.
-  const kicker = control.querySelector('.gev-voice-card-kicker');
-  const assistantWho = control.querySelector(
-    '#gev-voice-card-assistant .gev-voice-card-who',
-  );
-  const setLabels = (typed) => {
-    // i18n-ignore: speaker names (Claude, GEV)
-    if (kicker) kicker.textContent = typed ? 'CLAUDE' : t('VOICE');
-    // i18n-ignore: speaker names (Claude, GEV)
-    if (assistantWho) assistantWho.textContent = typed ? 'CLAUDE' : 'GEV';
-    if (typed) control.dataset.typed = '';
-    else delete control.dataset.typed;
-  };
-  const unsubscribe = session?.subscribe?.((event) => {
+  const setLabels = (typed) => present({ typed });
+  const onSessionEvent = (event) => {
     setLabels(false);
     // Voice starting mid-turn takes over: the typed turn stops.
     if (event.type === 'state' && !['idle', 'error'].includes(event.state))
       turn?.controller.abort();
     syncGate();
-  });
+  };
+  // Follow the current provider's session.
+  let followed = null;
+  let unsubscribe = null;
+  function followSession() {
+    if (disposed) return;
+    const session = voice?.session ?? null;
+    if (session === followed) return;
+    unsubscribe?.();
+    followed = session;
+    unsubscribe = session?.subscribe?.(onSessionEvent) ?? null;
+  }
+  // In the Voice panel layout the card shows in the panel's Preview tab:
+  // open it for a typed turn, as a voice reply does, unless Preview is off.
+  const showPreview = () => {
+    if (voice?.getVoicePreferences?.()?.previewEnabled === false) return;
+    voice?.voicePanel?.select?.('preview', { automatic: true });
+  };
 
-  // Pinned trays stay: the composer already sits above the pinned stack.
+  // The dock's popover trays the person has open; pinned trays stay, since
+  // the composer already sits above the pinned stack.
   const openTrays = () =>
-    [...documentRef.querySelectorAll('#location-bar, #control-panel')].filter(
-      (tray) =>
-        !tray.classList.contains('collapsed') &&
-        !tray.classList.contains('dock-pinned'),
-    );
+    ['location-bar', 'control-panel'].filter((id) => {
+      const shown = panelStore.panels[id];
+      return shown && !shown.collapsed && !shown.pinned;
+    });
   const openComposer = () => {
     // A dock popover and the composer would overlap; the popover gives way.
-    for (const tray of openTrays())
-      tray.querySelector('.dock-tray-toggle')?.click();
-    composer.hidden = false;
-    control.classList.add('composer-open');
-    typeButton.setAttribute('aria-expanded', 'true');
+    for (const id of openTrays())
+      documentRef
+        .getElementById(id)
+        ?.querySelector('.dock-tray-toggle')
+        ?.click();
+    present({ open: true });
     syncGate();
     syncTurns();
-    input.focus();
+    focusById('gev-ask-input');
   };
   const closeComposer = ({ restoreFocus = true } = {}) => {
-    composer.hidden = true;
-    control.classList.remove('composer-open');
-    typeButton.setAttribute('aria-expanded', 'false');
-    if (restoreFocus) typeButton.focus();
+    present({ open: false });
+    if (restoreFocus) focusById('gev-ask-button');
   };
   // A popover opening later closes the composer and keeps its own focus.
-  const trayWatch = new MutationObserver(() => {
-    if (!composer.hidden && openTrays().length)
-      closeComposer({ restoreFocus: false });
-  });
-  for (const tray of documentRef.querySelectorAll(
-    '#location-bar, #control-panel',
-  ))
-    trayWatch.observe(tray, { attributes: true, attributeFilter: ['class'] });
+  const stopTrayWatch = watch(
+    () => panelStore.panels,
+    () => {
+      if (state.open && openTrays().length)
+        closeComposer({ restoreFocus: false });
+    },
+  );
 
   /** Run one turn with progress, cancel and error routing. */
   async function startTurn(text, emit, { onDone } = {}) {
@@ -531,7 +527,6 @@ export function installAskClaude({
       }, 1000),
     };
     setStatus('Thinking…');
-    cancel.hidden = false;
     syncGate();
     let outcome;
     try {
@@ -540,7 +535,7 @@ export function installAskClaude({
         text,
         camera: cameraPosition(viewer),
         emit,
-        hold: (on) => voiceCard?.hold?.(on),
+        hold: (on) => voice?.voiceCard?.hold?.(on),
         isVoiceActive: voiceActive,
         signal: controller.signal,
       });
@@ -557,7 +552,6 @@ export function installAskClaude({
     } finally {
       clearInterval(turn.timer);
       turn = null;
-      cancel.hidden = true;
     }
     if (outcome.refused) setStatus(VOICE_ON_NOTE, 'warn');
     else if (outcome.setup) setStatus(outcome.error, 'warn');
@@ -568,35 +562,34 @@ export function installAskClaude({
     return outcome;
   }
 
-  const emitToCard = (event) => voiceCard?.handle?.(event);
-  const onSubmit = async (event) => {
-    event.preventDefault();
-    const text = input.value.trim();
+  const emitToCard = (event) => voice?.voiceCard?.handle?.(event);
+  const submit = async (value) => {
+    const text = String(value ?? '').trim();
     if (!text) {
       closeComposer();
       return;
     }
     setLabels(true);
+    showPreview();
     const outcome = await startTurn(text, emitToCard);
     if (outcome?.refused) setLabels(false);
-    if (outcome?.answer) input.value = '';
-    if (!composer.hidden) input.focus();
+    if (outcome?.answer) present({ clear: state.clear + 1 });
+    if (state.open) focusById('gev-ask-input');
   };
-  const onInputKey = (event) => {
+  const inputKey = (event) => {
     event.stopPropagation(); // keep typed keys away from app shortcuts
     if (event.key === 'Escape') {
       event.preventDefault();
       closeComposer();
     }
   };
-  const onNewChat = () => {
+  const newChat = () => {
     conversation.reset();
     syncTurns();
     setStatus('New chat.');
-    input.focus();
+    focusById('gev-ask-input');
   };
-  const onTypeButton = () =>
-    composer.hidden ? openComposer() : closeComposer();
+  const toggle = () => (state.open ? closeComposer() : openComposer());
 
   // Cockpit field: one-line progress, then a short reply that expands.
   let popupTimer = null;
@@ -636,6 +629,7 @@ export function installAskClaude({
       if (!inCard) {
         inCard = true;
         setLabels(true);
+        showPreview();
         emitToCard({ type: 'interruption' });
         emitToCard({
           type: 'transcript',
@@ -706,29 +700,40 @@ export function installAskClaude({
     else openComposer();
   };
 
-  composer.addEventListener('submit', onSubmit);
-  input.addEventListener('keydown', onInputKey);
-  newChat.addEventListener('click', onNewChat);
-  cancel.addEventListener('click', () => turn?.controller.abort());
-  typeButton.addEventListener('click', onTypeButton);
+  store.connect({
+    toggle,
+    submit,
+    inputKey,
+    newChat,
+    cancel: () => turn?.controller.abort(),
+  });
+  // Changing the voice provider presents a new control with a new session:
+  // follow it at once, so its voice turns stop and relabel a typed turn.
+  const stopVoiceWatch = watch(
+    () => voiceStore.controls,
+    () => syncGate(),
+  );
+  followSession();
+  present({});
   cockpitInput.addEventListener('keydown', onCockpitKey);
   popup.addEventListener('click', onPopupClick);
   documentRef.addEventListener('keydown', onDocumentKey);
   globalThis.addEventListener?.('gev:cockpit-mode-changed', onCockpitChange);
 
   return () => {
+    disposed = true;
     turn?.controller.abort();
     clearTimeout(popupTimer);
-    trayWatch.disconnect();
+    stopTrayWatch();
+    stopVoiceWatch();
     unsubscribe?.();
     documentRef.removeEventListener('keydown', onDocumentKey);
     globalThis.removeEventListener?.(
       'gev:cockpit-mode-changed',
       onCockpitChange,
     );
-    setLabels(false);
-    typeButton.remove();
-    composer.remove();
+    store.connect(null);
+    store.publish(null);
     cockpitBox.remove();
     style.remove();
   };
