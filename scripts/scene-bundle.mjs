@@ -13,7 +13,7 @@ import { parseSceneDocument } from '../src/director/document.js';
  */
 
 const MIME = Object.freeze({
-  '.json': 'application/geo+json',
+  '.json': 'application/json',
   '.geojson': 'application/geo+json',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
@@ -32,7 +32,9 @@ export async function bundleScene(project, assetDir, read = readFile) {
     parseSceneDocument(JSON.stringify(project)),
     async (pack) => {
       const file = path.resolve(root, pack.source.path);
-      if (!file.startsWith(root + path.sep))
+      // Also correct when the directory is a drive root.
+      const inside = path.relative(root, file);
+      if (!inside || inside.startsWith('..') || path.isAbsolute(inside))
         throw new Error(
           `Pack path leaves the asset directory: ${pack.source.path}`,
         );

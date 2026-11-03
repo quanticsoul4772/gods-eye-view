@@ -143,3 +143,72 @@ test('a scene and its pack files become a bundle the app reads back', async (t) 
   outside.scenes[0].dataPacks[0].source.path = 'n/missing.png';
   await assert.rejects(() => bundleScene(outside, dir), /ENOENT|no such file/i);
 });
+
+test('Placemarks in other forms or with several geometries are refused, not dropped', () => {
+  const ring = '<coordinates>0,0 1,0 1,1 0,0</coordinates>';
+  for (const kml of [
+    `<Placemark id="a"><Point><coordinates>0,0</coordinates></Point></Placemark>`,
+    `<kml:Placemark><kml:Point><kml:coordinates>0,0</kml:coordinates></kml:Point></kml:Placemark>`,
+    `<Placemark><gx:Track></gx:Track><Point><coordinates>0,0</coordinates></Point></Placemark>`,
+    `<Placemark><Point><coordinates>0,0</coordinates></Point><LineString><coordinates>0,0 1,1</coordinates></LineString></Placemark>`,
+    `<Placemark><Polygon><outerBoundaryIs><LinearRing>${ring}</LinearRing></outerBoundaryIs></Polygon><Point><coordinates>0,0</coordinates></Point></Placemark>`,
+  ])
+    assert.throws(() => kmlPlacemarks(kml), /Placemark/);
+});
+
+test('a pack the app would refuse is not written', () => {
+  const one = (type, coordinates) => [{ style: null, type, coordinates }];
+  assert.throws(
+    () => placemarksToPack(one('LineString', [[0, 0, 0]])),
+    /Invalid line/,
+  );
+  assert.throws(
+    () =>
+      placemarksToPack(
+        one('Polygon', [
+          [0, 0, 0],
+          [1, 0, 0],
+          [1, 1, 0],
+          [0, 1, 0],
+        ]),
+      ),
+    /Unclosed ring/,
+  );
+  assert.throws(
+    () => placemarksToPack(one('Point', [[200, 95, 0]])),
+    /Invalid geographic position/,
+  );
+});
+
+test('bundling reads pack files only from inside the asset directory, including a drive root', async (t) => {
+  const reads = [];
+  const read = async (file) => {
+    reads.push(file);
+    return new TextEncoder().encode(
+      JSON.stringify(placemarksToPack(kmlPlacemarks(KML), ['line-unflagged'])),
+    );
+  };
+  const project = (packPath) => ({
+    version: 6,
+    scenes: [
+      {
+        id: 's',
+        dataPacks: [
+          {
+            id: 'p',
+            version: 1,
+            format: 'geojson',
+            source: { adapter: 'assets', path: packPath },
+            attribution: { text: 'a', license: 'b' },
+            placement: { altitudeReference: 'ellipsoid' },
+          },
+        ],
+        shots: [{ id: 'shot', dataPackIds: ['p'] }],
+      },
+    ],
+  });
+  const root = path.parse(process.cwd()).root;
+  await bundleScene(project('n/track.json'), root, read);
+  assert.equal(reads.at(-1), path.join(root, 'n', 'track.json'));
+  await assert.rejects(() => bundleScene(project('../x.json'), root, read));
+});

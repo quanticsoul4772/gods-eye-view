@@ -1,6 +1,9 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 
+import { decodePackGeoJSON } from '../src/director/packs/geojson.js';
+import { PACK_LIMITS } from '../src/director/packs/manifest.js';
+
 /**
  * Turn a KML written by the reconstruction scripts (readsb-trace-to-kml,
  * glm-to-kml, nexrad-to-kml, goes-cloud-top-to-kml) into a Director GeoJSON
@@ -17,8 +20,11 @@ import { pathToFileURL } from 'node:url';
  * else is refused rather than guessed.
  */
 
-export const PACK_FEATURE_LIMIT = 2000;
-export const PACK_POSITION_LIMIT = 50000;
+export const PACK_FEATURE_LIMIT = PACK_LIMITS.features;
+export const PACK_POSITION_LIMIT = PACK_LIMITS.positions;
+
+const ONE_GEOMETRY =
+  'Only one Point, LineString or Polygon outer ring per Placemark is read';
 
 const coordinatesOf = (text) =>
   text
@@ -42,10 +48,16 @@ const coordinatesOf = (text) =>
 export function kmlPlacemarks(kml) {
   const placemarks = [];
   for (const [, body] of kml.matchAll(/<Placemark>([\s\S]*?)<\/Placemark>/g)) {
-    if (/<(MultiGeometry|innerBoundaryIs|Model|Track)\b/.test(body))
-      throw new Error(
-        'Only one Point, LineString or Polygon outer ring per Placemark is read',
-      );
+    if (
+      /<(?:\w+:)?(MultiGeometry|innerBoundaryIs|Model|Track|MultiTrack)\b/.test(
+        body,
+      )
+    )
+      throw new Error(ONE_GEOMETRY);
+    const geometries = body.match(/<(Point|LineString|Polygon)>/g) || [];
+    const blocks = body.match(/<coordinates>/g) || [];
+    if (geometries.length > 1 || blocks.length > 1)
+      throw new Error(ONE_GEOMETRY);
     const style = /<styleUrl>#([^<]+)<\/styleUrl>/.exec(body)?.[1] ?? null;
     const type = /<(Point|LineString|Polygon)>/.exec(body)?.[1];
     const text = /<coordinates>([\s\S]*?)<\/coordinates>/.exec(body)?.[1];
@@ -53,6 +65,13 @@ export function kmlPlacemarks(kml) {
       throw new Error('A Placemark without a Point, LineString or Polygon');
     placemarks.push({ style, type, coordinates: coordinatesOf(text) });
   }
+  // Placemarks written any other way (attributes, a namespace prefix) are not
+  // read; refuse rather than drop them.
+  const all = (kml.match(/<(?:\w+:)?Placemark\b/g) || []).length;
+  if (all !== placemarks.length)
+    throw new Error(
+      `${all - placemarks.length} Placemarks are not in the form these scripts write`,
+    );
   return placemarks;
 }
 
@@ -84,7 +103,10 @@ export function placemarksToPack(placemarks, styles = null) {
     throw new Error(
       `${positions} positions; a pack holds at most ${PACK_POSITION_LIMIT}.`,
     );
-  return { type: 'FeatureCollection', features };
+  const pack = { type: 'FeatureCollection', features };
+  // The app's own decoder: a pack written here is one the app reads.
+  decodePackGeoJSON(new TextEncoder().encode(JSON.stringify(pack)));
+  return pack;
 }
 
 const invoked = process.argv[1] ? pathToFileURL(process.argv[1]).href : '';
