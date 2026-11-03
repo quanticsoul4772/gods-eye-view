@@ -88,7 +88,7 @@ test('the first view renders the corners, edges and bottom bar', async (t) => {
   const { root } = mount(t);
   await nextTick();
   assert.equal(root.className, '');
-  assert.equal(root.dataset.variant, 'tactical');
+  assert.equal(root.dataset.variant, 'professional');
   assert.deepEqual(
     [...root.children].map((child) => child.className),
     [
@@ -160,4 +160,26 @@ test('the selected vessel readout shows while a vessel is selected', async (t) =
   await nextTick();
   assert.equal(vessel.className, 'hud-ais-vessel');
   assert.equal(vessel.textContent, 'AIS: --');
+});
+
+test('the HUD marks recording, and Professional reads ONA and BAND in a corner', async (t) => {
+  const { hud, root } = mount(t);
+  await nextTick();
+  assert.equal(root.hasAttribute('data-recording'), false);
+  hud.setRecording(true);
+  await nextTick();
+  assert.equal(root.hasAttribute('data-recording'), true);
+  assert.equal(root.querySelector('.hud-rec-label').textContent, ' REC  ');
+  hud.setRecording(false);
+  await nextTick();
+  assert.equal(root.hasAttribute('data-recording'), false);
+  hud.setVariant('tactical');
+  await nextTick();
+  assert.equal(root.querySelector('.hud-corner-sensor'), null);
+  hud.setVariant('professional');
+  await nextTick();
+  assert.equal(
+    root.querySelector('.hud-bottom-right .hud-corner-sensor').textContent,
+    'ONA: --°   BAND: PAN',
+  );
 });

@@ -5,7 +5,10 @@ import {
   normalizeAllocationStrategy,
 } from './data/detectionPolicy.js';
 import { clampScopeTerminusPct } from './scopeMask.js';
-import { DEFAULT_HUD_LAYOUT } from './hudLayoutPolicy.js';
+import {
+  DEFAULT_HUD_LAYOUT,
+  SHARE_ABSENT_HUD_LAYOUT,
+} from './hudLayoutPolicy.js';
 import { clampScopeFeatherPct } from './scopeMaskPolicy.js';
 import {
   decodeLayerStateParams,
@@ -99,7 +102,9 @@ export class ShareLinkManager {
     // question and deliberately stays at 5.
     this._detectionOutsideOpacityPct = 1;
     this._celestialRingEnabled = false;
-    this._scopeEnabled = true;
+    // The scope mask starts off (scopeMask.js); an absent `sc` still parses
+    // as on below, the state every earlier link was authored in.
+    this._scopeEnabled = false;
     this._scopeFeatherPct = 100;
     // null = the altitude-adaptive terminus (the default). A number pins the
     // outside-fill opacity as a percent, 94..100. (`sce`, 2026-08-17)
@@ -219,7 +224,7 @@ export class ShareLinkManager {
       bloomIntensity: parseOr(params.get('bi'), LEGACY_BLOOM_FALLBACK),
       bloomVersion: parseOr(params.get('bv'), 1),
       sharpenIntensity: parseOr(params.get('si'), 49),
-      hudVariant: params.get('hud') || DEFAULT_HUD_LAYOUT,
+      hudVariant: params.get('hud') || SHARE_ABSENT_HUD_LAYOUT,
       hudVisible: params.get('hv') === '1',
       detectionMode: restoredDetection.enabled
         ? restoredDetection.profile

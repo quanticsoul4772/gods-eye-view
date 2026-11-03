@@ -434,8 +434,10 @@ test('the share button links to /share/<code>, following the followed entity', (
     offset: OFFSET,
     lastKnown: { ...FIX, observedAtMs: Math.floor(NOW_MS / 1000) * 1000 },
   });
-  // The followed aircraft's layer is implied; the camera is derived.
-  assert.ok(code.length <= 45, `${code.length} characters`);
+  // The followed aircraft's layer is implied; the camera is derived. A fresh
+  // session also carries its Professional layout and Scope OFF, which differ
+  // from a link's frozen absent meanings (Tactical, Scope on).
+  assert.ok(code.length <= 46, `${code.length} characters`);
   assert.equal(href, shareLinkUrl(code, 'https://gev.example/'));
   manager.destroy();
 });

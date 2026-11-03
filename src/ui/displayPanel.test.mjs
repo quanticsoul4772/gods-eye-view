@@ -279,7 +279,9 @@ test('Scope and Celestial render what VisualSettings shows', async (t) => {
     setScopeMaskEnabled: (on) => (mask.enabled = on),
     setScopeMaskFeather: (value) => (mask.feather = value),
   };
-  assert.equal($('scope-toggle').checked, true);
+  // Until VisualSettings shows it, the toggle shows the mask's first-run
+  // state: off.
+  assert.equal($('scope-toggle').checked, false);
   assert.equal($('scope-feather-value').textContent, '100%');
   assert.equal($('celestial-toggle').hasAttribute('aria-disabled'), false);
 

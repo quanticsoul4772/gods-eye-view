@@ -13,7 +13,7 @@ const view = computed(() => hud.value ?? EMPTY);
 </script>
 
 <template>
-  <div id="intel-hud" :class="{ active: hud?.active }" :data-variant="hud?.variant" :style="hud?.colors ?? undefined">
+  <div id="intel-hud" :class="{ active: hud?.active }" :data-variant="hud?.variant" :data-recording="hud?.recording ? '' : undefined" :style="hud?.colors ?? undefined">
     <div class="hud-sonar" aria-hidden="true"></div>
     <div class="hud-corner hud-top-left">
       <div class="hud-bracket">┌</div>
@@ -29,7 +29,7 @@ const view = computed(() => hud.value ?? EMPTY);
     </div>
     <div class="hud-corner hud-top-right">
       <div class="hud-content" style="text-align: right">
-        <div class="hud-readout"><div class="hud-rec"><span id="hud-rec-dot" :style="view.recShown === null ? undefined : { visibility: view.recShown ? 'visible' : 'hidden' }">●</span>{{ view.rec ? ` ${view.rec}  ` : '' }}<span id="hud-timestamp">{{ view.timestamp }}</span></div></div>
+        <div class="hud-readout"><div class="hud-rec"><span id="hud-rec-dot" :style="view.recShown === null ? undefined : { visibility: view.recShown ? 'visible' : 'hidden' }">●</span><span v-if="view.rec" class="hud-rec-label">{{ ` ${view.rec}  ` }}</span><span id="hud-timestamp">{{ view.timestamp }}</span></div></div>
         <div class="hud-readout"><div class="hud-orbital">{{ view.orbital }}</div></div>
       </div>
       <div class="hud-bracket">┐</div>
@@ -45,6 +45,8 @@ const view = computed(() => hud.value ?? EMPTY);
       <div class="hud-content" style="text-align: right">
         <div class="hud-readout"><div id="hud-gsd">{{ view.gsd }}</div></div>
         <div class="hud-readout"><div id="hud-alt">{{ view.alt }}</div></div>
+        <!-- Professional shows ONA and BAND here instead of on the edges. -->
+        <div v-if="hud?.variant === 'professional'" class="hud-readout hud-corner-sensor"><div>{{ `${view.ona}   ${view.sensor[0] ?? ''}` }}</div></div>
         <div class="hud-readout"><div id="hud-ais-vessel" :class="['hud-ais-vessel', { active: view.vessel.active }]">{{ view.vessel.text }}</div></div>
       </div>
       <div class="hud-bracket">┘</div>

@@ -584,6 +584,9 @@ export class StyleManager extends ShellFacade {
       stacks: { left: this._leftPanelStack, right: this._rightPanelStack },
       setPanelCollapsed: (...args) =>
         this._panelChrome.setPanelCollapsed(...args),
+      peekOnHover: () =>
+        document.documentElement.dataset.hudLayout === 'professional' &&
+        !document.body.classList.contains('mobile-shell'),
     });
     this._panelNavigation.init();
     this._initLocaleSelector();
