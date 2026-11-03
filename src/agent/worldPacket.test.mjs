@@ -214,7 +214,8 @@ function pinnedHarness() {
 
 // Captured from main's get_current_view_state before the extraction
 // (bilawalsidhu/gods-eye-view@3d8e1ef0) with Date.now pinned to PINNED_NOW,
-// minus the speech envelope. Key order is part of the contract.
+// minus the speech envelope. Key order is part of the contract. The fork adds
+// `readouts` (the HUD's measured values) and `cameraFollowing`.
 const PRE_EXTRACTION_PAYLOAD = {
   ok: true,
   action: 'get_current_view_state',
@@ -224,6 +225,7 @@ const PRE_EXTRACTION_PAYLOAD = {
     heightM: 499.99999999901877,
   },
   style: 'night-vision',
+  readouts: null,
   context: {
     mode: 'contacts',
     entering: null,
@@ -234,6 +236,7 @@ const PRE_EXTRACTION_PAYLOAD = {
     contactsWindow: { windowMin: 30, count: 4 },
   },
   cockpit: { active: false },
+  cameraFollowing: false,
   controls: { hud: { visible: 'auto' } },
   scenePlayback: { playing: false, sceneId: 'fixture' },
   tracked: [
@@ -332,4 +335,31 @@ test('World Packet ages feeds against the clock when now is not a finite number'
 
 test('World Packet rejects null options with the camera requirement', () => {
   assert.throws(() => getWorldPacket(null), /requires a viewer camera/);
+});
+
+test('World Packet says whether the camera follows something, in map tracking or Cockpit', () => {
+  const { viewer, dataManager, styleManager } = harness();
+  let cockpit = { active: false };
+  styleManager.getCockpitState = () => cockpit;
+  const following = () =>
+    getWorldPacket({ viewer, dataManager, styleManager }).cameraFollowing;
+  assert.equal(following(), false);
+  // Map tracking, as after leaving Cockpit.
+  viewer.trackedEntity = { id: 'plane' };
+  assert.equal(following(), true);
+  // Cockpit takes the entity off the viewer and follows it itself.
+  viewer.trackedEntity = undefined;
+  cockpit = { active: true, activeTracked: true };
+  assert.equal(following(), true);
+});
+
+test('World Packet carries the HUD readouts, or null before the HUD measures', () => {
+  const { viewer, dataManager, styleManager } = harness();
+  const packet = () => getWorldPacket({ viewer, dataManager, styleManager });
+  assert.equal(packet().readouts, null);
+  styleManager.hud = { getReadouts: () => null };
+  assert.equal(packet().readouts, null);
+  const readouts = { headingDeg: 15, rangeToCenterM: 924 };
+  styleManager.hud = { getReadouts: () => readouts };
+  assert.deepEqual(packet().readouts, readouts);
 });
