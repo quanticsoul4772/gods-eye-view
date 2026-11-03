@@ -5,6 +5,7 @@ import { allocateSourceCap, resolveCatalogCap } from './cap.js';
 import { loadGroundHeights, joinGroundHeights } from './groundHeights.js';
 import { cameraRegion, normalizeSourceItem } from './normalize.js';
 import { loadLithuaniaSources } from './lithuania.js';
+import { loadTaiwanSources } from './taiwan.js';
 import {
   loadAustinSourcesFromOpenData,
   loadCaltransSourcesFromOpenData,
@@ -19,12 +20,15 @@ import {
   loadNswSourcesFromOpenData,
   loadCalgarySourcesFromOpenData,
   loadCataloniaSourcesFromOpenData,
+  loadHkSourcesFromOpenData,
   loadDelDOTSourcesFromOpenData,
   loadKingCountySourcesFromOpenData,
   loadWsdotSourcesFromOpenData,
   loadVegvesenSourcesFromOpenData,
   loadNycSourcesFromOpenData,
   loadTorontoSourcesFromOpenData,
+  loadFloridaSourcesFromOpenData,
+  loadA22SourcesFromOpenDataHub,
 } from './sources.js';
 
 /** Env kill switch: unset or anything but "0" means enabled. */
@@ -147,6 +151,14 @@ const LIVE_PACKS = [
     load: loadCataloniaSourcesFromOpenData,
   },
   {
+    name: 'hk',
+    enabled: () => envEnabled('CCTV_HK_ENABLED'),
+    label: 'Hong Kong Transport Department',
+    area: { south: 22.15, west: 113.83, north: 22.57, east: 114.44 },
+    offHint: 'CCTV_HK_ENABLED is set to 0; remove it to turn the pack on',
+    load: loadHkSourcesFromOpenData,
+  },
+  {
     name: 'deldot',
     enabled: () => envEnabled('CCTV_DELDOT_ENABLED'),
     label: 'DelDOT (Delaware)',
@@ -207,6 +219,34 @@ const LIVE_PACKS = [
     area: { south: 53.9, west: 20.9, north: 56.5, east: 26.9 },
     offHint: 'set CCTV_LITHUANIA_ENABLED=1; the photo terms are unconfirmed',
     load: loadLithuaniaSources,
+  },
+  {
+    // FL511's terms limit its content to individual, personal use (other use
+    // needs FDOT's written consent), so the pack is off unless the operator
+    // opts in (see DATA_SOURCES.md).
+    name: 'florida',
+    enabled: () => envOptIn('CCTV_FLORIDA_ENABLED'),
+    label: 'FL511 (Florida)',
+    area: { south: 24.4, west: -87.7, north: 31.0, east: -79.9 },
+    offHint:
+      "set CCTV_FLORIDA_ENABLED=1; FL511's terms allow individual, personal use only",
+    load: loadFloridaSourcesFromOpenData,
+  },
+  {
+    name: 'taiwan',
+    enabled: () => envEnabled('CCTV_TAIWAN_ENABLED'),
+    label: 'Freeway Bureau (Taiwan)',
+    area: { south: 21.85, west: 120.0, north: 25.35, east: 122.05 },
+    offHint: 'CCTV_TAIWAN_ENABLED is set to 0; remove it to turn the pack on',
+    load: loadTaiwanSources,
+  },
+  {
+    name: 'a22',
+    enabled: () => envEnabled('CCTV_A22_ENABLED'),
+    label: 'Autostrada del Brennero (A22)',
+    area: { south: 44.6, west: 10.85, north: 47.0, east: 11.55 },
+    offHint: 'CCTV_A22_ENABLED is set to 0; remove it to turn the pack on',
+    load: loadA22SourcesFromOpenDataHub,
   },
 ];
 /**
@@ -275,9 +315,11 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
   /** @type {Promise<Array<object>>|null} In-flight refresh, shared by concurrent
    * callers so a post-TTL burst launches ONE refetch, not one per request. */
   let _cctvSourceInflight = null;
-  /** @type {Array<{pack: string, available: number, served: number}>} Packs
-   * that serve fewer cameras than they offer. */
-  let _cctvTrimmedPacks = [];
+  /** @type {WeakMap<Array<object>, Array<{pack: string, available: number, served: number}>>}
+   * Packs that serve fewer cameras than they offer, keyed by the source list
+   * they describe, so a request served the old list during a background
+   * refresh never pairs it with the new list's trim notes. */
+  const _cctvTrimmedPacks = new WeakMap();
 
   /**
    * Assemble and cache the merged CCTV source list.
@@ -305,11 +347,16 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
         _cctvSourceInflight = null;
       });
       // A background refresh has no caller waiting on it: report its failure
-      // here, once per refresh rather than once per request it serves.
+      // here, once per refresh rather than once per request it serves. Keep
+      // the old catalog for another TTL, as an empty refresh does, so a refresh
+      // that keeps failing is retried once per TTL, not back to back.
       if (_cctvSourceCache.length) {
         _cctvSourceInflight.catch((error) => {
+          _cctvSourceCacheAt = Date.now();
           console.warn(
-            '[CCTV] background catalog refresh failed:',
+            '[CCTV] background catalog refresh failed; serving',
+            _cctvSourceCache.length,
+            'cameras from the last catalog:',
             error?.message || error,
           );
         });
@@ -409,7 +456,7 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
     }
     if (capped.length > 0 || _cctvSourceCache.length === 0) {
       _cctvSourceCache = capped;
-      _cctvTrimmedPacks = trimmedPacks;
+      _cctvTrimmedPacks.set(capped, trimmedPacks);
     } else {
       // Every source came back empty (all live packs timed out / upstream outage)
       // but a good catalog is already cached — serve it stale rather than blanking
@@ -423,7 +470,10 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
     return _cctvSourceCache;
   }
 
-  /** Packs serving fewer cameras than they offer, as of the last refresh. */
-  getCctvSources.trimmedPacks = () => _cctvTrimmedPacks;
+  /** Packs serving fewer cameras than they offer in `sources` (by default the
+   * current catalog). Pass the list a request was served to keep the two in
+   * step while a background refresh swaps the catalog. */
+  getCctvSources.trimmedPacks = (sources = _cctvSourceCache) =>
+    _cctvTrimmedPacks.get(sources) ?? [];
   return getCctvSources;
 }

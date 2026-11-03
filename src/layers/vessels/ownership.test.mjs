@@ -4,11 +4,6 @@ import { createVesselLayer } from './index.js';
 import { createVesselState } from './state.js';
 
 const noop = () => {};
-/** Paced-render holds taken by the layer: owner id → interval (ms). */
-const pacedHolds = new Map();
-/** One-shot frame requests, by reason. */
-const frameRequests = [];
-let focusNeeded = false;
 function services() {
   return {
     context: {
@@ -30,15 +25,14 @@ function services() {
     focus: {
       focusNowMs: (now) => now,
       getFocusTarget: () => null,
-      focusPassIsNeeded: () => focusNeeded,
+      focusPassIsNeeded: () => false,
       forgetSpriteFocus: noop,
     },
     worldFocus: {},
     render: {
-      holdPacedRender: (owner, ms) => pacedHolds.set(owner, ms),
-      releasePacedRender: (owner) => pacedHolds.delete(owner),
-      markPacedStep: noop,
-      governorRequestRender: (reason) => frameRequests.push(reason),
+      holdContinuousRender: noop,
+      releaseContinuousRender: noop,
+      governorRequestRender: noop,
     },
   };
 }
@@ -114,46 +108,6 @@ test('vessel construction is inert and each instance owns its records, icon cach
   layer.testing._beginAisSessionForTest();
   assert.equal(other.getStats().loading, false);
   assert.equal(requested, 0);
-  layer.testing._setVesselStateForTest({ enabled: false });
-});
-
-test('the layer paces the render loop only while it has ships to draw', async () => {
-  // Contacts (opened by the cockpit) enables vessels even without an AIS key;
-  // an empty layer holding render kept the scene drawing every frame. With
-  // ships the scene draws a frame per pass (800 ms), not every frame.
-  pacedHolds.clear();
-  frameRequests.length = 0;
-  let current = snapshot([]);
-  const { layer } = setup({
-    async getSnapshot() {
-      return current;
-    },
-  });
-  // setup() leaves the feed enabled, as enable() would.
-  await layer.update();
-  assert.equal(pacedHolds.has('ais-vessels'), false, 'no ships, no hold');
-  current = snapshot([observation('111')]);
-  await layer.update();
-  assert.equal(
-    pacedHolds.get('ais-vessels'),
-    800,
-    'ships pace it at the pass interval',
-  );
-  assert.ok(
-    frameRequests.includes('ais-vessels-snapshot'),
-    'a snapshot draws at once',
-  );
-  // A focus fade (a tracked target, or the fade back after it) runs at 80 ms.
-  focusNeeded = true;
-  await layer.update();
-  assert.equal(pacedHolds.get('ais-vessels'), 80);
-  focusNeeded = false;
-  await layer.update();
-  assert.equal(pacedHolds.get('ais-vessels'), 800);
-  // An empty update keeps the ships already drawn, and with them the hold.
-  current = snapshot([]);
-  await layer.update();
-  assert.equal(layer.hasContact('111'), pacedHolds.has('ais-vessels'));
   layer.testing._setVesselStateForTest({ enabled: false });
 });
 

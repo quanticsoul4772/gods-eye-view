@@ -65,9 +65,7 @@ test('credential file warnings never expose file contents or read errors', async
   t.mock.method(console, 'warn', (message) => warnings.push(message));
   for (const contents of [
     '{"clientId":"id","clientSecret":FAKE_SECRET_123}',
-    Object.assign(new Error('could not read FAKE_SECRET_123'), {
-      code: 'EACCES',
-    }),
+    new Error('could not read FAKE_SECRET_123'),
   ]) {
     const { openSkyClientCredentials: resolve } = await import(
       `./opensky.js?warning=${warnings.length}`

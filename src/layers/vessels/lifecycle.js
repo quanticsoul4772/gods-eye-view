@@ -11,7 +11,7 @@ export function createLifecycle({
 }) {
   const { state } = vesselState;
   const { restoreSpriteOrder, restoreSpriteOrderOnEnable } = services.sprites;
-  const { holdPacedRender, releasePacedRender } = services.render;
+  const { releaseContinuousRender } = services.render;
   const { ensureGeoidReady } = services.geoid;
   const { registerPickOwner, unregisterPickOwner } = services.picking;
 
@@ -125,6 +125,7 @@ export function createLifecycle({
     state.interactionHandlerFactory = null;
     state.interactionKeyTarget = null;
     state.preRenderRemover = null;
+    components.rendering.cancelTrailingVisibilityPass();
     state.lastVisibilityUpdate = 0;
     state.lastFocusUpdate = 0;
     state.activeFocusCount = 0;
@@ -135,22 +136,6 @@ export function createLifecycle({
     state.trailMmsi = null;
     state.trailBackfillToken = 0;
   }
-  /**
-   * Ask for frames only while there are ships to draw, and only as often as
-   * the layer's passes run (`renderStepMs`: 800 ms, 80 ms during a focus
-   * fade). Ships move only when a snapshot lands, which requests its own
-   * frame. The layer used to hold continuous render: with ships at rest over
-   * the Channel it was the scene's only hold and Google 3D redrew ~55 times a
-   * second for a pass that runs about once a second. The layer is also often
-   * enabled with no ships: Contacts (opened by the cockpit) turns it on even
-   * when AIS has no key.
-   */
-  function syncRenderDemand() {
-    if (state.feed.enabled && state.records.byMmsi.size > 0)
-      holdPacedRender('ais-vessels', components.rendering.renderStepMs());
-    else releasePacedRender('ais-vessels');
-  }
-
   const methods = {
     /** Configure the source before initialization; an active layer keeps its owner. */
     setSource(source) {
@@ -180,7 +165,6 @@ export function createLifecycle({
       const wasEnabled = state.feed.enabled;
       state.feed.enabled = true;
       if (!wasEnabled) beginAisSession();
-      syncRenderDemand();
       const activeViewer = viewer || state.viewer;
       components.rendering.ensureCollections(activeViewer);
       components.selection.installInteraction(activeViewer);
@@ -223,7 +207,8 @@ export function createLifecycle({
       removeViewListener();
       state.feed.enabled = false;
       invalidateAisSession();
-      releasePacedRender('ais-vessels');
+      releaseContinuousRender('ais-vessels');
+      components.rendering.cancelTrailingVisibilityPass();
       unregisterPickOwner('ais-live-vessels');
       components.rendering.setVisible(false);
       vesselState._vesselOverlayHost.clearSource(VESSEL_OVERLAY_SOURCE_ID);
@@ -242,7 +227,8 @@ export function createLifecycle({
       removeViewListener();
       const activeViewer = viewer || state.viewer;
       invalidateAisSession();
-      releasePacedRender('ais-vessels'); // direct-destroy path (perf wave 2 fix)
+      releaseContinuousRender('ais-vessels'); // direct-destroy path (perf wave 2 fix)
+      components.rendering.cancelTrailingVisibilityPass();
       if (state.feed.abort) state.feed.abort.abort();
       unregisterPickOwner('ais-live-vessels');
       components.selection.clearVesselInspection();
@@ -279,7 +265,6 @@ export function createLifecycle({
     isDefinitiveTransportFailure,
     markAisUnavailable,
     resetState,
-    syncRenderDemand,
     methods,
   };
 }

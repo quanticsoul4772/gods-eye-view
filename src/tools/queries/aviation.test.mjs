@@ -3,6 +3,8 @@ import test from 'node:test';
 import { composeCatalog, coreTools } from '../index.js';
 import { airlineDesignator } from './aviation.js';
 import { LiveSourceError } from '../../sources/live/contract.js';
+import { createMcpServer } from '../mcp/index.js';
+import { createToolServices } from '../services.js';
 
 const record = (id, latitude, longitude, extra = {}) => ({
   id,
@@ -243,6 +245,61 @@ test('tracks are ordered and thinned to 200 points', async () => {
   );
 });
 
+test('military track history is unsupported by the default composition and kept for custom sources', async () => {
+  const requests = [];
+  const services = createToolServices({
+    fetchImpl: async (url) => {
+      requests.push(String(url));
+      throw new Error('no request expected');
+    },
+    appUrl: 'http://localhost:5173',
+  });
+  const catalog = composeCatalog({ tools: coreTools, services });
+  await assert.rejects(
+    catalog.call('get_aircraft_track', { icao24: 'AE0001', military: true }),
+    (error) =>
+      error.name === 'ToolError' &&
+      error.code === 'unsupported' &&
+      /military/.test(error.message),
+  );
+  const server = createMcpServer({ catalog, name: 'test', version: '1.0.0' });
+  const { result } = await server.handle({
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'tools/call',
+    params: {
+      name: 'get_aircraft_track',
+      arguments: { icao24: 'ae0001', military: true },
+    },
+  });
+  assert.equal(result.isError, true);
+  assert.equal(result.structuredContent.error, 'unsupported');
+  assert.doesNotMatch(result.content[0].text, /try again|later/i);
+  assert.deepEqual(requests, []);
+
+  const track = [
+    {
+      latitude: 37.6,
+      longitude: -122.3,
+      observedAtMs: Date.UTC(2026, 0, 1),
+      baroAltitudeM: 3000,
+      onGround: false,
+    },
+  ];
+  const custom = feed(military, { track });
+  const withHistory = composeCatalog({
+    tools: coreTools,
+    services: { aircraft: feed(civil), military: custom },
+  });
+  const kept = await withHistory.call('get_aircraft_track', {
+    icao24: 'AE0001',
+    military: true,
+  });
+  assert.equal(custom.calls[0], 'ae0001');
+  assert.equal(kept.data.total, 1);
+  assert.equal(kept.data.view.follow.kind, 'military_aircraft');
+});
+
 test('aircraft info combines type and route lookups', async () => {
   const aircraft = feed(civil, {
     enrichment: {
@@ -411,7 +468,11 @@ test('aircraft in an area can be counted by operator over every match', async ()
     record('a1', 37.6, -122.3, { operator: 'United' }),
     record('a2', 37.61, -122.3, { operator: 'Delta' }),
     record('a3', 37.62, -122.3, { operator: 'United', baroAltitudeM: 3000 }),
-    record('a4', 37.63, -122.3, { onGround: true, baroAltitudeM: 0 }),
+    record('a4', 37.63, -122.3, {
+      onGround: true,
+      baroAltitudeM: 0,
+      speedMps: 0,
+    }),
     record('a5', 51.5, -0.1, { operator: 'British Airways' }),
   ];
   const catalog = composeCatalog({
@@ -476,15 +537,44 @@ test('aircraft in an area can be counted by operator over every match', async ()
     other_count: 0,
     unknown_count: 1,
   });
-  // Altitude covers airborne aircraft only; speed covers every match.
-  assert.deepEqual(result.data.stats.altitude_m, {
-    count: 3,
-    min: 3000,
-    median: 10000,
-    mean: 7666.7,
-    max: 10000,
+  // Both figures cover airborne aircraft only: the parked a4 stands at 0 m
+  // and 0 m/s and would pull each mean down.
+  assert.deepEqual(result.data.stats, {
+    altitude_m: {
+      count: 3,
+      min: 3000,
+      median: 10000,
+      mean: 7666.7,
+      max: 10000,
+    },
+    speed_mps: { count: 3, min: 230, median: 230, mean: 230, max: 230 },
   });
-  assert.equal(result.data.stats.speed_mps.count, 4);
+});
+
+test('aircraft stats are empty when every match is on the ground', async () => {
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: {
+      aircraft: feed([
+        record('g1', 37.6, -122.3, {
+          onGround: true,
+          baroAltitudeM: 0,
+          speedMps: 0,
+        }),
+        record('g2', 37.61, -122.3, {
+          onGround: true,
+          baroAltitudeM: 0,
+          speedMps: 4,
+        }),
+      ]),
+    },
+  });
+  const result = await catalog.call('aircraft_in_area', {
+    area: bay,
+    stats: true,
+  });
+  assert.match(result.summary, /^2 aircraft in /);
+  assert.deepEqual(result.data.stats, { altitude_m: null, speed_mps: null });
 });
 
 test('aircraft answers carry no breakdown or stats unless asked', async () => {
@@ -499,50 +589,6 @@ test('aircraft answers carry no breakdown or stats unless asked', async () => {
     catalog.call('aircraft_in_area', { area: bay, group_by: 'callsign' }),
     /must be one of/,
   );
-});
-
-test('an airline designator is read from an ICAO flight callsign only', () => {
-  for (const [callsign, designator] of [
-    ['SWA1234', 'SWA'],
-    ['ual12a', 'UAL'],
-    [' BAW1 ', 'BAW'],
-    ['RCH123', 'RCH'],
-    ['N123AB', null],
-    ['GABCD', null],
-    ['SWA', null],
-    ['SWAX123', null],
-    ['SWA12345', null],
-    ['RPC1234', null],
-    ['CUT1240', null],
-    ['CUB123', 'CUB'],
-    ['', null],
-    [null, null],
-  ])
-    assert.equal(airlineDesignator(callsign), designator, String(callsign));
-});
-
-test('aircraft in an area can be counted by airline from their callsigns', async () => {
-  const fleet = [
-    record('a1', 37.6, -122.3, { callsign: 'SWA100' }),
-    record('a2', 37.61, -122.3, { callsign: 'SWA2' }),
-    record('a3', 37.62, -122.3, { callsign: 'UAL9' }),
-    record('a4', 37.63, -122.3, { callsign: 'N123AB' }),
-  ];
-  const catalog = composeCatalog({
-    tools: coreTools,
-    services: { aircraft: feed(fleet) },
-  });
-  const result = await catalog.call('aircraft_in_area', {
-    area: bay,
-    group_by: 'airline',
-  });
-  assert.equal(
-    result.summary,
-    '4 aircraft in 60 km around 37.600, -122.300; most by airline: SWA (2), UAL (1); 1 unknown.',
-  );
-  assert.equal(result.data.breakdown.field, 'airline');
-  // Rows are unchanged: the designator is derived, not added to each row.
-  assert.equal('airline' in result.data.rows[0], false);
 });
 
 test('altitude bands require a reported altitude from normalized OpenSky records', async () => {
@@ -602,4 +648,48 @@ test('altitude bands require a reported altitude from normalized OpenSky records
     min_altitude_m: -500,
   });
   assert.equal(minimum.data.total, 3);
+});
+
+test('an airline designator is read from an ICAO flight callsign only', () => {
+  for (const [callsign, designator] of [
+    ['SWA1234', 'SWA'],
+    ['ual12a', 'UAL'],
+    [' BAW1 ', 'BAW'],
+    ['RCH123', 'RCH'],
+    ['N123AB', null],
+    ['GABCD', null],
+    ['SWA', null],
+    ['SWAX123', null],
+    ['SWA12345', null],
+    ['RPC1234', null],
+    ['CUT1240', null],
+    ['CUB123', 'CUB'],
+    ['', null],
+    [null, null],
+  ])
+    assert.equal(airlineDesignator(callsign), designator, String(callsign));
+});
+
+test('aircraft in an area can be counted by airline from their callsigns', async () => {
+  const fleet = [
+    record('a1', 37.6, -122.3, { callsign: 'SWA100' }),
+    record('a2', 37.61, -122.3, { callsign: 'SWA2' }),
+    record('a3', 37.62, -122.3, { callsign: 'UAL9' }),
+    record('a4', 37.63, -122.3, { callsign: 'N123AB' }),
+  ];
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: { aircraft: feed(fleet) },
+  });
+  const result = await catalog.call('aircraft_in_area', {
+    area: bay,
+    group_by: 'airline',
+  });
+  assert.equal(
+    result.summary,
+    '4 aircraft in 60 km around 37.600, -122.300; most by airline: SWA (2), UAL (1); 1 unknown.',
+  );
+  assert.equal(result.data.breakdown.field, 'airline');
+  // Rows are unchanged: the designator is derived, not added to each row.
+  assert.equal('airline' in result.data.rows[0], false);
 });

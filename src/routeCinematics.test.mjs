@@ -1123,3 +1123,20 @@ test('a flying route climbs clear of high ground once the terrain answers', () =
   for (let i = 0; i < 400; i += 1) heightM = advanceRouteFlight(flight, FRAME_S).heightM;
   assert.ok(heightM > 4300 + 1000, `climbed to ${heightM} m`);
 });
+
+test('a route hidden from Draw is not flown; the newest visible one is', () => {
+  const viewer = createTickableViewer();
+  initCameraVerbs(viewer.viewer, () => null);
+  const route = (label, hidden) => ({
+    type: 'route',
+    label,
+    hidden,
+    path: TWO_TURN_ROUTE.map(([lon, lat]) => ({ lon, lat, height: 0 })),
+  });
+  const onlyHidden = flyRoute([route('hidden walk', true)]);
+  assert.equal(onlyHidden.ok, false, 'a board of hidden routes has none to fly');
+  const started = flyRoute([route('shown walk', false), route('hidden walk', true)]);
+  assert.equal(started.ok, true);
+  assert.match(JSON.stringify(started), /shown walk/, 'the visible route is flown');
+  interruptCameraMotion?.('test');
+});

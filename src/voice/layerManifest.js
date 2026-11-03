@@ -58,6 +58,20 @@ const layers = [
     noQuery: 'navigation-integrity cells; no countable analyst records',
   },
   {
+    id: 's2-ghostmaps',
+    aliases: [
+      's2 ghostmaps',
+      'ghost maps',
+      'ghostmaps',
+      's2 underground',
+      's2 intel',
+      'intel picture',
+      'common intelligence picture',
+    ],
+    context: false,
+    noQuery: 'published third-party intel placemarks; not analyst records',
+  },
+  {
     id: 'flights',
     track: true,
     aliases: ['planes', 'aircraft', 'air traffic'],
@@ -575,28 +589,30 @@ const SELF_EVIDENT_IDS = new Set([
   'lightning-eu',
 ]);
 
+/** Lower case with spaces and hyphens removed: "Data centers" → "datacenters". */
+const spelled = (text) => text.toLowerCase().replace(/[\s-]+/g, '');
+
 /**
  * Compact model-facing alias hint: "alias/alias→id; …" for toggleable layers
  * whose id is not already the spoken word. At most two aliases per layer keep
  * the tool JSON small; the runner accepts the full alias list. Of those two,
- * the id with spaces ("fire perimeters") is left out: the model reads it from
- * the id and the runner maps it.
+ * an alias the id already spells ("dams"→local-dams, "weather radar"→
+ * weather-radar) is left out, and a layer with neither left gets no hint.
  * @returns {string} One line for the layerId description.
  */
 export function voiceLayerAliasHint() {
   return VOICE_LAYER_MANIFEST.filter(
-    (entry) =>
-      entry.toggle && entry.aliases.length && !SELF_EVIDENT_IDS.has(entry.id),
+    (entry) => entry.toggle && !SELF_EVIDENT_IDS.has(entry.id),
   )
-    .map((entry) => {
-      const spoken = entry.id.replace(/-/g, ' ');
-      const shown = entry.aliases
+    .map((entry) => ({
+      id: entry.id,
+      aliases: entry.aliases
         .slice(0, 2)
-        .filter((alias) => alias.toLowerCase() !== spoken);
-      return shown.length ? `${shown.join('/')}→${entry.id}` : null;
-    })
-    .filter(Boolean)
-    .join('; ');
+        .filter((alias) => !spelled(entry.id).includes(spelled(alias))),
+    }))
+    .filter((entry) => entry.aliases.length)
+    .map((entry) => `${entry.aliases.join('/')}→${entry.id}`)
+    .join(';');
 }
 
 /** Field names that already carry their unit (altitudeM, speedKts, …). */

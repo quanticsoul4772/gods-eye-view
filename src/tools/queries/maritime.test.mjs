@@ -297,6 +297,60 @@ test('numeric AIS ship-type codes group and filter by their family', async () =>
   );
 });
 
+test('reserved AIS ship-type codes 100 to 255 count as unknown', async () => {
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: {
+      vessels: vessels({
+        records: [
+          vessel('366000001', 37.78, -122.4, { type: '100' }),
+          vessel('366000002', 37.79, -122.41, { type: '255' }),
+          vessel('366000003', 37.77, -122.39, { type: '70' }),
+        ],
+      }),
+    },
+  });
+  const result = await catalog.call('vessels_in_area', {
+    area: bay,
+    group_by: 'type',
+  });
+  assert.deepEqual(result.data.breakdown.groups, [
+    { value: 'CARGO', count: 1 },
+  ]);
+  assert.equal(result.data.breakdown.unknown_count, 2);
+  assert.doesNotMatch(result.summary, /\b(100|255) \(/);
+});
+
+test('find_vessel answers carry normalized types and destinations', async () => {
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: {
+      vessels: vessels({
+        records: [
+          vessel('366000001', 37.78, -122.4, {
+            type: '71',
+            destination: '---',
+          }),
+          vessel('366000002', 37.79, -122.41, {
+            type: '0',
+            destination: 'NLRTM',
+          }),
+        ],
+      }),
+    },
+  });
+  const cargo = await catalog.call('find_vessel', { mmsi: '366000001' });
+  assert.deepEqual(
+    cargo.data.rows.map((row) => [row.type, row.destination]),
+    [['CARGO', null]],
+  );
+  const unknown = await catalog.call('find_vessel', { mmsi: '366000002' });
+  assert.deepEqual(
+    unknown.data.rows.map((row) => [row.type, row.destination]),
+    [[null, 'NLRTM']],
+  );
+});
+
 test('a destination with no letters counts as unknown', async () => {
   const catalog = composeCatalog({
     tools: coreTools,

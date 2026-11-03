@@ -10,16 +10,8 @@ export function onKeyDown(event) {
     if (event.target?.closest?.('.cesium-credit-lightbox')) return;
     // The typed Claude field owns Escape (it closes the field), not Cockpit.
     if (event.target?.closest?.('#gev-ask-cockpit')) return;
-    if (
-      document
-        .getElementById('context-radio-dock')
-        ?.classList.contains('disclosure-open')
-    )
-      return;
-    if (
-      document.querySelector('#cockpit-utility-controls [aria-expanded="true"]')
-    )
-      return;
+    // An open Display or Radio popover takes Escape itself.
+    if (this.isUtilityDisclosureOpen?.()) return;
     if (this.context?.contains(event.target) && !this.contextCollapsed) {
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -66,7 +58,8 @@ export function onKeyDown(event) {
     event.preventDefault();
     event.stopImmediatePropagation();
     if (!this.active && !this.isEntryAllowed()) return;
-    const changed = this.active ? this.exit() : this.enter();
+    if (this.active) this.exit();
+    else this.enter();
     return;
   }
 }

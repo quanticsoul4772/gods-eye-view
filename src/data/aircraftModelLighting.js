@@ -4,11 +4,13 @@
  *
  * Cesium gives each Model a dynamic environment map: it renders the sky around
  * the model and reads the result back from the GPU (`readPixels`) to light it,
- * and redoes that whenever the model moves more than 1 km. An airliner covers
- * that in four seconds, so a tracked aircraft's model spent ~2.1 s of every
- * 10 s of main-thread time on GPU readbacks (Intel Arc, Chrome, D3D11). The
- * models are tinted near-flat by code (`colorBlendAmount`), so the dynamic sky
- * lighting is barely visible on them; they use Cesium's default lighting.
+ * when the model is first placed and again when it moves more than 1 km, when
+ * the scene's atmosphere settings change, or every scene hour under sunlight
+ * lighting. Aircraft models take 94% of their surface from the class colour
+ * (`colorBlendAmount`), so that lighting contributes little; without it they
+ * are lit from Cesium's default spherical harmonics. Measured 2026-10-24
+ * (Intel Arc, Google 3D, ~150 models in the scene): GPU per frame at rest
+ * 14.3-14.8 -> 12.1-12.5 ms.
  */
 export const AIRCRAFT_ENVIRONMENT_MAP_OPTIONS = Object.freeze({
   enabled: false,

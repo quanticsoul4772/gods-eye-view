@@ -1,5 +1,7 @@
 import * as Cesium from 'cesium';
 import { renderPackGeometry } from './geometry.js';
+import { useDataPacksStore } from '../../ui/stores/dataPacks.js';
+import { applicationPinia } from '../../ui/vueRuntime.js';
 import { t } from '../../i18n/index.js';
 
 /** The card label for a pack's declared provenance. */
@@ -9,39 +11,6 @@ export function provenanceLabel(provenance) {
   return t('Artistic rendering');
 }
 
-function caption(viewer, pack) {
-  const card = document.createElement('section');
-  card.dataset.directorPack = pack.id;
-  Object.assign(card.style, {
-    color: '#e3faff',
-    background: '#08141eed',
-    border: '1px solid #2491a8',
-    padding: '8px',
-    margin: '4px',
-    maxWidth: '260px',
-    font: '12px sans-serif',
-  });
-  if (pack.provenance) {
-    const kind = document.createElement('div');
-    kind.dataset.provenance = pack.provenance;
-    kind.textContent = provenanceLabel(pack.provenance);
-    kind.style.fontWeight = 'bold';
-    card.append(kind);
-  }
-  const title = document.createElement('div');
-  title.textContent = `${pack.id} · ${pack.attribution.text} · ${pack.attribution.license}`;
-  card.append(title);
-  if (pack.attribution.url) {
-    const link = document.createElement('a');
-    link.textContent = t('Source');
-    link.href = pack.attribution.url;
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-    link.style.color = '#6eeaff';
-    card.append(link);
-  }
-  return card;
-}
 const xyz = (p) => Cesium.Cartesian3.fromDegrees(...p);
 
 const PNG_SIGNATURE = [137, 80, 78, 71, 13, 10, 26, 10];
@@ -108,29 +77,59 @@ export function photoDimensions(mimeType, bytes) {
   return size;
 }
 
-/** Create rendering adapters; data acquisition and authored placement stay independent. */
-export function createPackPresentations(viewer, targets = new Map()) {
-  let panel;
+// Key every panel and card on the page, so a new one never reuses an old
+// one's DOM.
+let panelKeys = 0,
+  cardKeys = 0;
+
+/**
+ * Create rendering adapters; data acquisition and authored placement stay
+ * independent. Each pack's attribution card is presented to the data packs
+ * store, which its view renders inside the viewer's container.
+ */
+export function createPackPresentations(
+  viewer,
+  targets = new Map(),
+  { store = useDataPacksStore(applicationPinia()) } = {},
+) {
+  const owner = {};
+  let key,
+    cards = [];
+  function present() {
+    store.publish(
+      owner,
+      cards.length ? { key, container: viewer.container, cards } : null,
+    );
+  }
   function addCard(pack) {
-    if (!panel) {
-      panel = document.createElement('div');
-      panel.dataset.directorPacks = '';
-      Object.assign(panel.style, {
-        position: 'absolute',
-        right: '10px',
-        bottom: '70px',
-        maxHeight: '40vh',
-        overflowY: 'auto',
-        zIndex: '30',
-      });
-      viewer.container.append(panel);
-    }
-    const card = caption(viewer, pack);
+    if (!cards.length) key = ++panelKeys;
+    const card = {
+      key: ++cardKeys,
+      id: pack.id,
+      provenance: pack.provenance || null,
+      provenanceLabel: pack.provenance
+        ? provenanceLabel(pack.provenance)
+        : null,
+      title: `${pack.id} · ${pack.attribution.text} · ${pack.attribution.license}`,
+      url: pack.attribution.url || null,
+      media: null,
+      photo: null,
+    };
     // Photos lead: the panel shows about one photo card before it scrolls,
     // and a credit-only card must not push the picture out of view.
-    if (pack.format === 'photo') panel.prepend(card);
-    else panel.append(card);
-    return card;
+    cards = pack.format === 'photo' ? [card, ...cards] : [...cards, card];
+    present();
+    return card.key;
+  }
+  function updateCard(key, patch) {
+    cards = cards.map((card) =>
+      card.key === key ? { ...card, ...patch } : card,
+    );
+    present();
+  }
+  function removeCard(key) {
+    cards = cards.filter((card) => card.key !== key);
+    present();
   }
   function resource(pack) {
     const entities = [],
@@ -159,7 +158,17 @@ export function createPackPresentations(viewer, targets = new Map()) {
         viewer.scene.requestRender();
       },
       card() {
-        return (card ||= addCard(pack));
+        card ||= addCard(pack);
+      },
+      /** @param {{kind: 'video'|'audio', src: string}} media */
+      media(media) {
+        card ||= addCard(pack);
+        updateCard(card, { media });
+      },
+      /** @param {{src: string, alt: string, title: string}} photo */
+      photo(photo) {
+        card ||= addCard(pack);
+        updateCard(card, { photo });
       },
       url(blob) {
         const url = URL.createObjectURL(blob);
@@ -170,16 +179,8 @@ export function createPackPresentations(viewer, targets = new Map()) {
         if (destroyed) return;
         destroyed = true;
         for (const key of featureKeys.splice(0)) targets.delete(key);
-        for (const media of card?.querySelectorAll('video,audio') || []) {
-          media.pause();
-          media.removeAttribute('src');
-          media.load();
-        }
-        card?.remove();
-        if (panel && !panel.childElementCount) {
-          panel.remove();
-          panel = null;
-        }
+        // The view stops a removed card's player as it goes.
+        if (card) removeCard(card);
         for (const entity of entities.splice(0)) viewer.entities.remove(entity);
         for (const primitive of primitives.splice(0))
           viewer.scene.primitives.remove(primitive);
@@ -293,14 +294,10 @@ export function createPackPresentations(viewer, targets = new Map()) {
           pixelOffset: new Cesium.Cartesian2(0, -24),
         },
       });
-      const media = document.createElement(
-        asset.mimeType.startsWith('video/') ? 'video' : 'audio',
-      );
-      media.controls = true;
-      media.preload = 'none';
-      media.style.width = '240px';
-      media.src = handle.url(new Blob([asset.bytes], { type: asset.mimeType }));
-      handle.card().append(media);
+      handle.media({
+        kind: asset.mimeType.startsWith('video/') ? 'video' : 'audio',
+        src: handle.url(new Blob([asset.bytes], { type: asset.mimeType })),
+      });
     }),
     photo: guarded(async ({ asset, pack, anchors, signal }, handle) => {
       photoDimensions(asset.mimeType, asset.bytes);
@@ -333,19 +330,11 @@ export function createPackPresentations(viewer, targets = new Map()) {
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
       });
-      image.alt = anchor.title || pack.id;
-      Object.assign(image.style, {
-        display: 'block',
-        width: '320px',
-        height: 'auto',
-        marginBottom: '4px',
+      handle.photo({
+        src: image.src,
+        alt: anchor.title || pack.id,
+        title: anchor.title || pack.id,
       });
-      const title = document.createElement('div');
-      title.textContent = anchor.title || pack.id;
-      title.style.fontWeight = '600';
-      const card = handle.card();
-      card.style.maxWidth = '340px';
-      card.prepend(image, title);
     }),
   };
 }

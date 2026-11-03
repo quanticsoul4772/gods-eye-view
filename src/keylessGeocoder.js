@@ -206,12 +206,27 @@ export function photonSearchUrl(
   url.searchParams.set('limit', String(limit));
 
   const corners = String(bias ?? '').split('|');
-  if (corners.length === 2) {
-    const [swLat, swLng] = corners[0].split(',').map(Number);
-    const [neLat, neLng] = corners[1].split(',').map(Number);
-    if ([swLat, swLng, neLat, neLng].every(Number.isFinite)) {
+  const tokens = corners.flatMap((corner) => corner.split(','));
+  if (
+    corners.length === 2 &&
+    corners.every((corner) => corner.split(',').length === 2) &&
+    tokens.every((token) => token.trim() !== '')
+  ) {
+    const [swLat, swLng, neLat, neLng] = tokens.map(Number);
+    if (
+      [swLat, swLng, neLat, neLng].every(Number.isFinite) &&
+      Math.abs(swLat) <= 90 &&
+      Math.abs(neLat) <= 90 &&
+      swLat <= neLat &&
+      Math.abs(swLng) <= 180 &&
+      Math.abs(neLng) <= 180
+    ) {
+      const midpoint = (swLng + neLng + (swLng > neLng ? 360 : 0)) / 2;
       url.searchParams.set('lat', String((swLat + neLat) / 2));
-      url.searchParams.set('lon', String((swLng + neLng) / 2));
+      url.searchParams.set(
+        'lon',
+        String(midpoint > 180 ? midpoint - 360 : midpoint),
+      );
     }
   }
   return url.toString();
@@ -269,6 +284,13 @@ export function selectPhotonFeature(
 /** Short country names people type that Photon's fields don't carry. */
 const COUNTRY_ALIASES = Object.freeze({ US: 'usa', GB: 'uk' });
 
+/**
+ * OSM keys of settlements and administrative areas. Among candidates that fit
+ * a "place, region" query, these are what the region names a place in: a cafe
+ * called "Paris" in Lyon is in France too, but "Paris, France" means the city.
+ */
+const SETTLEMENT_OSM_KEYS = Object.freeze(new Set(['place', 'boundary']));
+
 /** The region part of a "place, region" query, normalized ('' if none). */
 function queryRegion(query) {
   const [, ...rest] = String(query ?? '').split(',');
@@ -279,7 +301,8 @@ function queryRegion(query) {
  * For a "place, region" query, pick the candidate named for the place that
  * actually lies in the region. "Paris, Texas" is also the name of a pub in
  * Budapest: matched as one name it beat the town, so the region has to be
- * checked against where each candidate is, not against its name.
+ * checked against where each candidate is, not against its name. When several
+ * candidates fit, a settlement or administrative area wins over a POI.
  * @param {object[]} features - Photon features, in the order returned.
  * @param {string} query - The query as typed.
  * @returns {?object} null when the query names no region or nothing fits.
@@ -290,8 +313,8 @@ export function selectQualifiedFeature(features, query) {
   const head = normalizeToponym(headText);
   if (!head || !region) return null;
   const words = region.split(' ');
-  return (
-    (Array.isArray(features) ? features : []).find((feature) => {
+  const qualified = (Array.isArray(features) ? features : []).filter(
+    (feature) => {
       const properties = feature?.properties ?? {};
       const name = normalizeToponym(properties.name);
       // Exactly the place: "Paris Gare de Lyon" is in France too, but it
@@ -308,7 +331,14 @@ export function selectQualifiedFeature(features, query) {
         ].join(' '),
       )} `;
       return words.every((word) => where.includes(` ${word} `));
-    }) ?? null
+    },
+  );
+  return (
+    qualified.find((feature) =>
+      SETTLEMENT_OSM_KEYS.has(feature?.properties?.osm_key),
+    ) ??
+    qualified[0] ??
+    null
   );
 }
 
@@ -430,7 +460,7 @@ export async function geocodeKeylessWithOutcome(
   // to the wrong continent. So a biased answer is only accepted when it leads
   // with the name asked for; otherwise the same query runs unbiased, which is
   // what a user searching for somewhere off-screen meant in the first place.
-  // A query naming a region is only answered nearby by a match inside it.
+  // A query naming a region is answered nearby only by a match inside it.
   // A nearby place whose own name has a comma ("Bed, Bath & Beyond") and
   // equals the whole query is kept as the last choice, after the region
   // checks of both passes.

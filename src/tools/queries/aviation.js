@@ -174,13 +174,14 @@ export const aircraftInArea = defineTool({
       ...(snapshot.freshness === 'stale' ? ['data may be stale'] : []),
     ];
     // With group_by, stats also come per group (altitude by type, say).
-    const summarize = (subset) => ({
-      altitude_m: numericSummary(
-        subset.filter((row) => !row.on_ground),
-        'altitude_m',
-      ),
-      speed_mps: numericSummary(subset, 'speed_mps'),
-    });
+    // Parked aircraft would pull both figures toward zero.
+    const summarize = (subset) => {
+      const airborne = subset.filter((row) => !row.on_ground);
+      return {
+        altitude_m: numericSummary(airborne, 'altitude_m'),
+        speed_mps: numericSummary(airborne, 'speed_mps'),
+      };
+    };
     const groups = args.group_by
       ? breakdown(
           rows,
@@ -335,13 +336,20 @@ export const getAircraftTrack = defineTool({
   requires: ['aircraft'],
   async run(args, { services, signal }) {
     const icao24 = args.icao24.toLowerCase();
+    const source = feedFor(services, args.military);
+    // History is optional: the standalone military source has none.
+    if (typeof source.getTrack !== 'function')
+      throw new ToolError(
+        'unsupported',
+        args.military
+          ? 'Track history is not available for the military aircraft feed'
+          : 'Track history is not available for the aircraft feed',
+      );
     // A track server answers 404 for an aircraft it has no positions for.
-    const track = await feedFor(services, args.military)
-      .getTrack(icao24, { signal })
-      .catch((error) => {
-        if (error?.status === 404) return { records: [] };
-        throw error;
-      });
+    const track = await source.getTrack(icao24, { signal }).catch((error) => {
+      if (error?.status === 404) return { records: [] };
+      throw error;
+    });
     const points = [...track.records].sort(
       (a, b) => a.observedAtMs - b.observedAtMs,
     );
