@@ -419,6 +419,8 @@ test('packs may declare their provenance and a named colour, and nothing else', 
     (pk) => (pk.color = '#ff0000'),
     (pk) => (pk.color = 'url(x)'),
     (pk) => (pk.color = 'toString'),
+    (pk) => (pk.color = ['red']),
+    (pk) => (pk.color = '__proto__'),
     (pk) => {
       pk.format = 'image';
       pk.placement = {

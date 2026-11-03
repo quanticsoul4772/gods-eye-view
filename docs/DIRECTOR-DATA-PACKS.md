@@ -81,8 +81,10 @@ assets list them with their licenses in their asset folder's README, e.g.
 
 Optional `provenance` says what a pack shows: `observed` (measured values),
 `derived` (values computed from measurements) or `artistic` (a rendering made
-for the picture). The pack's card shows it as its first line, so a viewer can
-tell data from art. A GeoJSON pack may also name a `color` from a fixed set:
+for the picture). The pack's card shows it above the attribution (below the
+picture on a photo card), so a viewer can tell data from art. It is the scene
+author's declaration: the app does not check it against the data, so read an
+imported scene's labels as its author's claim. A GeoJSON pack may also name a `color` from a fixed set:
 `cyan` (the default), `white`, `yellow`, `orange`, `red`, `magenta`, `green` or
 `sky`. The whole pack is drawn in that colour; per-feature styles still do not
 exist, so split differently coloured features into separate packs.

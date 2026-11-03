@@ -98,6 +98,7 @@ export function validateDataPack(pack, path, anchorIds) {
   });
   optional(pack, 'color', path, (v, at) => {
     if (pack.format !== 'geojson') fail(at, 'colour applies to geojson packs');
+    string(v, at, 32);
     if (!Object.hasOwn(PACK_COLORS, v))
       fail(at, `expected one of ${Object.keys(PACK_COLORS).join(', ')}`);
   });
