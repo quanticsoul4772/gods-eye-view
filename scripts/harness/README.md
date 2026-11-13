@@ -2,7 +2,9 @@
 
 Scripts for the upstream-contribution workflow. They live on the fork's `local`
 branch and never go into an upstream PR. Run them from any checkout that has
-them; they find the main checkout and the projects folder through git.
+them; they find the main checkout through git. Every worktree, including
+`gev-upstream-deps`, lives in `.worktrees/` inside the main checkout, never
+beside it; a bare `<name>` argument means `.worktrees/<name>`.
 
 - `node scripts/harness/status.mjs [--since-hours 24]`: open upstream PRs
   against the cap of 5, merge state, CI, and other people's comments, reviews and
