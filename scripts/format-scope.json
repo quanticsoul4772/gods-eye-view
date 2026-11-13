@@ -1219,5 +1219,12 @@
   "src/standalone/layerSources.test.mjs",
   "src/tooling/nominatimGuardLifecycle.test.mjs",
   "src/tooling/nominatimLockOwnership.test.mjs",
-  "src/tooling/nominatimOutlineRoute.test.mjs"
+  "src/tooling/nominatimOutlineRoute.test.mjs",
+  "scripts/harness/lib.mjs",
+  "scripts/harness/status.mjs",
+  "scripts/harness/merge-main.mjs",
+  "scripts/harness/test-batched.mjs",
+  "scripts/harness/pre-push.mjs",
+  "scripts/harness/worktree.mjs",
+  "src/tooling/harness.test.mjs"
 ]
