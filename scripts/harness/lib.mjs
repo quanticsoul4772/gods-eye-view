@@ -43,14 +43,15 @@ export function mainCheckout(cwd = process.cwd()) {
   );
 }
 
-export const projectsDir = (cwd) => path.dirname(mainCheckout(cwd));
+/** Every worktree lives here, inside the project folder (excluded through .git/info/exclude). */
+export const worktreesDir = (cwd) => path.join(mainCheckout(cwd), '.worktrees');
 
-/** Resolve a worktree argument: a path, or a bare name under the projects folder. */
+/** Resolve a worktree argument: a path, or a bare name under `.worktrees/` in the main checkout. */
 export function resolveWorktree(arg, cwd = process.cwd()) {
   if (!arg) return path.resolve(cwd);
   return /[\\/]/.test(arg)
     ? path.resolve(arg)
-    : path.join(projectsDir(cwd), arg);
+    : path.join(worktreesDir(cwd), arg);
 }
 
 /** Parse `git worktree list --porcelain`. */

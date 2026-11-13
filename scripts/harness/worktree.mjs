@@ -12,7 +12,7 @@ import {
   linkDir,
   mainCheckout,
   parseWorktrees,
-  projectsDir,
+  worktreesDir,
   resolveWorktree,
   run,
   unlinkDir,
@@ -44,7 +44,7 @@ if (cmd === 'new') {
   const deps = opt('--deps', base.startsWith('origin/') ? 'upstream' : 'local');
   const depsDir = path.join(
     deps === 'upstream'
-      ? path.join(projectsDir(root), 'gev-upstream-deps')
+      ? path.join(worktreesDir(root), 'gev-upstream-deps')
       : root,
     'node_modules',
   );
@@ -190,7 +190,10 @@ if (cmd === 'new') {
     'hooks',
   );
   // A hooks path inside a removable worktree goes dark silently when that worktree goes.
-  if (!path.resolve(hooks).startsWith(path.resolve(root) + path.sep))
+  if (
+    !path.resolve(hooks).startsWith(path.resolve(root) + path.sep) ||
+    path.resolve(hooks).startsWith(worktreesDir(root) + path.sep)
+  )
     fail(`run install-hooks from the main checkout (${root}), not ${hooks}`);
   git(root, 'config', 'core.hooksPath', hooks.split(path.sep).join('/'));
   console.log(

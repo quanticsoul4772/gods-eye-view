@@ -5,6 +5,8 @@
 const RUNTIME_WRITE_GLOBS = Object.freeze([
   '**/.gev-cache/**',
   '**/.gev-logs/**',
+  // Fork harness worktrees inside the checkout: other branches' source, never this server's.
+  '**/.worktrees/**',
 ]);
 
 /**

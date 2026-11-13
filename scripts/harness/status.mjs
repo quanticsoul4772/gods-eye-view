@@ -11,7 +11,7 @@ import {
   mainCheckout,
   out,
   parseWorktrees,
-  projectsDir,
+  worktreesDir,
   run,
   summarizeChecks,
 } from './lib.mjs';
@@ -130,7 +130,7 @@ for (const pr of closed)
 
 // Upstream deps checkout: stale when upstream's lockfile changed since its last npm ci.
 const depsLock = path.join(
-  projectsDir(root),
+  worktreesDir(root),
   'gev-upstream-deps',
   'package-lock.json',
 );
